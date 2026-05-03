@@ -57,6 +57,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -1455,7 +1456,15 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			undisguise0(event.getPlayer());
 		}
 	}
-	
+
+	@EventHandler
+	public void handlePlayerDeath(PlayerDeathEvent event) {
+		Player player = event.getEntity();
+		if(isDisguised(player)) {
+			undisguise0(player);
+		}
+	}
+
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void handlePlayerMove(PlayerMoveEvent event) {
 		Player player = event.getPlayer();
@@ -1499,14 +1508,24 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void handleEntityDamageMonitor(EntityDamageEvent event) {
-		if(event.getEntity().hasMetadata("iDisguise")) {
-			if(!event.isCancelled()) {
-				Player player = Bukkit.getPlayer((UUID)event.getEntity().getMetadata("iDisguise").get(0).value());
-				player.damage(event.getDamage());
-				if(debugMode) getLogger().info("Dealt damage (" + event.getCause().name() + "," + event.getDamage() + ") to " + player.getName());
-				event.setDamage(Double.MIN_VALUE);
-			}
+		Entity entity = event.getEntity();
+		if(!entity.hasMetadata("iDisguise") || event.isCancelled()) return;
+
+		UUID playerId = (UUID)entity.getMetadata("iDisguise").get(0).value();
+		Player player = Bukkit.getPlayer(playerId);
+		Entity registeredDisguise = disguiseMap.get(playerId);
+
+		// Drop orphan disguise mobs (player offline / dead / re-disguised as something else).
+		// Without this, a leftover mob keeps damaging the player long after they undisguised.
+		if(player == null || !player.isOnline() || registeredDisguise == null || !registeredDisguise.equals(entity)) {
+			entity.remove();
+			if(debugMode) getLogger().info("Removed orphan disguise entity for UUID " + playerId);
+			return;
 		}
+
+		player.damage(event.getDamage());
+		if(debugMode) getLogger().info("Dealt damage (" + event.getCause().name() + "," + event.getDamage() + ") to " + player.getName());
+		event.setDamage(Double.MIN_VALUE);
 	}
 
 	@EventHandler(priority = EventPriority.LOWEST)
