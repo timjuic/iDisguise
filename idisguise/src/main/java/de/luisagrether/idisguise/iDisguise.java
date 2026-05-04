@@ -45,7 +45,9 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.entity.TNTPrimed;
+import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -1425,6 +1427,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		} else {
 			Entity entity = disguiseMap.remove(player.getUniqueId());
 			entity.remove();
+			// Clear the invisibility we applied at disguise time. Otherwise an undisguise that
+			// happens during the 5s viewself grace leaves the player invisible.
+			player.removePotionEffect(PotionEffectType.INVISIBILITY);
 			for(Player observer : Bukkit.getOnlinePlayers()) {
 				if(observer != player) {
 					observer.showPlayer(player);
@@ -1502,6 +1507,26 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			EntityDamageByEntityEvent event2 = (EntityDamageByEntityEvent)event;
 			if(event2.getDamager().hasMetadata("iDisguise")) {
 				event.setCancelled(true);
+				return;
+			}
+			// Block self-damage when a player hits their own disguise mob (the mob lags behind
+			// during movement and is reachable). Without this, the MONITOR handler forwards the
+			// damage back to the player.
+			if(event.getEntity().hasMetadata("iDisguise")) {
+				UUID disguiseOwnerId = (UUID)event.getEntity().getMetadata("iDisguise").get(0).value();
+				Entity damager = event2.getDamager();
+				Player attackerPlayer = null;
+				if(damager instanceof Player) {
+					attackerPlayer = (Player)damager;
+				} else if(damager instanceof Projectile) {
+					ProjectileSource shooter = ((Projectile)damager).getShooter();
+					if(shooter instanceof Player) {
+						attackerPlayer = (Player)shooter;
+					}
+				}
+				if(attackerPlayer != null && attackerPlayer.getUniqueId().equals(disguiseOwnerId)) {
+					event.setCancelled(true);
+				}
 			}
 		}
 	}
