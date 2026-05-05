@@ -31,6 +31,7 @@ import javax.annotation.Nullable;
 
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -63,6 +64,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
@@ -105,6 +107,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	private static boolean LEGACY_INJECTION = false;
 	private static Method LegacyInjector_inject = null;
 	private static Method LegacyInjector_toggleIntercept = null;
+	private static Method LegacyInjector_injectAll = null;
+	private static Method LegacyInjector_toggleInterceptAll = null;
 	private static Method CraftEntity_getHandle = null;
 	private static Method Entity_copyMetadataFrom = null;
 	private static boolean LEGACY_DISABLE_AI = false;
@@ -186,6 +190,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						Class<?> LegacyInjector = Class.forName("de.luisagrether.idisguise.impl.EntityTrackerEntry_" + PACKAGE_VERSION);
 						LegacyInjector_inject = LegacyInjector.getMethod("inject", Entity.class, Player.class);
 						LegacyInjector_toggleIntercept = LegacyInjector.getMethod("toggleIntercept", Entity.class, Player.class, boolean.class);
+						try {
+							LegacyInjector_injectAll = LegacyInjector.getMethod("injectAll", Entity.class);
+							LegacyInjector_toggleInterceptAll = LegacyInjector.getMethod("toggleInterceptAll", Entity.class, boolean.class);
+						} catch(NoSuchMethodException e) {
+							// Older impl without all-observer support; fall back to hidePlayer at runtime.
+						}
 					} catch(ClassNotFoundException|NoSuchMethodException e) {
 					}
 				}
@@ -407,6 +417,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	private Map<EntityType, List<String>> tabCompletions = new HashMap<>();
 	private Map<UUID, Entity> disguiseMap = new HashMap<>();
 	private Map<UUID, String> playerDisguiseMap = new HashMap<>();
+	// Players who were disguised when they started a cross-world teleport. Re-disguise happens
+	// in PlayerChangedWorldEvent (after the teleport completes) so the new mob spawns in the
+	// destination world and the invisibility potion lands in the right context.
+	private Map<UUID, EntityType> pendingCrossWorldDisguises = new HashMap<>();
 	private Map<String, Object> profileDatabase = new HashMap<>();
 	private World dummyWorld;
 	
@@ -433,6 +447,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		config = new Config(this);
 		config.loadData();
 		config.saveData();
+
+		// Config-driven debug flag (in addition to the legacy file marker).
+		if(config.DEBUG_MODE) debugMode = true;
 
 		language = new Language(this);
 		language.loadData();
@@ -771,6 +788,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					} else {
 						try {
 							Entity entity = disguise(target, type);
+							if(entity == null) {
+								sender.sendMessage(ChatColor.RED + "Disguise spawn was rejected here (mob spawning may be restricted in this world).");
+								return true;
+							}
 							for(int i = 1; i < args.length; i++) {
 								String codeLine = args[i];
 								String[] codeFrags = codeLine.split("[()]", -1);
@@ -1139,9 +1160,19 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		} else {
 			entity = player.getWorld().spawnEntity(player.getLocation(), type);
 		}
+		// Bail if the spawn was denied (CreatureSpawnEvent cancelled, WorldGuard mob-spawning deny,
+		// per-world entity restrictions, etc.). Otherwise we'd leave the player half-disguised:
+		// invisible + tracker intercepted but with no visible mob.
+		if(entity == null || entity.isDead() || !entity.isValid()) {
+			if(entity != null) entity.remove();
+			if(debugMode) getLogger().info("Disguise spawn for " + player.getName() + " was denied in world '"
+					+ player.getWorld().getName() + "' (likely a mob-spawning restriction). Aborting disguise.");
+			return null;
+		}
 		if(entity instanceof LivingEntity) {
+			LivingEntity living = (LivingEntity)entity;
 			if(!LEGACY_DISABLE_AI) {
-				((LivingEntity)entity).setAI(false);
+				living.setAI(false);
 			} else {
 				try {
 					Object nmsEntity = CraftEntity_getHandle.invoke(entity);
@@ -1152,6 +1183,16 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
 				}
 			}
+			// Prevent natural despawn (hostile mobs despawn when no player is within ~32 blocks
+			// for several ticks). Without this the disguise mob can vanish during fast movement
+			// or when observers go in/out of render distance, leaving the disguised player
+			// invisible to others until the next move re-syncs.
+			try {
+				living.setRemoveWhenFarAway(false);
+			} catch(Throwable t) {
+				if(debugMode) getLogger().log(Level.WARNING, "setRemoveWhenFarAway failed", t);
+			}
+			living.setCanPickupItems(false);
 		} else if(entity instanceof Item) {
 			((Item)entity).setPickupDelay(Integer.MAX_VALUE);
 		} else if(entity instanceof TNTPrimed) {
@@ -1173,9 +1214,24 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			entity.teleport(player.getLocation());
 		}
 		disguiseMap.put(player.getUniqueId(), entity);
-		for(Player observer : Bukkit.getOnlinePlayers()) {
-			if(observer != player) {
-				observer.hidePlayer(player);
+		if(config.KEEP_TAB_LIST_WHEN_DISGUISED && LegacyInjector_injectAll != null) {
+			// Hide the player entity from observers via NMS tracker injection. Skips Bukkit's
+			// hidePlayer entirely so canSee, tab list, /tpa, /msg, online status etc. all stay
+			// intact -- only the on-screen entity goes away.
+			try {
+				LegacyInjector_injectAll.invoke(null, player);
+				LegacyInjector_toggleInterceptAll.invoke(null, player, true);
+			} catch(Exception e) {
+				if(debugMode) getLogger().log(Level.SEVERE, "Failed to inject player tracker for disguise of " + player.getName(), e);
+			}
+		} else {
+			for(Player observer : Bukkit.getOnlinePlayers()) {
+				if(observer != player) {
+					observer.hidePlayer(player);
+					if(config.KEEP_TAB_LIST_WHEN_DISGUISED) {
+						resendTabAdd(observer, player);
+					}
+				}
 			}
 		}
 
@@ -1430,6 +1486,15 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			// Clear the invisibility we applied at disguise time. Otherwise an undisguise that
 			// happens during the 5s viewself grace leaves the player invisible.
 			player.removePotionEffect(PotionEffectType.INVISIBILITY);
+			if(LegacyInjector_toggleInterceptAll != null) {
+				// Stop hiding the player from observers (no-op if no injection was active).
+				try {
+					LegacyInjector_toggleInterceptAll.invoke(null, player, false);
+				} catch(Exception e) {
+					// IllegalStateException from the impl when no injection is in place -- expected
+					// for the !KEEP_TAB_LIST disguise path; nothing to do.
+				}
+			}
 			for(Player observer : Bukkit.getOnlinePlayers()) {
 				if(observer != player) {
 					observer.showPlayer(player);
@@ -1443,8 +1508,19 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	public void handlePlayerJoin(PlayerJoinEvent event) {
 		Player player = event.getPlayer();
 		
+		boolean injectorActive = config.KEEP_TAB_LIST_WHEN_DISGUISED && LegacyInjector_injectAll != null;
 		for(Entry<UUID, Entity> entry : disguiseMap.entrySet()) {
-			player.hidePlayer(Bukkit.getPlayer(entry.getKey()));
+			Player disguisedPlayer = Bukkit.getPlayer(entry.getKey());
+			if(disguisedPlayer == null) continue;
+			if(injectorActive) {
+				// The tracker injector already suppresses entity updates to every observer
+				// including new joiners, so there's nothing to do here.
+				continue;
+			}
+			player.hidePlayer(disguisedPlayer);
+			if(config.KEEP_TAB_LIST_WHEN_DISGUISED) {
+				resendTabAdd(player, disguisedPlayer);
+			}
 		}
 
 		String targetSkin = player.getName().toLowerCase(Locale.ENGLISH);
@@ -1457,6 +1533,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	
 	@EventHandler
 	public void handlePlayerQuit(PlayerQuitEvent event) {
+		pendingCrossWorldDisguises.remove(event.getPlayer().getUniqueId());
 		if(isDisguised(event.getPlayer())) {
 			undisguise0(event.getPlayer());
 		}
@@ -1470,20 +1547,33 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 	}
 
+	private void checkDisguiseHealth(Player player) {
+		Entity entity = disguiseMap.get(player.getUniqueId());
+		if(entity == null) return;
+		// If the disguise mob got removed by something we don't control (chunk eviction, despawn,
+		// other plugin's entity cleanup), the player is left invisible without a visible mob.
+		// Tear down cleanly so they go back to a normal visible state.
+		if(entity.isDead() || !entity.isValid()) {
+			if(debugMode) getLogger().info("Disguise mob for " + player.getName()
+					+ " went away unexpectedly (dead or invalid). Cleaning up.");
+			undisguise0(player);
+		}
+	}
+
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void handlePlayerMove(PlayerMoveEvent event) {
+		checkDisguiseHealth(event.getPlayer());
 		Player player = event.getPlayer();
 		if(!event.isCancelled() && disguiseMap.containsKey(player.getUniqueId())) {
 			Entity entity = disguiseMap.get(player.getUniqueId());
 			World worldFrom = entity.getWorld();
 			if(LEGACY_INJECTION && !event.getTo().getWorld().equals(worldFrom)) {
+				// PlayerMoveEvent fires before the teleport completes; spawning a new mob now
+				// would orphan it in the source world. Hand off to PlayerChangedWorldEvent which
+				// fires synchronously after the world transition is fully settled.
+				EntityType originalType = entity.getType();
 				undisguise0(player);
-				Entity newEntity = disguise0(player, entity.getType());
-				try {
-					Entity_copyMetadataFrom.invoke(CraftEntity_getHandle.invoke(newEntity), CraftEntity_getHandle.invoke(entity));
-				} catch(IllegalAccessException|InvocationTargetException e) {
-					if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
-				}
+				pendingCrossWorldDisguises.put(player.getUniqueId(), originalType);
 			} else {
 				if(entity.getType().name().equals("SHULKER")) {
 					Location to = event.getTo();
@@ -1495,7 +1585,39 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			}
 		}
 	}
-	
+
+	@EventHandler
+	public void handlePlayerChangedWorld(PlayerChangedWorldEvent event) {
+		Player player = event.getPlayer();
+		EntityType pendingType = pendingCrossWorldDisguises.remove(player.getUniqueId());
+
+		// Fallback: if handlePlayerMove didn't run (some teleport mechanisms skip PlayerMoveEvent
+		// but always fire PlayerChangedWorldEvent), detect the mismatch ourselves -- the disguise
+		// mob is in the old world but the player is now in the new one.
+		if(pendingType == null && isDisguised(player)) {
+			Entity orphan = disguiseMap.get(player.getUniqueId());
+			if(orphan != null && !player.getWorld().equals(orphan.getWorld())) {
+				pendingType = orphan.getType();
+				if(debugMode) getLogger().info("Detected cross-world disguise for " + player.getName()
+						+ " (mob in '" + orphan.getWorld().getName() + "', player in '"
+						+ player.getWorld().getName() + "'). Re-syncing.");
+				undisguise0(player);
+			}
+		}
+
+		if(pendingType == null) return;
+		if(!player.isOnline() || isDisguised(player)) return;
+		try {
+			Entity result = disguise0(player, pendingType);
+			if(result == null && debugMode) {
+				getLogger().info("Cross-world re-disguise for " + player.getName() + " in world '"
+						+ player.getWorld().getName() + "' was rejected; leaving them undisguised.");
+			}
+		} catch(Exception e) {
+			if(debugMode) getLogger().log(Level.SEVERE, "Failed to re-disguise " + player.getName() + " after cross-world teleport", e);
+		}
+	}
+
 	@EventHandler(priority = EventPriority.LOWEST)
 	public void handleEntityDamageLowest(EntityDamageEvent event) {
 		if(event.getEntity().hasMetadata("iDisguise")) {
@@ -1540,9 +1662,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		Player player = Bukkit.getPlayer(playerId);
 		Entity registeredDisguise = disguiseMap.get(playerId);
 
-		// Drop orphan disguise mobs (player offline / dead / re-disguised as something else).
-		// Without this, a leftover mob keeps damaging the player long after they undisguised.
-		if(player == null || !player.isOnline() || registeredDisguise == null || !registeredDisguise.equals(entity)) {
+		// Drop orphan disguise mobs (player offline / dead / re-disguised as something else / left
+		// behind in another world after a cross-world teleport). Without this, a leftover mob
+		// keeps damaging the player long after they're gone from the area.
+		if(player == null || !player.isOnline() || registeredDisguise == null
+				|| !registeredDisguise.equals(entity)
+				|| !player.getWorld().equals(entity.getWorld())) {
 			entity.remove();
 			if(debugMode) getLogger().info("Removed orphan disguise entity for UUID " + playerId);
 			return;
@@ -1636,5 +1761,28 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	public static iDisguise getInstance() {
 		return INSTANCE;
 	}
-	
+
+	// Re-add `target` to `observer`'s tab list after hidePlayer() removed them. Bukkit's hidePlayer
+	// on 1.8 sends both an entity-destroy and a player-info-remove packet; we send a player-info-add
+	// back so the disguise stays visible in the world (still hidden) without dropping out of tab.
+	private void resendTabAdd(Player observer, Player target) {
+		if(!PLAYER_DISGUISE_VIEWSELF) return;
+		try {
+			Object targetHandle = CraftPlayer_getHandle.invoke(target);
+			Object observerHandle = CraftPlayer_getHandle.invoke(observer);
+			Object addPacket;
+			if(!LEGACY_PLAYER_DISGUISE_VIEWSELF) {
+				addPacket = PacketUpdatePlayerInfo_new.newInstance(UpdatePlayerInfo_ADD_PLAYER, targetHandle);
+			} else {
+				Object handleArray = Array.newInstance(EntityPlayer, 1);
+				Array.set(handleArray, 0, targetHandle);
+				addPacket = PacketUpdatePlayerInfo_new.newInstance(UpdatePlayerInfo_ADD_PLAYER, handleArray);
+			}
+			Object observerConnection = EntityPlayer_playerConnection.get(observerHandle);
+			PlayerConnection_sendPacket.invoke(observerConnection, addPacket);
+		} catch(Exception e) {
+			if(debugMode) getLogger().log(Level.WARNING, "Failed to resend tab info for " + target.getName() + " to " + observer.getName(), e);
+		}
+	}
+
 }

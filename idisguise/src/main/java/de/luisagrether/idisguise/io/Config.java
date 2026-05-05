@@ -23,6 +23,8 @@ public class Config {
     public static final String DISGUISE_TYPE_BLACKLIST_PATH = "disguise.disguise-type-blacklist";
 	public static final String PLAYER_DISGUISE_BLACKLIST_PATH = "disguise.player-disguise-blacklist";
 	public static final String PLAYER_DISGUISE_VIEWSELF_PATH = "disguise.player-disguise-viewself";
+	public static final String KEEP_TAB_LIST_WHEN_DISGUISED_PATH = "disguise.keep-tab-list-when-disguised";
+	public static final String DEBUG_MODE_PATH = "disguise.debug-mode";
     public static final String STATEMENT_WHITELIST_PATH = "commands.statement-whitelist";
 	public static final String USE_PERMISSION_NODES_PATH = "commands.use-permission-nodes";
 	public static final String UPDATE_CHECK_PATH = "updates.check";
@@ -41,6 +43,8 @@ public class Config {
 	@LastUpdated(60002)
 	public List<String> PLAYER_DISGUISE_BLACKLIST = Arrays.asList("put player name here");
 	public boolean PLAYER_DISGUISE_VIEWSELF = true;
+	public boolean KEEP_TAB_LIST_WHEN_DISGUISED = true;
+	public boolean DEBUG_MODE = false;
 	@LastUpdated(60002)
 	public List<String> STATEMENT_WHITELIST = Arrays.asList(
 		"setCustomName", "setGlowing", "setFireTicks", "setFreezeTicks", "setSilent", "setAdult", "setBaby", "setVariant", "setPlayingDead", "setHasNectar",

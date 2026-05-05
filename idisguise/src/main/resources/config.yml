@@ -10,9 +10,20 @@ disguise:
    player-disguise-blacklist: PLAYER_DISGUISE_BLACKLIST
 
    # Are player disguises visible to the disguised players themselves in 3rd person view?
-   # if true: a dummy world 'iDisguiseDummyWorld' is created, which is necessary to realize this feature. 
+   # if true: a dummy world 'iDisguiseDummyWorld' is created, which is necessary to realize this feature.
    player-disguise-viewself: PLAYER_DISGUISE_VIEWSELF
-   
+
+   # Should disguised players still appear in the tab list (player list) for everyone else?
+   # if true: a tab-list ADD_PLAYER packet is re-sent after the player entity is hidden, so observers
+   #   still see the player's name in tab while the disguise mob is what they see in the world.
+   # if false: the player vanishes from tab while disguised (the original iDisguise behavior).
+   # Only affects mob disguises; player disguises always remain in tab.
+   keep-tab-list-when-disguised: KEEP_TAB_LIST_WHEN_DISGUISED
+
+   # Verbose logging for diagnosing disguise issues (cross-world transitions, denied mob spawns,
+   # orphan-cleanup events, NMS injection failures, etc.). Leave false on production servers.
+   debug-mode: DEBUG_MODE
+
 # Options affecting the commands and permissions of iDisguise (these do NOT affect the developer API)
 commands:
 
