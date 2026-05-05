@@ -9,7 +9,10 @@ loadbefore: [MinecraftTrainSimulator]
 commands:
    disguise:
       description: Disguise yourself as a mob or other player.
+      aliases: [d]
    odisguise:
       description: Disguise another player as a mob or other player.
+      aliases: [od]
    undisguise:
       description: Undisguise yourself or another player.
+      aliases: [ud]
