@@ -103,6 +103,7 @@ public class Language {
 									  + ChatColor.GOLD + "possible statements.";
 	@LastUpdated(60001)
 	public String HELP_INGAME_HELP = ChatColor.GOLD.toString() + ChatColor.BOLD + "In-game help: " + ChatColor.ITALIC + "/disguise ? [page]";
+	public String HELP_DISGUISE_LIST = ChatColor.GOLD.toString() + ChatColor.BOLD + "List available disguises: " + ChatColor.ITALIC + "/disguise list";
 	@LastUpdated(60001)
 	public String HELP_DISGUISE_PERMISSION = ChatColor.GOLD + "By default, only server operators can use the commands.\\\\"
 										   + ChatColor.GOLD + "If you enable " + ChatColor.ITALIC + "commands.use-permission-nodes" + ChatColor.RESET + ChatColor.GOLD + " in the\\\\"

@@ -14,6 +14,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -746,6 +747,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					}
 				}
 				sendHelpPage(sender, page);
+			} else if(args[0].equalsIgnoreCase("list")) {
+				sendDisguiseList(sender);
 			} else if(args[0].equalsIgnoreCase("player")) {
 				if(!PLAYER_DISGUISE_AVAILABLE || config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER")) {
 					sender.sendMessage(language.DISGUISE_TYPE_NOT_SUPPORTED);
@@ -976,6 +979,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			addHelpMessage(helpPages, language.HELP_DISGUISE_CHECK);
 			addHelpMessage(helpPages, language.HELP_UNDISGUISE);
 			addHelpMessage(helpPages, language.HELP_DISGUISE_ALTER);
+			addHelpMessage(helpPages, language.HELP_DISGUISE_LIST);
 			addHelpMessage(helpPages, language.HELP_INGAME_HELP);
 			if(hasPermissionAdmin(sender)) addHelpMessage(helpPages, language.HELP_DISGUISE_PERMISSION);
 		}
@@ -994,6 +998,51 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		sender.sendMessage(language.HELP_PAGE_TITLE.replace("%number%", page + "/" + helpPages.size()));
 		for(String line : helpPages.get(page - 1)) {
 			sender.sendMessage(line);
+		}
+	}
+
+	private void sendDisguiseList(CommandSender sender) {
+		List<EntityType> types = new ArrayList<>();
+		for(EntityType type : EntityType.values()) {
+			if(type == EntityType.PLAYER) continue;
+			if(config.DISGUISE_TYPE_BLACKLIST.contains(type.name())) continue;
+			types.add(type);
+		}
+		types.sort(Comparator.comparing(Enum::name));
+
+		boolean playerType = PLAYER_DISGUISE_AVAILABLE && !config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER");
+		boolean useColors = sender instanceof Player;
+
+		StringBuilder line = new StringBuilder();
+		boolean first = true;
+		if(playerType) {
+			appendType(line, "PLAYER", hasPermission(sender, EntityType.PLAYER), useColors, first);
+			first = false;
+		}
+		for(EntityType type : types) {
+			appendType(line, type.name(), hasPermission(sender, type), useColors, first);
+			first = false;
+		}
+
+		sender.sendMessage(ChatColor.DARK_GREEN + "===== " + ChatColor.BOLD + "iDisguise" + ChatColor.RESET
+				+ ChatColor.DARK_GREEN + " Disguises (" + types.size() + (playerType ? " + PLAYER" : "") + ") =====");
+		sender.sendMessage(line.toString());
+		if(useColors) {
+			sender.sendMessage(ChatColor.WHITE + "white = available, " + ChatColor.GRAY + ChatColor.STRIKETHROUGH
+					+ "grey" + ChatColor.RESET + ChatColor.WHITE + " = no permission.");
+		}
+	}
+
+	private void appendType(StringBuilder line, String name, boolean has, boolean useColors, boolean first) {
+		if(!first) line.append(useColors ? ChatColor.WHITE + ", " : ", ");
+		if(!useColors) {
+			line.append(name);
+			return;
+		}
+		if(has) {
+			line.append(ChatColor.WHITE).append(name).append(ChatColor.RESET);
+		} else {
+			line.append(ChatColor.GRAY).append(ChatColor.STRIKETHROUGH).append(name).append(ChatColor.RESET);
 		}
 	}
 
@@ -1034,6 +1083,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				}
 			} else if(args.length < (self ? 2 : 3)) {
 				completions.add("?");
+				completions.add("list");
 				for(EntityType type : EntityType.values()) {
 					if(type.equals(EntityType.PLAYER) && !PLAYER_DISGUISE_AVAILABLE) continue;
 					if(!config.DISGUISE_TYPE_BLACKLIST.contains(type.name()) && (!(sender instanceof Player) || hasPermission((Player)sender, type))) {
