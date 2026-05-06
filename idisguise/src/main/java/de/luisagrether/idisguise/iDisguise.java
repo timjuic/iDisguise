@@ -287,11 +287,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				Class<?> PropertyMap = GameProfile_getProperties.getReturnType();
 				PropertyMap_properties = PropertyMap.getDeclaredField("properties");
 				PropertyMap_properties.setAccessible(true);
-				if(MINECRAFT_VERSION[0] > 1 || (MINECRAFT_VERSION[0] == 1 && (MINECRAFT_VERSION[1] >= 22 || (MINECRAFT_VERSION[1] == 21 && MINECRAFT_VERSION[2] >= 9)))) {
-					Field theUnsafe = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-					theUnsafe.setAccessible(true);
-					UNSAFE = (sun.misc.Unsafe)theUnsafe.get(null);
-				}
+				// Always init Unsafe -- the immutable PropertyMap swap below depends on it,
+				// and some non-vanilla servers (e.g. WineSpigot) ship an immutable inner map even
+				// on older Minecraft versions where the original code skipped the init.
+				Field theUnsafe = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+				theUnsafe.setAccessible(true);
+				UNSAFE = (sun.misc.Unsafe)theUnsafe.get(null);
 
 				PLAYER_DISGUISE_AVAILABLE = true;
 			} catch(ClassNotFoundException|NoSuchFieldException|NoSuchMethodException|IllegalAccessException e) {
