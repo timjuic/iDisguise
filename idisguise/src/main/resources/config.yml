@@ -36,6 +36,16 @@ commands:
    # if false: only server operators can disguise
    use-permission-nodes: USE_PERMISSION_NODES
 
+# Mob-sound action: shift + right-click while holding a sword and disguised plays the
+# disguise mob's ambient sound to nearby players.
+mob-sound:
+
+   # Master toggle for the feature.
+   enabled: MOB_SOUND_ENABLED
+
+   # Per-player cooldown in seconds between sound plays.
+   cooldown-seconds: MOB_SOUND_COOLDOWN_SECONDS
+
 # Options affecting the update checking feature
 updates:
    

@@ -29,6 +29,8 @@ public class Config {
 	public static final String USE_PERMISSION_NODES_PATH = "commands.use-permission-nodes";
 	public static final String UPDATE_CHECK_PATH = "updates.check";
 	public static final String UPDATE_DOWNLOAD_PATH = "updates.download";
+	public static final String MOB_SOUND_ENABLED_PATH = "mob-sound.enabled";
+	public static final String MOB_SOUND_COOLDOWN_SECONDS_PATH = "mob-sound.cooldown-seconds";
 	
 	@LastUpdated(60001)
     public List<String> DISGUISE_TYPE_BLACKLIST = new ArrayList<>(Arrays.asList(
@@ -56,6 +58,8 @@ public class Config {
 	public boolean USE_PERMISSION_NODES = false;
 	public boolean UPDATE_CHECK = true;
 	public boolean UPDATE_DOWNLOAD = false;
+	public boolean MOB_SOUND_ENABLED = true;
+	public int MOB_SOUND_COOLDOWN_SECONDS = 3;
 	/* Configuration options end here */
 	
 	private iDisguise plugin;

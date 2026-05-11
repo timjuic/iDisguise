@@ -139,7 +139,8 @@ public class Language {
 	public String UPDATE_DOWNLOAD_FAILED = ChatColor.RED + "[iDisguise] Download failed.";
 	@LastUpdated(60001)
 	public String UPDATE_OPTION = ChatColor.GOLD + "[iDisguise] You can enable automatic updates in the config file.";
-	
+	public String MOB_SOUND_PLAYED = ChatColor.GOLD + "♪ Played %entityType% sound";
+
 	private iDisguise plugin;
 	
 	public Language(iDisguise plugin) {

@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
@@ -62,7 +63,9 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
@@ -78,6 +81,8 @@ import org.bukkit.potion.PotionEffectType;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
 
+import com.cryptomorin.xseries.XSound;
+import com.cryptomorin.xseries.messages.ActionBar;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 
@@ -423,6 +428,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	// in PlayerChangedWorldEvent (after the teleport completes) so the new mob spawns in the
 	// destination world and the invisibility potion lands in the right context.
 	private Map<UUID, EntityType> pendingCrossWorldDisguises = new HashMap<>();
+	private Map<UUID, Long> mobSoundCooldowns = new HashMap<>();
 	private Map<String, Object> profileDatabase = new HashMap<>();
 	private World dummyWorld;
 	
@@ -594,6 +600,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.admin", PermissionDefault.OP));
 			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.disguise.*", PermissionDefault.OP));
 			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.others", PermissionDefault.OP));
+			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.sound", PermissionDefault.TRUE));
 			for(EntityType type : EntityType.values()) {
 				if(config.DISGUISE_TYPE_BLACKLIST.contains(type.name())) continue;
 				Bukkit.getPluginManager().addPermission(new Permission("iDisguise.disguise." + type.name(), PermissionDefault.OP));
@@ -1585,6 +1592,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	@EventHandler
 	public void handlePlayerQuit(PlayerQuitEvent event) {
 		pendingCrossWorldDisguises.remove(event.getPlayer().getUniqueId());
+		mobSoundCooldowns.remove(event.getPlayer().getUniqueId());
 		if(isDisguised(event.getPlayer())) {
 			undisguise0(event.getPlayer());
 		}
@@ -1727,6 +1735,93 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		player.damage(event.getDamage());
 		if(debugMode) getLogger().info("Dealt damage (" + event.getCause().name() + "," + event.getDamage() + ") to " + player.getName());
 		event.setDamage(Double.MIN_VALUE);
+	}
+
+	// Resolved once at first call. Stays null on 1.8 (no off-hand → method doesn't exist).
+	// Reflection avoids a direct EquipmentSlot reference, which would NoClassDefFoundError on 1.8.
+	private static java.lang.reflect.Method PlayerInteractEvent_getHand;
+	private static boolean PlayerInteractEvent_getHand_resolved;
+
+	@EventHandler(ignoreCancelled = true)
+	public void handleMobSoundTrigger(PlayerInteractEvent event) {
+		if(!config.MOB_SOUND_ENABLED) return;
+
+		Action action = event.getAction();
+		if(action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
+
+		if(isOffHandPass(event)) return;
+
+		Player player = event.getPlayer();
+		if(!player.isSneaking()) {
+			if(debugMode) getLogger().info("[mob-sound] " + player.getName() + " not sneaking, skipping");
+			return;
+		}
+
+		ItemStack item = event.getItem();
+		if(item == null || !item.getType().name().endsWith("_SWORD")) {
+			if(debugMode) getLogger().info("[mob-sound] " + player.getName() + " not holding a sword (item="
+					+ (item == null ? "null" : item.getType().name()) + "), skipping");
+			return;
+		}
+
+		Entity disguise = disguiseMap.get(player.getUniqueId());
+		if(disguise == null) {
+			if(debugMode) getLogger().info("[mob-sound] " + player.getName() + " not disguised, skipping");
+			return;
+		}
+
+		if(config.USE_PERMISSION_NODES && !player.hasPermission("iDisguise.sound")
+				&& !player.hasPermission("iDisguise.*")) return;
+
+		long now = System.currentTimeMillis();
+		long cooldownMs = Math.max(0, config.MOB_SOUND_COOLDOWN_SECONDS) * 1000L;
+		Long last = mobSoundCooldowns.get(player.getUniqueId());
+		if(last != null && now - last < cooldownMs) return;
+
+		XSound sound = resolveMobSound(disguise.getType());
+		if(sound == null) {
+			if(debugMode) getLogger().info("[mob-sound] no sound mapping for " + disguise.getType().name());
+			return;
+		}
+
+		mobSoundCooldowns.put(player.getUniqueId(), now);
+		if(debugMode) getLogger().info("[mob-sound] playing " + sound.name() + " for "
+				+ player.getName() + " (disguise=" + disguise.getType().name() + ")");
+		sound.play(player.getLocation(), 1.0f, 1.0f);
+		ActionBar.sendActionBar(player, language.MOB_SOUND_PLAYED.replace("%entityType%",
+				disguise.getType().name()));
+	}
+
+	// True iff this PlayerInteractEvent is the off-hand pass on 1.9+. Goes through full reflection
+	// so the bytecode of this class never references EquipmentSlot, which doesn't exist on 1.8.
+	private static boolean isOffHandPass(PlayerInteractEvent event) {
+		if(!PlayerInteractEvent_getHand_resolved) {
+			try {
+				PlayerInteractEvent_getHand = PlayerInteractEvent.class.getMethod("getHand");
+			} catch(NoSuchMethodException ignored) {
+			}
+			PlayerInteractEvent_getHand_resolved = true;
+		}
+		if(PlayerInteractEvent_getHand == null) return false;
+		try {
+			Object hand = PlayerInteractEvent_getHand.invoke(event);
+			if(hand == null) return false;
+			return "OFF_HAND".equals(((Enum<?>)hand).name());
+		} catch(Throwable t) {
+			return false;
+		}
+	}
+
+	// Resolve a Bukkit Sound for the disguised mob via XSeries, which papers over the
+	// 1.8 ("ZOMBIE_IDLE") vs 1.9+ ("ENTITY_ZOMBIE_AMBIENT") enum renaming. Returns null
+	// if no plausible sound exists for this entity type on the running server version.
+	private static XSound resolveMobSound(EntityType type) {
+		String name = type.name();
+		Optional<XSound> result = XSound.matchXSound("ENTITY_" + name + "_AMBIENT");
+		if(!result.isPresent()) result = XSound.matchXSound("ENTITY_" + name + "_IDLE");
+		if(!result.isPresent()) result = XSound.matchXSound("ENTITY_" + name + "_HURT");
+		if(!result.isPresent()) result = XSound.matchXSound("ENTITY_" + name + "_DEATH");
+		return result.orElse(null);
 	}
 
 	@EventHandler(priority = EventPriority.LOWEST)
