@@ -89,6 +89,11 @@ public class Config {
 							valueField.setInt(this, fileConfiguration.getInt((String)pathField.get(null), valueField.getInt(this)));
 						} else if(fileConfiguration.isList((String)pathField.get(null))) {
 							if(valueField.getName().equals("DISGUISE_TYPE_BLACKLIST")) {
+								// User's config is authoritative -- clear defaults first so removed
+								// entries actually stay removed across restarts. Without this, anything
+								// in the default list (e.g. ENDER_DRAGON) is unremovable because
+								// loadData only adds and saveData writes back the merged list.
+								DISGUISE_TYPE_BLACKLIST.clear();
 								for(String value : (List<String>)fileConfiguration.getList((String)pathField.get(null), (List<String>)valueField.get(this))) {
 									if(!DISGUISE_TYPE_BLACKLIST.contains(value)) {
 										DISGUISE_TYPE_BLACKLIST.add(value);
