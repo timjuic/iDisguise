@@ -25,6 +25,9 @@ public class Config {
 	public static final String PLAYER_DISGUISE_VIEWSELF_PATH = "disguise.player-disguise-viewself";
 	public static final String KEEP_TAB_LIST_WHEN_DISGUISED_PATH = "disguise.keep-tab-list-when-disguised";
 	public static final String DEBUG_MODE_PATH = "disguise.debug-mode";
+	public static final String PERSIST_DISGUISE_ON_QUIT_PATH = "disguise.persist-on-quit";
+	public static final String DISGUISE_COOLDOWN_SECONDS_PATH = "disguise.cooldown-seconds";
+	public static final String DISABLE_ENDERPEARLS_WHILE_DISGUISED_PATH = "disguise.disable-enderpearls-while-disguised";
     public static final String STATEMENT_WHITELIST_PATH = "commands.statement-whitelist";
 	public static final String USE_PERMISSION_NODES_PATH = "commands.use-permission-nodes";
 	public static final String UPDATE_CHECK_PATH = "updates.check";
@@ -47,6 +50,9 @@ public class Config {
 	public boolean PLAYER_DISGUISE_VIEWSELF = true;
 	public boolean KEEP_TAB_LIST_WHEN_DISGUISED = true;
 	public boolean DEBUG_MODE = false;
+	public boolean PERSIST_DISGUISE_ON_QUIT = true;
+	public int DISGUISE_COOLDOWN_SECONDS = 30;
+	public boolean DISABLE_ENDERPEARLS_WHILE_DISGUISED = true;
 	@LastUpdated(60002)
 	public List<String> STATEMENT_WHITELIST = Arrays.asList(
 		"setCustomName", "setGlowing", "setFireTicks", "setFreezeTicks", "setSilent", "setAdult", "setBaby", "setVariant", "setPlayingDead", "setHasNectar",

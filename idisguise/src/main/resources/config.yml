@@ -24,6 +24,26 @@ disguise:
    # orphan-cleanup events, NMS injection failures, etc.). Leave false on production servers.
    debug-mode: DEBUG_MODE
 
+   # Keep the player disguised across a leave/rejoin within the same session.
+   # if true: on quit, the disguise is recorded in memory and re-applied automatically when the
+   #   player rejoins. The disguise mob is despawned on quit and a fresh one is spawned on rejoin.
+   #   State is never written to disk -- a server restart clears every entry, so everyone joins
+   #   undisguised after a restart.
+   # if false: quitting undisguises the player immediately (the original behavior).
+   persist-on-quit: PERSIST_DISGUISE_ON_QUIT
+
+   # Per-player cooldown (in seconds) between disguise attempts via /disguise. Prevents players
+   # from rapidly cycling through mob disguises to escape combat or scout. Applies only to
+   # self-disguises (/odisguise on others is unaffected). Players with the iDisguise.* permission
+   # bypass the cooldown. Set to 0 to disable.
+   cooldown-seconds: DISGUISE_COOLDOWN_SECONDS
+
+   # Block ender-pearl throws while a player is disguised. The disguise mob occupies the player's
+   # location and would otherwise eat the pearl (looks like it returns to hand). Letting pearls
+   # through reliably would require nudging the projectile past the mob's hitbox, which opens up
+   # wall-glitch exploits in tight spaces -- so the safe default is to disallow them entirely.
+   disable-enderpearls-while-disguised: DISABLE_ENDERPEARLS_WHILE_DISGUISED
+
 # Options affecting the commands and permissions of iDisguise (these do NOT affect the developer API)
 commands:
 

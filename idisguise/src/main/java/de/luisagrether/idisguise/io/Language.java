@@ -140,6 +140,8 @@ public class Language {
 	@LastUpdated(60001)
 	public String UPDATE_OPTION = ChatColor.GOLD + "[iDisguise] You can enable automatic updates in the config file.";
 	public String MOB_SOUND_PLAYED = ChatColor.GOLD + "♪ Played %entityType% sound";
+	public String DISGUISE_ON_COOLDOWN = ChatColor.RED + "Please wait %seconds%s before disguising again.";
+	public String ENDERPEARL_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't throw ender pearls while disguised.";
 
 	private iDisguise plugin;
 	

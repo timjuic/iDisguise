@@ -63,6 +63,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -429,6 +430,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	// destination world and the invisibility potion lands in the right context.
 	private Map<UUID, EntityType> pendingCrossWorldDisguises = new HashMap<>();
 	private Map<UUID, Long> mobSoundCooldowns = new HashMap<>();
+	// In-memory only -- intentionally not persisted to disk. A server restart should drop everyone
+	// back to undisguised, so we never serialize these.
+	private Map<UUID, EntityType> pendingRejoinMobDisguises = new HashMap<>();
+	private Map<UUID, String> pendingRejoinPlayerDisguises = new HashMap<>();
+	private Map<UUID, Long> lastDisguiseTimestamps = new HashMap<>();
+	private Map<UUID, Long> lastPearlBlockNotice = new HashMap<>();
 	private Map<String, Object> profileDatabase = new HashMap<>();
 	private World dummyWorld;
 	
@@ -768,11 +775,14 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_INVALID);
 				} else if(config.PLAYER_DISGUISE_BLACKLIST.contains(args[1].toLowerCase(Locale.ENGLISH))) {
 					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_BLACKLISTED);
+				} else if(self && !checkDisguiseCooldown(target)) {
+					return true;
 				} else {
 					try {
 						Player finalTarget = target;
 						disguiseAsPlayer(target, args[1], (success) -> {
 							if(success) {
+								if(self) lastDisguiseTimestamps.put(finalTarget.getUniqueId(), System.currentTimeMillis());
 								sender.sendMessage(language.DISGUISED_SUCCESSFULLY);
 								if(!self) {
 									finalTarget.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
@@ -796,6 +806,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						sender.sendMessage(language.DISGUISE_TYPE_NOT_SUPPORTED);
 					} else if(sender instanceof Player && !hasPermission((Player)sender, type)) {
 						sender.sendMessage(language.DISGUISE_NO_PERMISSION);
+					} else if(self && !checkDisguiseCooldown(target)) {
+						return true;
 					} else {
 						try {
 							Entity entity = disguise(target, type);
@@ -803,6 +815,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 								sender.sendMessage(ChatColor.RED + "Disguise spawn was rejected here (mob spawning may be restricted in this world).");
 								return true;
 							}
+							if(self) lastDisguiseTimestamps.put(target.getUniqueId(), System.currentTimeMillis());
 							for(int i = 1; i < args.length; i++) {
 								String codeLine = args[i];
 								String[] codeFrags = codeLine.split("[()]", -1);
@@ -1176,7 +1189,23 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			       ((Player)sender).hasPermission("iDisguise.others");
 		}
 	}
-	
+
+	// Returns true when the player is allowed to disguise; false when the cooldown is active
+	// (a message is sent to the player in that case). Bypassed for players holding iDisguise.*
+	// so admins aren't rate-limited.
+	private boolean checkDisguiseCooldown(Player player) {
+		if(config.DISGUISE_COOLDOWN_SECONDS <= 0) return true;
+		if(player.hasPermission("iDisguise.*")) return true;
+		Long last = lastDisguiseTimestamps.get(player.getUniqueId());
+		if(last == null) return true;
+		long cooldownMs = config.DISGUISE_COOLDOWN_SECONDS * 1000L;
+		long elapsed = System.currentTimeMillis() - last;
+		if(elapsed >= cooldownMs) return true;
+		long remaining = (cooldownMs - elapsed + 999) / 1000L;
+		player.sendMessage(language.DISGUISE_ON_COOLDOWN.replace("%seconds%", String.valueOf(remaining)));
+		return false;
+	}
+
 	public synchronized EntityType getDisguise(Player player) {
 		if(disguiseMap.containsKey(player.getUniqueId())) {
 			return disguiseMap.get(player.getUniqueId()).getType();
@@ -1295,11 +1324,23 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 
 		Entity finalEntity = entity;
 		Bukkit.getScheduler().runTaskLater(this, () -> {
+			// The disguise may have been torn down in the 5s window before this fires (undisguise,
+			// quit, cross-world teleport, orphan cleanup). Bail before touching the tracker so we
+			// don't spam IllegalStateException -- the cleanup paths already removed the injection.
+			if(!player.isOnline() || finalEntity.isDead() || !finalEntity.isValid()) return;
+			Entity current = disguiseMap.get(player.getUniqueId());
+			if(current == null || !current.equals(finalEntity)) return;
 			if(!LEGACY_INJECTION) {
 				player.hideEntity(this, finalEntity);
 			} else if(player.getWorld().equals(finalEntity.getWorld())) {
 				try {
 					LegacyInjector_toggleIntercept.invoke(null, finalEntity, player, true);
+				} catch(InvocationTargetException ite) {
+					// Tracker was uninjected between our guards above and this call (very narrow
+					// race) -- nothing to do, the disguise is already gone.
+					if(!(ite.getCause() instanceof IllegalStateException) && debugMode) {
+						getLogger().log(Level.SEVERE, "Unexpected failure!", ite);
+					}
 				} catch(Exception e) {
 					if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
 				}
@@ -1587,15 +1628,67 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(config.UPDATE_CHECK && hasPermissionAdmin(player)) {
 			Bukkit.getScheduler().runTaskLaterAsynchronously(this, new UpdateCheck(this, player, config.UPDATE_DOWNLOAD), 20L);
 		}
+
+		// Re-apply a disguise that was active when the player last quit (if persist-on-quit was
+		// enabled at the time). Delay a few ticks so the join finishes (other login plugins,
+		// teleport-on-join etc.) before we spawn the disguise mob at the wrong location.
+		UUID id = player.getUniqueId();
+		EntityType pendingMobType = pendingRejoinMobDisguises.remove(id);
+		String pendingSkin = pendingRejoinPlayerDisguises.remove(id);
+		if(pendingMobType != null) {
+			Bukkit.getScheduler().runTaskLater(this, () -> {
+				if(!player.isOnline() || isDisguised(player)) return;
+				try {
+					disguise0(player, pendingMobType);
+					if(debugMode) getLogger().info("[persist-on-quit] re-applied " + pendingMobType.name()
+							+ " disguise for " + player.getName() + " on rejoin");
+				} catch(Throwable t) {
+					if(debugMode) getLogger().log(Level.WARNING,
+							"Failed to re-apply pending disguise for " + player.getName(), t);
+				}
+			}, 10L);
+		} else if(pendingSkin != null) {
+			Bukkit.getScheduler().runTaskLater(this, () -> {
+				if(!player.isOnline() || isDisguised(player)) return;
+				try {
+					disguiseAsPlayer(player, pendingSkin, false, null);
+					if(debugMode) getLogger().info("[persist-on-quit] re-applied player disguise '"
+							+ pendingSkin + "' for " + player.getName() + " on rejoin");
+				} catch(Throwable t) {
+					if(debugMode) getLogger().log(Level.WARNING,
+							"Failed to re-apply pending player disguise for " + player.getName(), t);
+				}
+			}, 10L);
+		}
 	}
 	
 	@EventHandler
 	public void handlePlayerQuit(PlayerQuitEvent event) {
-		pendingCrossWorldDisguises.remove(event.getPlayer().getUniqueId());
-		mobSoundCooldowns.remove(event.getPlayer().getUniqueId());
-		if(isDisguised(event.getPlayer())) {
-			undisguise0(event.getPlayer());
+		Player player = event.getPlayer();
+		UUID id = player.getUniqueId();
+		pendingCrossWorldDisguises.remove(id);
+		mobSoundCooldowns.remove(id);
+		lastDisguiseTimestamps.remove(id);
+		lastPearlBlockNotice.remove(id);
+		if(!isDisguised(player)) return;
+
+		if(config.PERSIST_DISGUISE_ON_QUIT) {
+			// Capture the disguise identity BEFORE undisguising, because undisguise0 wipes the maps.
+			// We tear down the mob/invisibility now (offline players don't need either) and replay
+			// the disguise on rejoin in handlePlayerJoin.
+			Entity mob = disguiseMap.get(id);
+			String skin = playerDisguiseMap.get(id);
+			if(mob != null) {
+				pendingRejoinMobDisguises.put(id, mob.getType());
+			} else if(skin != null) {
+				pendingRejoinPlayerDisguises.put(id, skin);
+			}
+			if(debugMode) getLogger().info("[persist-on-quit] storing pending rejoin disguise for "
+					+ player.getName() + " (mob=" + (mob == null ? "null" : mob.getType().name())
+					+ ", skin=" + skin + ")");
 		}
+
+		undisguise0(player);
 	}
 
 	@EventHandler
@@ -1741,6 +1834,59 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	// Reflection avoids a direct EquipmentSlot reference, which would NoClassDefFoundError on 1.8.
 	private static java.lang.reflect.Method PlayerInteractEvent_getHand;
 	private static boolean PlayerInteractEvent_getHand_resolved;
+
+	// Block ender-pearl throws while disguised. The disguise mob sits at the player's location and
+	// otherwise either eats the pearl (looks like the pearl returns to hand) or, with any
+	// projectile-displacement workaround, would risk a wall-glitch teleport.
+	// Secondary catch at the projectile-spawn point. Some server forks (WineSpigot at least) don't
+	// deliver PlayerInteractEvent to plugins for pearl right-clicks, so we listen at
+	// ProjectileLaunchEvent too -- this fires whenever the pearl entity actually spawns. The cost
+	// is that the pearl item was already consumed by the time we get here, so we refund one on
+	// the next tick.
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void handleEnderpearlLaunchBlock(ProjectileLaunchEvent event) {
+		if(!config.DISABLE_ENDERPEARLS_WHILE_DISGUISED) return;
+		if(event.getEntityType() != EntityType.ENDER_PEARL) return;
+		ProjectileSource source = event.getEntity().getShooter();
+		if(!(source instanceof Player)) return;
+		Player player = (Player)source;
+		if(!isDisguised(player)) return;
+		event.setCancelled(true);
+		notifyPearlBlocked(player);
+		// The pearl item was already removed from the inventory before ProjectileLaunchEvent fired.
+		// Hand it back on the next tick so it doesn't end up consumed for no reason.
+		Bukkit.getScheduler().runTask(this, () -> {
+			if(!player.isOnline()) return;
+			Map<Integer, ItemStack> leftover = player.getInventory().addItem(new ItemStack(Material.ENDER_PEARL));
+			for(ItemStack drop : leftover.values()) {
+				player.getWorld().dropItemNaturally(player.getLocation(), drop);
+			}
+		});
+	}
+
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void handleEnderpearlBlock(PlayerInteractEvent event) {
+		if(!config.DISABLE_ENDERPEARLS_WHILE_DISGUISED) return;
+		Action action = event.getAction();
+		if(action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
+		if(isOffHandPass(event)) return;
+		ItemStack item = event.getItem();
+		if(item == null || item.getType() != Material.ENDER_PEARL) return;
+		Player player = event.getPlayer();
+		if(!isDisguised(player)) return;
+		event.setCancelled(true);
+		notifyPearlBlocked(player);
+	}
+
+	// Rate-limit the deny notification to once per second per player. Spam-clicking a pearl can
+	// fire several block events in a tick; we still cancel each one, but only message once.
+	private void notifyPearlBlocked(Player player) {
+		long now = System.currentTimeMillis();
+		Long last = lastPearlBlockNotice.get(player.getUniqueId());
+		if(last != null && now - last < 1000L) return;
+		lastPearlBlockNotice.put(player.getUniqueId(), now);
+		player.sendMessage(language.ENDERPEARL_BLOCKED_WHILE_DISGUISED);
+	}
 
 	@EventHandler(ignoreCancelled = true)
 	public void handleMobSoundTrigger(PlayerInteractEvent event) {
