@@ -60,6 +60,7 @@ import org.bukkit.event.entity.EntityCombustByEntityEvent;
 import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -1286,6 +1287,11 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			((TNTPrimed)entity).setFuseTicks(Integer.MAX_VALUE);
 		}
 		entity.setMetadata("iDisguise", new FixedMetadataValue(this, player.getUniqueId()));
+		// FactionsKore-Stacker's MobStackingFeature looks for this exact metadata key in its
+		// EntityDeathEvent listener and skips its custom-drop table when present. Without it,
+		// killing a disguise mob (e.g. when damage redirect doesn't fully neutralize the hit)
+		// rewards the attacker with the configured loot for that mob type -- free items.
+		entity.setMetadata("nodrops", new FixedMetadataValue(this, true));
 		if(LEGACY_INJECTION) {
 			try {
 				LegacyInjector_inject.invoke(null, entity, player);
@@ -1783,10 +1789,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				event.setCancelled(true);
 				return;
 			}
-			// Block self-damage when a player hits their own disguise mob (the mob lags behind
-			// during movement and is reachable). Without this, the MONITOR handler forwards the
-			// damage back to the player.
-			if(event.getEntity().hasMetadata("iDisguise")) {
+			if(event.getEntity().hasMetadata("iDisguise") && !event.isCancelled()) {
 				UUID disguiseOwnerId = (UUID)event.getEntity().getMetadata("iDisguise").get(0).value();
 				Entity damager = event2.getDamager();
 				Player attackerPlayer = null;
@@ -1798,10 +1801,49 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						attackerPlayer = (Player)shooter;
 					}
 				}
-				if(attackerPlayer != null && attackerPlayer.getUniqueId().equals(disguiseOwnerId)) {
-					event.setCancelled(true);
+				if(attackerPlayer != null) {
+					// Block self-damage when a player hits their own disguise mob (the mob lags
+					// behind during movement and is reachable). Without this, the MONITOR handler
+					// forwards the damage back to the player.
+					if(attackerPlayer.getUniqueId().equals(disguiseOwnerId)) {
+						event.setCancelled(true);
+						return;
+					}
+					// Re-dispatch the hit as attacker -> real player so PvP-protection plugins
+					// (Factions friendly-fire, towny, teams, region flags, ...) can inspect the
+					// matchup as if the disguise mob weren't sitting between them. They cancel
+					// and print their own "can't hit ally" message during this synchronous call;
+					// we mirror the cancellation back so the original mob hit shows no knockback
+					// or damage tick. The MONITOR handler then bails (event.isCancelled), leaving
+					// the disguised player untouched. Re-entrance is impossible: the synthetic
+					// event's victim is the bare Player (no "iDisguise" metadata), so neither
+					// this handler nor the MONITOR redirect re-fires.
+					Player disguisedPlayer = Bukkit.getPlayer(disguiseOwnerId);
+					if(disguisedPlayer != null && disguisedPlayer.isOnline()) {
+						EntityDamageByEntityEvent forward = new EntityDamageByEntityEvent(
+								damager, disguisedPlayer, event.getCause(), event.getDamage());
+						Bukkit.getPluginManager().callEvent(forward);
+						if(forward.isCancelled()) {
+							event.setCancelled(true);
+							return;
+						}
+					}
 				}
 			}
+		}
+	}
+
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	public void handleEntityDeath(EntityDeathEvent event) {
+		// Belt-and-suspenders against any mob-loot / stacker plugin that scans EntityDeathEvent
+		// for the disguise mob's type. The "nodrops" metadata set at spawn already covers
+		// FactionsKore-Stacker, but other plugins use their own conventions; clearing the vanilla
+		// drop list + xp here neutralizes the generic case. MONITOR-priority plugins that build
+		// their own drop containers (like FactionsKore-Stacker) won't honor this -- they need the
+		// metadata bypass -- but anything reading e.getDrops()/setDroppedExp() will be empty.
+		if(event.getEntity().hasMetadata("iDisguise")) {
+			event.getDrops().clear();
+			event.setDroppedExp(0);
 		}
 	}
 
