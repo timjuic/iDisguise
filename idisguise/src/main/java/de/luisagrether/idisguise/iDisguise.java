@@ -1600,8 +1600,31 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					// for the !KEEP_TAB_LIST disguise path; nothing to do.
 				}
 			}
+			// Force a destroy+spawn cycle per observer so the player's entity reappears immediately
+			// instead of waiting up to ~3s for the next entity-tracker keepalive. Plain showPlayer
+			// is insufficient in LEGACY_INJECTION mode (KEEP_TAB_LIST_WHEN_DISGUISED): observers
+			// were never added to hiddenPlayers at disguise time, so showPlayer early-returns and
+			// the tracker entry's updatePlayer is also a no-op (observer is still in
+			// trackedPlayers). Calling hidePlayer first evicts the observer from trackedPlayers
+			// and sends EntityDestroy; the following showPlayer then sends ADD_PLAYER and a fresh
+			// NamedEntitySpawn. Both packets ship in the same tick, so the client renders one
+			// continuous transition with no flicker. In non-legacy mode hidePlayer is a no-op
+			// (observer already in hiddenPlayers from disguise time) and showPlayer behaves as
+			// before -- this change is a net no-op there.
+			//
+			// Cross-world observers skip the hidePlayer call: they can't see the player, so the
+			// destroy packet is wasted, and clearing trackedPlayers does nothing useful. We still
+			// call showPlayer for them because in non-legacy mode the disguise loop called
+			// hidePlayer for every online observer including cross-world ones -- if we don't clear
+			// their hiddenPlayers flag here, CraftBukkit's tracker refuses to spawn the player
+			// when they next teleport into range (canSee() consults hiddenPlayers regardless of
+			// world), leaving the player invisibly stuck to that observer indefinitely.
+			World playerWorld = player.getWorld();
 			for(Player observer : Bukkit.getOnlinePlayers()) {
 				if(observer != player) {
+					if(observer.getWorld().equals(playerWorld)) {
+						observer.hidePlayer(player);
+					}
 					observer.showPlayer(player);
 				}
 			}
