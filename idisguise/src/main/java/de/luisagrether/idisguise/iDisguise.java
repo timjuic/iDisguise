@@ -65,6 +65,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPortalEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
+import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.block.Action;
@@ -1873,6 +1874,25 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(event.getEntity().hasMetadata("iDisguise")) {
 			event.getDrops().clear();
 			event.setDroppedExp(0);
+		}
+	}
+
+	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+	public void handleDisguiseEggLay(ItemSpawnEvent event) {
+		// A chicken disguise mob keeps laying eggs (NoAI doesn't stop it) right at the player's feet,
+		// so disguised players farm eggs and throw them to hatch chickens. EntityDropItemEvent would
+		// name the chicken but doesn't exist on 1.8, so match on position instead: the egg spawns at
+		// the chicken's exact location. LOWEST so item-stacker plugins see the spawn already cancelled.
+		Item item = event.getEntity();
+		String material = item.getItemStack().getType().name();
+		if(!material.equals("EGG") && !material.equals("BROWN_EGG") && !material.equals("BLUE_EGG")) return;
+		Location location = item.getLocation();
+		for(Entity entity : disguiseMap.values()) {
+			if(entity.getType() == EntityType.CHICKEN && entity.getWorld().equals(location.getWorld())
+					&& entity.getLocation().distanceSquared(location) < 0.01) {
+				event.setCancelled(true);
+				return;
+			}
 		}
 	}
 
