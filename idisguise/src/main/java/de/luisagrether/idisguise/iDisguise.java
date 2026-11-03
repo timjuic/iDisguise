@@ -1809,7 +1809,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	@EventHandler(priority = EventPriority.LOWEST)
 	public void handleEntityDamageLowest(EntityDamageEvent event) {
 		if(event.getEntity().hasMetadata("iDisguise")) {
-			if(StringUtil.equals(event.getCause().name(), "DROWNING", "DRYOUT", "FLY_INTO_WALL", "SUFFOCATION")) {
+			// Fire causes too: the player stands in the same fire/lava and takes that damage
+			// themselves. Relaying the mob's copy arrives as generic damage, which Fire Resistance
+			// doesn't block. Burning from attacks still reaches the player through
+			// handleEntityCombustMonitor, which sets the player on fire directly.
+			if(StringUtil.equals(event.getCause().name(), "DROWNING", "DRYOUT", "FLY_INTO_WALL", "SUFFOCATION",
+					"FIRE", "FIRE_TICK", "LAVA", "HOT_FLOOR")) {
 				event.setCancelled(true);
 			}
 		}
