@@ -44,6 +44,15 @@ disguise:
    # wall-glitch exploits in tight spaces -- so the safe default is to disallow them entirely.
    disable-enderpearls-while-disguised: DISABLE_ENDERPEARLS_WHILE_DISGUISED
 
+   # Disallow placing blocks while disguised. Cancels BlockPlaceEvent and sends a chat notice
+   # (rate-limited to once per second per player). Useful if disguised players abuse build to
+   # peek over walls or scout while looking like a mob.
+   disallow-block-place-while-disguised: DISALLOW_BLOCK_PLACE_WHILE_DISGUISED
+
+   # Disallow breaking blocks while disguised. Cancels BlockBreakEvent and sends a chat notice
+   # (rate-limited to once per second per player).
+   disallow-block-break-while-disguised: DISALLOW_BLOCK_BREAK_WHILE_DISGUISED
+
 # Options affecting the commands and permissions of iDisguise (these do NOT affect the developer API)
 commands:
 

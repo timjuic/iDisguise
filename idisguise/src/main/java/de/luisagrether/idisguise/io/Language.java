@@ -142,6 +142,8 @@ public class Language {
 	public String MOB_SOUND_PLAYED = ChatColor.GOLD + "♪ Played %entityType% sound";
 	public String DISGUISE_ON_COOLDOWN = ChatColor.RED + "Please wait %seconds%s before disguising again.";
 	public String ENDERPEARL_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't throw ender pearls while disguised.";
+	public String BLOCK_PLACE_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't place blocks while disguised.";
+	public String BLOCK_BREAK_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't break blocks while disguised.";
 
 	private iDisguise plugin;
 	

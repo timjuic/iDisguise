@@ -54,6 +54,8 @@ import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.EntityBlockFormEvent;
 import org.bukkit.event.entity.EntityCombustByBlockEvent;
 import org.bukkit.event.entity.EntityCombustByEntityEvent;
@@ -437,6 +439,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	private Map<UUID, String> pendingRejoinPlayerDisguises = new HashMap<>();
 	private Map<UUID, Long> lastDisguiseTimestamps = new HashMap<>();
 	private Map<UUID, Long> lastPearlBlockNotice = new HashMap<>();
+	private Map<UUID, Long> lastBlockPlaceNotice = new HashMap<>();
+	private Map<UUID, Long> lastBlockBreakNotice = new HashMap<>();
 	private Map<String, Object> profileDatabase = new HashMap<>();
 	private World dummyWorld;
 	
@@ -1699,6 +1703,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		mobSoundCooldowns.remove(id);
 		lastDisguiseTimestamps.remove(id);
 		lastPearlBlockNotice.remove(id);
+		lastBlockPlaceNotice.remove(id);
+		lastBlockBreakNotice.remove(id);
 		if(!isDisguised(player)) return;
 
 		if(config.PERSIST_DISGUISE_ON_QUIT) {
@@ -1951,6 +1957,35 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(last != null && now - last < 1000L) return;
 		lastPearlBlockNotice.put(player.getUniqueId(), now);
 		player.sendMessage(language.ENDERPEARL_BLOCKED_WHILE_DISGUISED);
+	}
+
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void handleBlockPlaceBlock(BlockPlaceEvent event) {
+		if(!config.DISALLOW_BLOCK_PLACE_WHILE_DISGUISED) return;
+		Player player = event.getPlayer();
+		if(!isDisguised(player)) return;
+		event.setCancelled(true);
+		notifyRateLimited(player, lastBlockPlaceNotice, language.BLOCK_PLACE_BLOCKED_WHILE_DISGUISED);
+	}
+
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void handleBlockBreakBlock(BlockBreakEvent event) {
+		if(!config.DISALLOW_BLOCK_BREAK_WHILE_DISGUISED) return;
+		Player player = event.getPlayer();
+		if(!isDisguised(player)) return;
+		event.setCancelled(true);
+		notifyRateLimited(player, lastBlockBreakNotice, language.BLOCK_BREAK_BLOCKED_WHILE_DISGUISED);
+	}
+
+	// Same 1s per-player rate-limit pattern as notifyPearlBlocked. Holding right-click on a stack
+	// or rapid-mining can fire many block events per second; we cancel every one but only emit
+	// the chat message at most once per second per player to avoid flooding their chat.
+	private void notifyRateLimited(Player player, Map<UUID, Long> bucket, String message) {
+		long now = System.currentTimeMillis();
+		Long last = bucket.get(player.getUniqueId());
+		if(last != null && now - last < 1000L) return;
+		bucket.put(player.getUniqueId(), now);
+		player.sendMessage(message);
 	}
 
 	@EventHandler(ignoreCancelled = true)
