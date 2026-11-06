@@ -144,6 +144,9 @@ public class Language {
 	public String ENDERPEARL_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't throw ender pearls while disguised.";
 	public String BLOCK_PLACE_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't place blocks while disguised.";
 	public String BLOCK_BREAK_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't break blocks while disguised.";
+	public String DISGUISE_BLOCKED_IN_REGION = ChatColor.RED + "You can't disguise in this area.";
+	public String ODISGUISE_BLOCKED_IN_REGION = ChatColor.RED + "%player% is in an area where disguises aren't allowed.";
+	public String UNDISGUISED_IN_BLOCKED_REGION = ChatColor.RED + "You were undisguised because disguises aren't allowed in this area.";
 
 	private iDisguise plugin;
 	

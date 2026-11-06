@@ -53,6 +53,15 @@ disguise:
    # (rate-limited to once per second per player).
    disallow-block-break-while-disguised: DISALLOW_BLOCK_BREAK_WHILE_DISGUISED
 
+   # WorldGuard region ids where players can't disguise, matched in every world (needs WorldGuard 6).
+   # /disguise is refused inside them, and disguised players who walk or teleport in are undisguised.
+   # Players with the iDisguise.bypass.regions permission are exempt. Leave empty to turn this off.
+   # Example:
+   # blocked-regions:
+   #    - koth
+   #    - arena
+   blocked-regions: BLOCKED_REGIONS
+
 # Options affecting the commands and permissions of iDisguise (these do NOT affect the developer API)
 commands:
 

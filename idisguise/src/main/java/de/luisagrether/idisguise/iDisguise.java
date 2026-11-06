@@ -76,6 +76,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.permissions.Permission;
@@ -447,6 +448,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	// Set only while disguise0 spawns the disguise mob, so handleDisguiseSpawn can tell that spawn
 	// apart from anything else spawning during the call.
 	private EntityType spawningDisguiseType;
+	// null when WorldGuard 6 isn't installed; disguise.blocked-regions does nothing then.
+	private WorldGuardRegions worldGuardRegions;
 	private World dummyWorld;
 	
 	public iDisguise() { INSTANCE = this; }
@@ -479,6 +482,11 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		language = new Language(this);
 		language.loadData();
 		language.saveData();
+
+		worldGuardRegions = WorldGuardRegions.detect(this);
+		if(worldGuardRegions == null && !config.BLOCKED_REGIONS.isEmpty()) {
+			getLogger().warning("disguise.blocked-regions is set, but WorldGuard 6 isn't installed. Disguises won't be blocked in any region.");
+		}
 
 		for(EntityType type : EntityType.values()) {
 			if(config.DISGUISE_TYPE_BLACKLIST.contains(type.name())) continue;
@@ -618,6 +626,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.disguise.*", PermissionDefault.OP));
 			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.others", PermissionDefault.OP));
 			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.sound", PermissionDefault.TRUE));
+			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.bypass.regions", PermissionDefault.OP));
 			for(EntityType type : EntityType.values()) {
 				if(config.DISGUISE_TYPE_BLACKLIST.contains(type.name())) continue;
 				Bukkit.getPluginManager().addPermission(new Permission("iDisguise.disguise." + type.name(), PermissionDefault.OP));
@@ -785,6 +794,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_INVALID);
 				} else if(config.PLAYER_DISGUISE_BLACKLIST.contains(args[1].toLowerCase(Locale.ENGLISH))) {
 					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_BLACKLISTED);
+				} else if(isDisguiseBlocked(target, target.getLocation())) {
+					sender.sendMessage(self ? language.DISGUISE_BLOCKED_IN_REGION : language.ODISGUISE_BLOCKED_IN_REGION.replace("%player%", target.getName()));
 				} else if(self && !checkDisguiseCooldown(target)) {
 					return true;
 				} else {
@@ -816,6 +827,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						sender.sendMessage(language.DISGUISE_TYPE_NOT_SUPPORTED);
 					} else if(sender instanceof Player && !hasPermission((Player)sender, type)) {
 						sender.sendMessage(language.DISGUISE_NO_PERMISSION);
+					} else if(isDisguiseBlocked(target, target.getLocation())) {
+						sender.sendMessage(self ? language.DISGUISE_BLOCKED_IN_REGION : language.ODISGUISE_BLOCKED_IN_REGION.replace("%player%", target.getName()));
 					} else if(self && !checkDisguiseCooldown(target)) {
 						return true;
 					} else {
@@ -1198,6 +1211,35 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			return ((Player)sender).hasPermission("iDisguise.*") ||
 			       ((Player)sender).hasPermission("iDisguise.others");
 		}
+	}
+
+	private boolean hasPermissionRegionBypass(Player player) {
+		if(!config.USE_PERMISSION_NODES) {
+			return player.isOp();
+		} else {
+			return player.hasPermission("iDisguise.*") ||
+			       player.hasPermission("iDisguise.bypass.regions");
+		}
+	}
+
+	// True when the location is inside a region from disguise.blocked-regions and the player has
+	// no bypass. Checks the target, so /odisguise on a player in a blocked region is refused too.
+	private boolean isDisguiseBlocked(Player player, Location location) {
+		if(worldGuardRegions == null || config.BLOCKED_REGIONS.isEmpty()) return false;
+		if(hasPermissionRegionBypass(player)) return false;
+		return worldGuardRegions.isInAny(location, config.BLOCKED_REGIONS);
+	}
+
+	// Undisguise on the next tick, once the move or teleport into the blocked region has settled.
+	// Doing it inside the event would let a player-skin undisguise teleport the player (its viewself
+	// refresh) in the middle of their own move.
+	private void scheduleRegionUndisguise(Player player) {
+		Bukkit.getScheduler().runTask(this, () -> {
+			if(!player.isOnline() || !isDisguised(player)) return;
+			if(!isDisguiseBlocked(player, player.getLocation())) return;
+			undisguise0(player);
+			player.sendMessage(language.UNDISGUISED_IN_BLOCKED_REGION);
+		});
 	}
 
 	// Returns true when the player is allowed to disguise; false when the cooldown is active
@@ -1681,6 +1723,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(pendingMobType != null) {
 			Bukkit.getScheduler().runTaskLater(this, () -> {
 				if(!player.isOnline() || isDisguised(player)) return;
+				if(isDisguiseBlocked(player, player.getLocation())) {
+					player.sendMessage(language.UNDISGUISED_IN_BLOCKED_REGION);
+					return;
+				}
 				try {
 					disguise0(player, pendingMobType);
 					if(debugMode) getLogger().info("[persist-on-quit] re-applied " + pendingMobType.name()
@@ -1693,6 +1739,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		} else if(pendingSkin != null) {
 			Bukkit.getScheduler().runTaskLater(this, () -> {
 				if(!player.isOnline() || isDisguised(player)) return;
+				if(isDisguiseBlocked(player, player.getLocation())) {
+					player.sendMessage(language.UNDISGUISED_IN_BLOCKED_REGION);
+					return;
+				}
 				try {
 					disguiseAsPlayer(player, pendingSkin, false, null);
 					if(debugMode) getLogger().info("[persist-on-quit] re-applied player disguise '"
@@ -1761,6 +1811,13 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	public void handlePlayerMove(PlayerMoveEvent event) {
 		checkDisguiseHealth(event.getPlayer());
 		Player player = event.getPlayer();
+		Location moveFrom = event.getFrom();
+		Location moveTo = event.getTo();
+		boolean changedBlock = moveFrom.getBlockX() != moveTo.getBlockX() || moveFrom.getBlockY() != moveTo.getBlockY()
+				|| moveFrom.getBlockZ() != moveTo.getBlockZ() || !moveFrom.getWorld().equals(moveTo.getWorld());
+		if(!event.isCancelled() && changedBlock && isDisguised(player) && isDisguiseBlocked(player, moveTo)) {
+			scheduleRegionUndisguise(player);
+		}
 		if(!event.isCancelled() && disguiseMap.containsKey(player.getUniqueId())) {
 			Entity entity = disguiseMap.get(player.getUniqueId());
 			World worldFrom = entity.getWorld();
@@ -1780,6 +1837,15 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				}
 				entity.setVelocity(player.getVelocity());
 			}
+		}
+	}
+
+	// PlayerTeleportEvent has its own handler list, so handlePlayerMove never sees teleports.
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void handlePlayerTeleportRegion(PlayerTeleportEvent event) {
+		Player player = event.getPlayer();
+		if(isDisguised(player) && isDisguiseBlocked(player, event.getTo())) {
+			scheduleRegionUndisguise(player);
 		}
 	}
 
@@ -1804,6 +1870,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 
 		if(pendingType == null) return;
 		if(!player.isOnline() || isDisguised(player)) return;
+		if(isDisguiseBlocked(player, player.getLocation())) {
+			player.sendMessage(language.UNDISGUISED_IN_BLOCKED_REGION);
+			return;
+		}
 		try {
 			Entity result = disguise0(player, pendingType);
 			if(result == null && debugMode) {

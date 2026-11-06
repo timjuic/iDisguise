@@ -6,6 +6,7 @@ author: LuisaGrether
 description: Disguise as a mob or other player.
 website: https://www.spigotmc.org/resources/idisguise.5509/
 loadbefore: [MinecraftTrainSimulator]
+softdepend: [WorldGuard]
 commands:
    disguise:
       description: Disguise yourself as a mob or other player.

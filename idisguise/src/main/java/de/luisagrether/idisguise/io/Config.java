@@ -30,6 +30,7 @@ public class Config {
 	public static final String DISABLE_ENDERPEARLS_WHILE_DISGUISED_PATH = "disguise.disable-enderpearls-while-disguised";
 	public static final String DISALLOW_BLOCK_PLACE_WHILE_DISGUISED_PATH = "disguise.disallow-block-place-while-disguised";
 	public static final String DISALLOW_BLOCK_BREAK_WHILE_DISGUISED_PATH = "disguise.disallow-block-break-while-disguised";
+	public static final String BLOCKED_REGIONS_PATH = "disguise.blocked-regions";
     public static final String STATEMENT_WHITELIST_PATH = "commands.statement-whitelist";
 	public static final String USE_PERMISSION_NODES_PATH = "commands.use-permission-nodes";
 	public static final String UPDATE_CHECK_PATH = "updates.check";
@@ -57,6 +58,7 @@ public class Config {
 	public boolean DISABLE_ENDERPEARLS_WHILE_DISGUISED = true;
 	public boolean DISALLOW_BLOCK_PLACE_WHILE_DISGUISED = false;
 	public boolean DISALLOW_BLOCK_BREAK_WHILE_DISGUISED = false;
+	public List<String> BLOCKED_REGIONS = new ArrayList<>();
 	@LastUpdated(60002)
 	public List<String> STATEMENT_WHITELIST = Arrays.asList(
 		"setCustomName", "setGlowing", "setFireTicks", "setFreezeTicks", "setSilent", "setAdult", "setBaby", "setVariant", "setPlayingDead", "setHasNectar",
@@ -114,6 +116,15 @@ public class Config {
 								for(String value : (List<String>)fileConfiguration.getList((String)pathField.get(null), (List<String>)valueField.get(this))) {
 									if(!PLAYER_DISGUISE_BLACKLIST.contains(value.toLowerCase(Locale.ENGLISH))) {
 										PLAYER_DISGUISE_BLACKLIST.add(value.toLowerCase(Locale.ENGLISH));
+									}
+								}
+							} else if(valueField.getName().equals("BLOCKED_REGIONS")) {
+								// String.valueOf: a numeric region id like "- 1" comes back from YAML as an Integer.
+								BLOCKED_REGIONS = new ArrayList<>();
+								for(Object value : fileConfiguration.getList((String)pathField.get(null))) {
+									String regionId = String.valueOf(value).toLowerCase(Locale.ENGLISH);
+									if(!BLOCKED_REGIONS.contains(regionId)) {
+										BLOCKED_REGIONS.add(regionId);
 									}
 								}
 							} else {
