@@ -627,6 +627,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.others", PermissionDefault.OP));
 			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.sound", PermissionDefault.TRUE));
 			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.bypass.regions", PermissionDefault.OP));
+			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.see", PermissionDefault.OP));
 			for(EntityType type : EntityType.values()) {
 				if(config.DISGUISE_TYPE_BLACKLIST.contains(type.name())) continue;
 				Bukkit.getPluginManager().addPermission(new Permission("iDisguise.disguise." + type.name(), PermissionDefault.OP));
@@ -1219,6 +1220,15 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		} else {
 			return player.hasPermission("iDisguise.*") ||
 			       player.hasPermission("iDisguise.bypass.regions");
+		}
+	}
+
+	private boolean hasPermissionSee(Player player) {
+		if(!config.USE_PERMISSION_NODES) {
+			return player.isOp();
+		} else {
+			return player.hasPermission("iDisguise.*") ||
+			       player.hasPermission("iDisguise.see");
 		}
 	}
 
@@ -2192,6 +2202,15 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	public void handlePlayerInteractEntity(PlayerInteractEntityEvent event) {
 		if(event.getRightClicked().hasMetadata("iDisguise")) {
 			event.setCancelled(true);
+			// Staff right-click a disguise mob to see who's in it; everyone else gets no hint.
+			if(hasPermissionSee(event.getPlayer())) {
+				Player disguisedPlayer = Bukkit.getPlayer((UUID)event.getRightClicked().getMetadata("iDisguise").get(0).value());
+				if(disguisedPlayer != null) {
+					event.getPlayer().sendMessage(language.DISGUISE_REVEAL
+							.replace("%player%", disguisedPlayer.getName())
+							.replace("%entityType%", event.getRightClicked().getType().name()));
+				}
+			}
 			Bukkit.getScheduler().runTaskLater(this, () -> {
 				Bukkit.getPluginManager().callEvent(new PlayerInteractDisguisedPlayerEvent(
 					event.getPlayer(),
