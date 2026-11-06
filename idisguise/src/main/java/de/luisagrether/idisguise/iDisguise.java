@@ -64,6 +64,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPortalEvent;
+import org.bukkit.event.entity.EntitySpawnEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -443,6 +444,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	private Map<UUID, Long> lastBlockPlaceNotice = new HashMap<>();
 	private Map<UUID, Long> lastBlockBreakNotice = new HashMap<>();
 	private Map<String, Object> profileDatabase = new HashMap<>();
+	// Set only while disguise0 spawns the disguise mob, so handleDisguiseSpawn can tell that spawn
+	// apart from anything else spawning during the call.
+	private EntityType spawningDisguiseType;
 	private World dummyWorld;
 	
 	public iDisguise() { INSTANCE = this; }
@@ -1248,14 +1252,19 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(isDisguised(player)) undisguise0(player);
 
 		Entity entity;
-		if(type == EntityType.DROPPED_ITEM) {
-			entity = player.getWorld().dropItem(player.getLocation(), new ItemStack(Material.STONE));
-		} else {
-			entity = player.getWorld().spawnEntity(player.getLocation(), type);
+		spawningDisguiseType = type;
+		try {
+			if(type == EntityType.DROPPED_ITEM) {
+				entity = player.getWorld().dropItem(player.getLocation(), new ItemStack(Material.STONE));
+			} else {
+				entity = player.getWorld().spawnEntity(player.getLocation(), type);
+			}
+		} finally {
+			spawningDisguiseType = null;
 		}
-		// Bail if the spawn was denied (CreatureSpawnEvent cancelled, WorldGuard mob-spawning deny,
-		// per-world entity restrictions, etc.). Otherwise we'd leave the player half-disguised:
-		// invisible + tracker intercepted but with no visible mob.
+		// Bail if the mob still didn't make it into the world. Cancelled spawn events are overridden
+		// by handleDisguiseSpawn, but a plugin can still remove the entity outright. Otherwise we'd
+		// leave the player half-disguised: invisible + tracker intercepted but with no visible mob.
 		if(entity == null || entity.isDead() || !entity.isValid()) {
 			if(entity != null) entity.remove();
 			if(debugMode) getLogger().info("Disguise spawn for " + player.getName() + " was denied in world '"
@@ -1879,6 +1888,20 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(event.getEntity().hasMetadata("iDisguise")) {
 			event.getDrops().clear();
 			event.setDroppedExp(0);
+		}
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR)
+	public void handleDisguiseSpawn(EntitySpawnEvent event) {
+		// Spawn, the End and other protected areas deny mob spawning (WorldGuard mob-spawning flag,
+		// Factions zone rules, ...), and that also cancelled the disguise mob, so nobody could
+		// disguise there. The disguise mob isn't a real mob spawn, so let it through. MONITOR
+		// because the cancelling plugin can sit at HIGHEST and run after any earlier priority.
+		// On 1.8 CreatureSpawnEvent and ItemSpawnEvent share this handler list, so this covers both.
+		if(spawningDisguiseType != null && event.isCancelled() && event.getEntityType() == spawningDisguiseType) {
+			event.setCancelled(false);
+			if(debugMode) getLogger().info("Let disguise spawn (" + spawningDisguiseType.name() + ") through at "
+					+ event.getLocation() + " after another plugin cancelled it");
 		}
 	}
 
