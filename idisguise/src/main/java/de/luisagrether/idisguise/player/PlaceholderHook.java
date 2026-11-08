@@ -11,6 +11,7 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
  * %idisguise_name% = the name other players see (the fake name while disguised, else the real one).
  * Use it instead of %player_name% where a disguised player's real name must not show,
  * e.g. InteractiveChat's "/msg %player_name%" click action.
+ * %idisguise_tabprefix% = the TAB tab prefix of the player's real rank (for their own scoreboard).
  */
 final class PlaceholderHook extends PlaceholderExpansion {
 
@@ -59,6 +60,7 @@ final class PlaceholderHook extends PlaceholderExpansion {
 	@Override
 	public String onPlaceholderRequest(Player player, String params) {
 		if("name".equalsIgnoreCase(params)) return manager.visibleName(player);
+		if("tabprefix".equalsIgnoreCase(params)) return manager.realTabPrefix(player);
 		return null;
 	}
 

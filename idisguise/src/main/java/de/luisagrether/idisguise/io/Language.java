@@ -31,8 +31,8 @@ public class Language {
 	public String ODISGUISE_CURRENTLY_NOT_DISGUISED = ChatColor.GOLD + "%player% is not disguised.";
     @LastUpdated(60001)
 	public String DISGUISE_TYPE_NOT_SUPPORTED = ChatColor.RED + "Currently not supported!";
-    @LastUpdated(60001)
-	public String DISGUISE_TYPE_NOT_FOUND = ChatColor.RED + "Disguise type not found: %entityType%";
+    @LastUpdated(60102)
+	public String DISGUISE_TYPE_NOT_FOUND = ChatColor.RED + "Disguise type not found: " + ChatColor.WHITE + "%entityType%";
 	@LastUpdated(60001)
 	public String DISGUISE_NO_PERMISSION = ChatColor.RED + "You don't have permission.";
 	@LastUpdated(60001)
@@ -167,14 +167,14 @@ public class Language {
 	public String LIST_LEGEND = ChatColor.WHITE + "white = available, " + ChatColor.GRAY + ChatColor.STRIKETHROUGH + "grey" + ChatColor.RESET + ChatColor.WHITE + " = no permission.";
 	@LastUpdated(60100)
 	public String PLAYER_DISGUISED = ChatColor.GOLD + "You are now disguised as " + ChatColor.YELLOW + "%name%" + ChatColor.GOLD + " (rank: " + ChatColor.YELLOW + "%rank%" + ChatColor.GOLD + ").";
-	@LastUpdated(60100)
-	public String PLAYER_DISGUISE_RANK_UNKNOWN = ChatColor.RED + "Unknown rank: %rank%. Ranks you can use: %ranks%";
-	@LastUpdated(60100)
-	public String PLAYER_DISGUISE_RANK_NO_PERMISSION = ChatColor.RED + "You can't use the rank %rank%.";
-	@LastUpdated(60100)
-	public String PLAYER_DISGUISE_NAME_ONLINE = ChatColor.RED + "%name% is online, you can't disguise as them.";
-	@LastUpdated(60100)
-	public String PLAYER_DISGUISE_NAME_PLAYED_BEFORE = ChatColor.RED + "%name% has played on this server, you can't disguise as them.";
+	@LastUpdated(60102)
+	public String PLAYER_DISGUISE_RANK_UNKNOWN = ChatColor.RED + "Unknown rank: " + ChatColor.WHITE + "%rank%" + ChatColor.RED + ". Ranks you can use: " + ChatColor.WHITE + "%ranks%";
+	@LastUpdated(60102)
+	public String PLAYER_DISGUISE_RANK_NO_PERMISSION = ChatColor.RED + "You can't use the rank " + ChatColor.WHITE + "%rank%" + ChatColor.RED + ".";
+	@LastUpdated(60102)
+	public String PLAYER_DISGUISE_NAME_ONLINE = ChatColor.WHITE + "%name%" + ChatColor.RED + " is online, you can't disguise as them.";
+	@LastUpdated(60102)
+	public String PLAYER_DISGUISE_NAME_PLAYED_BEFORE = ChatColor.WHITE + "%name%" + ChatColor.RED + " has played on this server, you can't disguise as them.";
 	@LastUpdated(60100)
 	public String HELP_DISGUISE_RANDOM = ChatColor.GOLD.toString() + ChatColor.BOLD + "Random player disguise: " + ChatColor.ITALIC + "/disguise random\\\\"
 	                                   + ChatColor.GOLD + "A real player's name and skin with a random rank.";
@@ -272,12 +272,12 @@ public class Language {
 	public String LOG_STILL_ON = "still on";
 	@LastUpdated(60100)
 	public String HELP_CLICK = ChatColor.GRAY + "Click to type this command";
-	@LastUpdated(60100)
-	public String PLAYER_DISGUISE_RANK_OWNER_ONLINE = ChatColor.RED + "%name% is online, so you can only use their real rank: /disguise %name%";
-	@LastUpdated(60100)
-	public String PLAYER_DISGUISE_NAME_TAKEN = ChatColor.RED + "Someone is already disguised as %name%.";
-	@LastUpdated(60100)
-	public String UNDISGUISED_REAL_PLAYER_JOINED = ChatColor.RED + "You were undisguised because %name% joined the server.";
+	@LastUpdated(60102)
+	public String PLAYER_DISGUISE_RANK_OWNER_ONLINE = ChatColor.WHITE + "%name%" + ChatColor.RED + " is online, so you can only use their real rank: " + ChatColor.WHITE + "/disguise %name%";
+	@LastUpdated(60102)
+	public String PLAYER_DISGUISE_NAME_TAKEN = ChatColor.RED + "Someone is already disguised as " + ChatColor.WHITE + "%name%" + ChatColor.RED + ".";
+	@LastUpdated(60102)
+	public String UNDISGUISED_REAL_PLAYER_JOINED = ChatColor.RED + "You were undisguised because " + ChatColor.WHITE + "%name%" + ChatColor.RED + " joined the server.";
 	@LastUpdated(60100)
 	public String UNDISGUISED_IN_COMBAT = ChatColor.RED + "You were undisguised because you entered combat.";
 	@LastUpdated(60100)

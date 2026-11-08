@@ -82,6 +82,14 @@ random-name-pool: 40
 # false = they only see mob disguises, so player disguises stay on in combat (see remove-in-combat below).
 visible-to-other-plugins: false
 
+# Vanish commands. A vanish plugin may hide / show a player with its own packets, which iDisguise doesn't see.
+# When a disguised player uses one, their disguise is rebuilt for everyone a moment later (PremiumVanish is detected by itself).
+vanish-commands:
+- v
+- vanish
+- pv
+- premiumvanish
+
 # Commands where a disguise name is NOT changed into the real name (e.g. LuckPerms, so /lp user <name>
 # always means the real account with that name).
 commands-not-translated:

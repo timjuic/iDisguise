@@ -44,6 +44,7 @@ final class PlayerDisguiseSettings {
 	final int randomNamePool;
 	final boolean visibleToOtherPlugins;
 	final java.util.Set<String> commandsNotTranslated = new java.util.HashSet<>();
+	final java.util.Set<String> repairAfterCommands = new java.util.HashSet<>();
 	private final java.util.Map<String, String> menuItems = new java.util.HashMap<>();
 	final String defaultRank;
 	final boolean copyRealRank;
@@ -78,6 +79,9 @@ final class PlayerDisguiseSettings {
 		blockKnownNamesForPlayers = config.getBoolean("block-known-names-for-players", true);
 		randomNamePool = Math.max(5, config.getInt("random-name-pool", 40));
 		visibleToOtherPlugins = config.getBoolean("visible-to-other-plugins", false);
+		for(String command : config.getStringList("vanish-commands")) {
+			repairAfterCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
+		}
 		for(String command : config.getStringList("commands-not-translated")) {
 			commandsNotTranslated.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
 		}

@@ -66,6 +66,8 @@ public final class PlayerDisguiseManager implements Listener {
 
 	private static final Set<String> OWN_COMMANDS = new HashSet<>(java.util.Arrays.asList(
 			"disguise", "d", "dis", "odisguise", "od", "undisguise", "ud", "undis", "idisguise"));
+	private static final Set<String> VANISH_EVENTS = new HashSet<>(java.util.Arrays.asList(
+			"de.myzelyam.api.vanish.PlayerShowEvent", "de.myzelyam.api.vanish.PlayerHideEvent"));
 	private static final Set<String> SKIN_COMMANDS = new HashSet<>(java.util.Arrays.asList("skin", "skins"));
 
 	private final iDisguise plugin;
@@ -148,6 +150,8 @@ public final class PlayerDisguiseManager implements Listener {
 		randomNames.refill();
 		Bukkit.getPluginManager().registerEvents(new RankMenu.Clicks(plugin), plugin);
 		preview = new SelfPreview(plugin, this);
+		hookVanishEvents();
+		readTabPrefixes();
 		mobRevealTask = Bukkit.getScheduler().runTaskTimer(plugin, this::showMobNames, 20L, 20L);
 		rewriter = new PacketRewriter(plugin, this);
 		rewriter.register();
@@ -316,7 +320,7 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		// Check the name first: the menu only opens for a name that can be used.
 		// Otherwise the normal path runs and says why not.
-		String problem = nameProblem(target, name);
+		String problem = nameProblem(sender, target, name);
 		boolean blockKnown = !has(sender, PERM_ANY_NAME) && settings.blockKnownNamesForPlayers;
 		if(problem != null || plugin.isPlayerNameBlacklisted(name)
 				|| (luckPerms == null && blockKnown && hasPlayedBefore(name, target))) {
@@ -390,7 +394,7 @@ public final class PlayerDisguiseManager implements Listener {
 			return;
 		}
 		String name = randomNames.take(candidate -> {
-			if(plugin.isPlayerNameBlacklisted(candidate) || nameProblem(target, candidate) != null) return false;
+			if(plugin.isPlayerNameBlacklisted(candidate) || nameProblem(sender, target, candidate) != null) return false;
 			if(Bukkit.getPlayerExact(candidate) != null) return false;
 			return luckPerms != null || !hasPlayedBefore(candidate, target);
 		});
@@ -446,7 +450,7 @@ public final class PlayerDisguiseManager implements Listener {
 				return;
 			}
 		}
-		String problem = nameProblem(target, name);
+		String problem = nameProblem(sender, target, name);
 		if(problem != null) {
 			send(sender, problem.replace("%name%", name));
 			finish(done, false);
@@ -501,13 +505,16 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	/** Why this name can't be used right now, or null. */
-	private String nameProblem(Player target, String name) {
+	private String nameProblem(CommandSender sender, Player target, String name) {
 		for(PlayerDisguise other : disguises.values()) {
 			if(other.getUniqueId().equals(target.getUniqueId())) continue;
 			if(other.getFakeName().equalsIgnoreCase(name)) return language().PLAYER_DISGUISE_NAME_TAKEN;
-			// The real name of someone who is disguised right now: names would get mixed up.
-			// No name in this message: it would tell who is disguised.
-			if(other.getProfile() != null && other.getRealName().equalsIgnoreCase(name)) return language().PLAYER_DISGUISE_NAME_UNAVAILABLE;
+			// The real name of someone who is disguised right now: names would get mixed up. The message
+			// must not tell that this player is disguised: players get the usual "has played here" one.
+			if(other.getProfile() != null && other.getRealName().equalsIgnoreCase(name)) {
+				boolean blockKnown = !has(sender, PERM_ANY_NAME) && settings.blockKnownNamesForPlayers;
+				return blockKnown ? language().PLAYER_DISGUISE_NAME_PLAYED_BEFORE : language().PLAYER_DISGUISE_NAME_UNAVAILABLE;
+			}
 		}
 		return null;
 	}
@@ -525,7 +532,7 @@ public final class PlayerDisguiseManager implements Listener {
 			finish(done, false);
 			return;
 		}
-		String problem = nameProblem(target, name);
+		String problem = nameProblem(sender, target, name);
 		if(problem != null) {
 			send(sender, problem.replace("%name%", name));
 			finish(done, false);
@@ -615,6 +622,48 @@ public final class PlayerDisguiseManager implements Listener {
 			if(viewer == player) continue;
 			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, null,
 					new WrappedGameProfile(player.getUniqueId(), player.getName())));
+		}
+	}
+
+	/**
+	 * Rebuilds a disguised player's tab entry and body for everyone who can see them, after a vanish
+	 * plugin hid / showed them with its own packets (those bypass iDisguise).
+	 */
+	void repair(Player player) {
+		PlayerDisguise disguise = disguises.get(player.getUniqueId());
+		if(!player.isOnline() || disguise == null) return;
+		for(Player viewer : Bukkit.getOnlinePlayers()) {
+			if(viewer == player || !viewer.canSee(player)) continue;
+			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,
+					new WrappedGameProfile(disguise.getFakeUniqueId(), disguise.getFakeName())));
+			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, null,
+					new WrappedGameProfile(player.getUniqueId(), player.getName())));
+			disguise.getRemovedFor().remove(viewer.getUniqueId());
+			viewer.hidePlayer(player);
+			viewer.showPlayer(player);
+		}
+	}
+
+	/** PremiumVanish: rebuild a disguised player right after they vanish / appear. */
+	@SuppressWarnings("unchecked")
+	private void hookVanishEvents() {
+		for(String className : VANISH_EVENTS) {
+			try {
+				Class<? extends org.bukkit.event.Event> eventClass = (Class<? extends org.bukkit.event.Event>)Class.forName(className);
+				Bukkit.getPluginManager().registerEvent(eventClass, this, EventPriority.MONITOR, (listener, event) -> {
+					try {
+						Object player = event.getClass().getMethod("getPlayer").invoke(event);
+						if(player instanceof Player && disguises.containsKey(((Player)player).getUniqueId())) {
+							Bukkit.getScheduler().runTaskLater(plugin, () -> repair((Player)player), 2L);
+							Bukkit.getScheduler().runTaskLater(plugin, () -> repair((Player)player), 20L);
+						}
+					} catch(ReflectiveOperationException e) {
+						debug("Could not read the vanish event", e);
+					}
+				}, plugin);
+			} catch(ClassNotFoundException e) {
+				// PremiumVanish isn't installed
+			}
 		}
 	}
 
@@ -1186,6 +1235,12 @@ public final class PlayerDisguiseManager implements Listener {
 		String label = parts[0].toLowerCase(Locale.ENGLISH);
 		if(label.contains(":")) label = label.substring(label.indexOf(':') + 1);
 
+		if(settings.repairAfterCommands.contains(label) && disguises.containsKey(event.getPlayer().getUniqueId())) {
+			// A vanish plugin may send its own tab packets past iDisguise: rebuild the entry afterwards.
+			Player player = event.getPlayer();
+			Bukkit.getScheduler().runTaskLater(plugin, () -> repair(player), 10L);
+			Bukkit.getScheduler().runTaskLater(plugin, () -> repair(player), 40L);
+		}
 		if(SKIN_COMMANDS.contains(label) && disguises.containsKey(event.getPlayer().getUniqueId())) {
 			event.setCancelled(true);
 			send(event.getPlayer(), language().SKIN_BLOCKED_WHILE_DISGUISED);
@@ -1228,6 +1283,31 @@ public final class PlayerDisguiseManager implements Listener {
 		PlayerDisguiseSettings.Profile profile = disguise == null ? null : disguise.getProfile();
 		if(profile == null || !profile.removeInCombat) return;
 		if(undisguise(player)) send(player, language().UNDISGUISED_IN_COMBAT);
+	}
+
+	/**
+	 * %idisguise_tabprefix%: the TAB tab prefix of the player's REAL rank (groups.yml), for their own
+	 * scoreboard: %tab_tabprefix% shows the disguise rank while disguised.
+	 */
+	String realTabPrefix(Player player) {
+		if(player == null || luckPerms == null) return "";
+		String group = luckPerms.primaryGroup(player);
+		if(group == null) return "";
+		String prefix = tabPrefixes.get(group.toLowerCase(Locale.ENGLISH));
+		if(prefix == null) prefix = tabPrefixes.get("_default_");
+		return prefix == null ? "" : prefix;
+	}
+
+	private final Map<String, String> tabPrefixes = new java.util.HashMap<>();
+
+	private void readTabPrefixes() {
+		File file = new File(Bukkit.getWorldContainer(), "plugins/TAB/groups.yml");
+		if(!file.isFile()) return;
+		org.bukkit.configuration.file.YamlConfiguration yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file);
+		for(String group : yaml.getKeys(false)) {
+			String prefix = yaml.getString(group + ".tabprefix");
+			if(prefix != null) tabPrefixes.put(group.toLowerCase(Locale.ENGLISH), prefix);
+		}
 	}
 
 	/** %idisguise_name%: the name other players see. */
