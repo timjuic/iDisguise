@@ -714,8 +714,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				}
 			}
 			if(args.length == 0) {
-				if(isDisguised(target)) {
-					if(getDisguise(target) == EntityType.PLAYER) {
+				if(anyDisguise(target)) {
+					if(currentDisguise(target) == EntityType.PLAYER) {
 						String fakeName = playerDisguises.get(target.getUniqueId()).getFakeName();
 						playerDisguises.sendUnchanged(sender,
 							self ? 
@@ -724,7 +724,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						);
 					} else {
 						if(self) {
-							sender.sendMessage(language.CURRENTLY_DISGUISED_AS_ENTITY.replace("%entityType%", getDisguise(target).name()));
+							sender.sendMessage(language.CURRENTLY_DISGUISED_AS_ENTITY.replace("%entityType%", currentDisguise(target).name()));
 							target.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, 100, 1, true, false));
 							Entity finalEntity = disguiseMap.get(target.getUniqueId());
 							Player finalTarget = target;
@@ -749,7 +749,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 								}
 							}, 100L);
 						} else {
-							sender.sendMessage(language.ODISGUISE_CURRENTLY_DISGUISED_AS_ENTITY.replace("%player%", target.getName()).replace("%entityType%", getDisguise(target).name()));
+							sender.sendMessage(language.ODISGUISE_CURRENTLY_DISGUISED_AS_ENTITY.replace("%player%", target.getName()).replace("%entityType%", currentDisguise(target).name()));
 						}
 					}
 				} else {
@@ -955,9 +955,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				}
 				args = Arrays.copyOfRange(args, 1, args.length);
 			}
-			if(isDisguised(target)) {
+			if(anyDisguise(target)) {
 				try {
-					undisguise(target);
+					undisguiseChecked(target, true);
 					sender.sendMessage(language.UNDISGUISED_SUCCESSFULLY);
 					if(!self) {
 						target.sendMessage(language.UNDISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
@@ -1256,7 +1256,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	// refresh) in the middle of their own move.
 	private void scheduleRegionUndisguise(Player player) {
 		Bukkit.getScheduler().runTask(this, () -> {
-			if(!player.isOnline() || !isDisguised(player)) return;
+			if(!player.isOnline() || !anyDisguise(player)) return;
 			if(!isDisguiseBlocked(player, player.getLocation())) return;
 			undisguise0(player);
 			player.sendMessage(language.UNDISGUISED_IN_BLOCKED_REGION);
@@ -1279,7 +1279,15 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		return false;
 	}
 
+	/** Developer API (CombatLogX ...): player disguises only when visible-to-other-plugins is on. */
 	public synchronized EntityType getDisguise(Player player) {
+		EntityType type = currentDisguise(player);
+		if(type == EntityType.PLAYER && (playerDisguises == null || !playerDisguises.visibleToOtherPlugins())) return null;
+		return type;
+	}
+
+	/** What the player is disguised as right now (mob type, PLAYER, or null). */
+	private synchronized EntityType currentDisguise(Player player) {
 		if(disguiseMap.containsKey(player.getUniqueId())) {
 			return disguiseMap.get(player.getUniqueId()).getType();
 		}
@@ -1289,7 +1297,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		return null;
 	}
 	
+	/** Developer API (CombatLogX ...): player disguises only when visible-to-other-plugins is on. */
 	public synchronized boolean isDisguised(Player player) {
+		return getDisguise(player) != null;
+	}
+
+	private synchronized boolean anyDisguise(Player player) {
 		return disguiseMap.containsKey(player.getUniqueId()) || (playerDisguises != null && playerDisguises.isDisguised(player));
 	}
 
@@ -1333,7 +1346,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(config.DISGUISE_TYPE_BLACKLIST.contains(type.name())) throw new UnsupportedOperationException("Currently not supported!");
 		if(type == EntityType.PLAYER) throw new UnsupportedOperationException();
 		
-		if(isDisguised(player)) undisguise0(player);
+		if(anyDisguise(player)) undisguise0(player);
 
 		Entity entity;
 		spawningDisguiseType = type;
@@ -1461,8 +1474,14 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		playerDisguises.disguise(null, player, targetSkin, null, callback);
 	}
 	
+	/** Developer API: only touches disguises other plugins can see (see isDisguised). */
 	public EntityType undisguise(Player player, boolean fireEvent) throws EventCancelledException {
 		if(!isDisguised(player)) return null;
+		return undisguiseChecked(player, fireEvent);
+	}
+
+	private EntityType undisguiseChecked(Player player, boolean fireEvent) throws EventCancelledException {
+		if(!anyDisguise(player)) return null;
 
 		if(fireEvent) {
 			PlayerUndisguiseEvent event = new PlayerUndisguiseEvent(player);
@@ -1476,9 +1495,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	}
 
 	private synchronized EntityType undisguise0(Player player) {
-		if(!isDisguised(player)) return null;
+		if(!anyDisguise(player)) return null;
 		
-		if(getDisguise(player) == EntityType.PLAYER) {
+		if(currentDisguise(player) == EntityType.PLAYER) {
 			playerDisguises.undisguise(player);
 			return EntityType.PLAYER;
 		} else {
@@ -1558,7 +1577,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		EntityType pendingMobType = pendingRejoinMobDisguises.remove(id);
 		if(pendingMobType != null) {
 			Bukkit.getScheduler().runTaskLater(this, () -> {
-				if(!player.isOnline() || isDisguised(player)) return;
+				if(!player.isOnline() || anyDisguise(player)) return;
 				if(isDisguiseBlocked(player, player.getLocation())) {
 					player.sendMessage(language.UNDISGUISED_IN_BLOCKED_REGION);
 					return;
@@ -1675,7 +1694,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		// Fallback: if handlePlayerMove didn't run (some teleport mechanisms skip PlayerMoveEvent
 		// but always fire PlayerChangedWorldEvent), detect the mismatch ourselves -- the disguise
 		// mob is in the old world but the player is now in the new one.
-		if(pendingType == null && isDisguised(player)) {
+		if(pendingType == null && anyDisguise(player)) {
 			Entity orphan = disguiseMap.get(player.getUniqueId());
 			if(orphan != null && !player.getWorld().equals(orphan.getWorld())) {
 				pendingType = orphan.getType();
@@ -1687,7 +1706,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 
 		if(pendingType == null) return;
-		if(!player.isOnline() || isDisguised(player)) return;
+		if(!player.isOnline() || anyDisguise(player)) return;
 		if(isDisguiseBlocked(player, player.getLocation())) {
 			player.sendMessage(language.UNDISGUISED_IN_BLOCKED_REGION);
 			return;

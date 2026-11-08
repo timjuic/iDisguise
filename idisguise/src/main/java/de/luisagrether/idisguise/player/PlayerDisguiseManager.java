@@ -265,9 +265,9 @@ public final class PlayerDisguiseManager implements Listener {
 		return settings.isStaffRank(rank) ? has(sender, PERM_RANK + "staff") : has(sender, PERM_RANK + "players");
 	}
 
-	/** With SkinsRestorer the disguise skin is put on the server profile, and packets keep that skin. */
-	boolean skinFromServerProfile() {
-		return skinsRestorer;
+	/** Other plugins (CombatLogX ...) see player disguises too. */
+	public boolean visibleToOtherPlugins() {
+		return settings != null && settings.visibleToOtherPlugins;
 	}
 
 	public boolean canUseRandom(CommandSender sender) {
@@ -489,6 +489,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(previous != null) {
 			disguises.remove(target.getUniqueId());
 			resetLook(target, previous);
+			removeDisguiseEntry(target, previous);
 			rebuildSnapshots();
 		}
 		plugin.removeMobDisguise(target);
@@ -524,7 +525,6 @@ public final class PlayerDisguiseManager implements Listener {
 
 		applyLook(target, disguise);
 		refresh(target);
-		showSkin(target, disguise);
 
 		String shownRank = effectiveRank(disguise);
 		send(sender, language.PLAYER_DISGUISED.replace("%name%", name).replace("%rank%", shownRank == null ? "-" : shownRank));
@@ -539,46 +539,19 @@ public final class PlayerDisguiseManager implements Listener {
 		save();
 		if(player.isOnline()) {
 			resetLook(player, disguise);
+			removeDisguiseEntry(player, disguise);
 			refresh(player);
-			restoreSkin(player);
 		}
 		return true;
 	}
 
-	/**
-	 * SkinsRestorer shows the disguise skin the way /skin does (not saved): clients that keep their own
-	 * skin per player (Orbit, Lunar ...) accept it this way, and the player sees it in F5 too.
-	 */
-	private void showSkin(Player player, PlayerDisguise disguise) {
-		if(!skinsRestorer || !disguise.hasSkin()) return;
-		try {
-			SkinsRestorerSkins.show(player, disguise.getSkinValue(), disguise.getSkinSignature());
-			Bukkit.getScheduler().runTaskLater(plugin, () -> {
-				if(!player.isOnline()) return;
-				String owner = "none";
-				for(com.comphenix.protocol.wrappers.WrappedSignedProperty property
-						: WrappedGameProfile.fromPlayer(player).getProperties().get("textures")) {
-					SkinResolver.Skin skin = new SkinResolver.Skin(property.getValue(), property.getSignature());
-					owner = SkinResolver.describe(skin);
-				}
-				debug("After SkinsRestorer applied the disguise skin, " + player.getName() + "'s server profile has:" + owner);
-			}, 20L);
-		} catch(Throwable t) {
-			Throwable cause = t.getCause() != null ? t.getCause() : t;
-			plugin.getLogger().warning("SkinsRestorer could not show the disguise skin on " + player.getName() + ": " + cause);
+	/** Other players' clients drop the tab entry the disguise had (it has its own ID). */
+	private void removeDisguiseEntry(Player player, PlayerDisguise disguise) {
+		for(Player viewer : Bukkit.getOnlinePlayers()) {
+			if(viewer == player) continue;
+			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,
+					new WrappedGameProfile(disguise.getFakeUniqueId(), disguise.getFakeName())));
 		}
-	}
-
-	private void restoreSkin(Player player) {
-		if(!skinsRestorer) return;
-		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-			try {
-				SkinsRestorerSkins.restore(player);
-			} catch(Throwable t) {
-				Throwable cause = t.getCause() != null ? t.getCause() : t;
-				plugin.getLogger().warning("SkinsRestorer could not give " + player.getName() + " their own skin back: " + cause);
-			}
-		});
 	}
 
 	private void markOnline(Player player, PlayerDisguise disguise) {
@@ -668,7 +641,7 @@ public final class PlayerDisguiseManager implements Listener {
 		Bukkit.getScheduler().runTaskLater(plugin, () -> {
 			if(!viewer.isOnline() || !disguise.isHiddenFromTab() || disguises.get(disguise.getUniqueId()) != disguise) return;
 			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,
-					new WrappedGameProfile(disguise.getUniqueId(), disguise.getFakeName())));
+					new WrappedGameProfile(disguise.getFakeUniqueId(), disguise.getFakeName())));
 			disguise.getRemovedFor().add(viewer.getUniqueId());
 		}, 40L);
 	}
@@ -723,7 +696,7 @@ public final class PlayerDisguiseManager implements Listener {
 		for(Player viewer : Bukkit.getOnlinePlayers()) {
 			if(viewer == player) continue;
 			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,
-					new WrappedGameProfile(disguise.getUniqueId(), disguise.getFakeName())));
+					new WrappedGameProfile(disguise.getFakeUniqueId(), disguise.getFakeName())));
 			disguise.getRemovedFor().add(viewer.getUniqueId());
 		}
 	}
@@ -816,9 +789,6 @@ public final class PlayerDisguiseManager implements Listener {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> {
 				if(joined.isOnline() && disguises.get(joined.getUniqueId()) == disguise) applyLook(joined, disguise);
 			}, 5L);
-			Bukkit.getScheduler().runTaskLater(plugin, () -> {
-				if(joined.isOnline() && disguises.get(joined.getUniqueId()) == disguise) showSkin(joined, disguise);
-			}, 40L);
 		}
 	}
 

@@ -20,6 +20,8 @@ public final class PlayerDisguise {
 	// null when no skin was found (players then see a default skin, never the real one)
 	private final String skinValue;
 	private final String skinSignature;
+	// The ID other players see the disguise under (never the ID of a real player).
+	private final UUID fakeUuid;
 
 	private final Pattern realNamePattern;
 
@@ -49,9 +51,12 @@ public final class PlayerDisguise {
 		this.skinValue = skinValue;
 		this.skinSignature = skinSignature;
 		this.realNamePattern = NameReplacer.wordPattern(realName);
+		this.fakeUuid = UUID.nameUUIDFromBytes(("iDisguise:" + uuid + ":" + fakeName.toLowerCase(java.util.Locale.ENGLISH))
+				.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 	}
 
 	public UUID getUniqueId() { return uuid; }
+	public UUID getFakeUniqueId() { return fakeUuid; }
 	public String getRealName() { return realName; }
 	public String getFakeName() { return fakeName; }
 	public String getRank() { return rank; }

@@ -42,6 +42,7 @@ final class PlayerDisguiseSettings {
 	final List<String> staffRanks;
 	final boolean blockKnownNamesForPlayers;
 	final int randomNamePool;
+	final boolean visibleToOtherPlugins;
 	final String defaultRank;
 	final boolean copyRealRank;
 	final List<String> randomSkins;
@@ -74,6 +75,7 @@ final class PlayerDisguiseSettings {
 		ranks = Collections.unmodifiableList(all);
 		blockKnownNamesForPlayers = config.getBoolean("block-known-names-for-players", true);
 		randomNamePool = Math.max(5, config.getInt("random-name-pool", 40));
+		visibleToOtherPlugins = config.getBoolean("visible-to-other-plugins", false);
 		String configuredDefault = config.getString("default-rank", "default");
 		defaultRank = configuredDefault == null || configuredDefault.isEmpty() ? null : configuredDefault.toLowerCase(Locale.ENGLISH);
 		copyRealRank = config.getBoolean("copy-real-rank", true);

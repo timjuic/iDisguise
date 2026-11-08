@@ -95,7 +95,6 @@ final class PacketRewriter extends PacketAdapter {
 		PlayerInfoAction action = packet.getPlayerInfoAction().readSafely(0);
 		List<PlayerInfoData> entries = packet.getPlayerInfoDataLists().readSafely(0);
 		if(action == null || entries == null || entries.isEmpty()) return;
-		if(action == PlayerInfoAction.REMOVE_PLAYER) return;
 
 		UUID viewer = event.getPlayer().getUniqueId();
 		List<PlayerInfoData> result = new ArrayList<>(entries.size());
@@ -108,11 +107,15 @@ final class PacketRewriter extends PacketAdapter {
 			}
 			changed = true;
 			boolean self = viewer.equals(disguise.getUniqueId());
-			if(action == PlayerInfoAction.ADD_PLAYER) {
-				WrappedGameProfile fake = manager.skinFromServerProfile()
-						? renamed(entry.getProfile(), disguise) : fakeProfile(disguise);
-				manager.debugOnce(disguise, "Sending " + disguise.getRealName() + " as " + disguise.getFakeName() + " to " + event.getPlayer().getName()
-						+ (fake.getProperties().containsKey("textures") ? " with the disguise skin" : " WITHOUT a skin (none was found)"));
+			// Other players get the disguise under its own ID: BungeeCord puts the real skin back on
+			// entries of real players, but leaves this one alone. The player keeps the real ID for themselves.
+			UUID shownId = self ? disguise.getUniqueId() : disguise.getFakeUniqueId();
+			if(action == PlayerInfoAction.REMOVE_PLAYER) {
+				result.add(new PlayerInfoData(new WrappedGameProfile(shownId, disguise.getFakeName()), 0, entry.getGameMode(), null));
+			} else if(action == PlayerInfoAction.ADD_PLAYER) {
+				WrappedGameProfile fake = fakeProfile(disguise, shownId);
+				manager.debugOnce(disguise, "Sending " + disguise.getRealName() + " as " + disguise.getFakeName() + " (id " + shownId + ") to "
+						+ event.getPlayer().getName() + (fake.getProperties().containsKey("textures") ? " with the disguise skin" : " WITHOUT a skin (none was found)"));
 				result.add(new PlayerInfoData(fake, entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
 				disguise.getRemovedFor().remove(viewer);
 				if(disguise.isHiddenFromTab() && !self) {
@@ -120,10 +123,9 @@ final class PacketRewriter extends PacketAdapter {
 				}
 			} else if(disguise.getRemovedFor().contains(viewer)) {
 				// This viewer's client has no entry for the player right now; drop the update.
-			} else if(action == PlayerInfoAction.UPDATE_DISPLAY_NAME) {
-				result.add(new PlayerInfoData(entry.getProfile(), entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
 			} else {
-				result.add(entry);
+				WrappedChatComponent display = action == PlayerInfoAction.UPDATE_DISPLAY_NAME ? replaceNames(entry.getDisplayName()) : entry.getDisplayName();
+				result.add(new PlayerInfoData(new WrappedGameProfile(shownId, disguise.getFakeName()), entry.getLatency(), entry.getGameMode(), display));
 			}
 		}
 		if(!changed) return;
@@ -137,31 +139,14 @@ final class PacketRewriter extends PacketAdapter {
 		event.setPacket(copy);
 	}
 
-	/**
-	 * Fake name, but the skin the server profile has right now. With SkinsRestorer that is the
-	 * disguise skin it applied (the way /skin does it, which every client accepts).
-	 */
-	private static WrappedGameProfile renamed(WrappedGameProfile original, PlayerDisguise disguise) {
-		WrappedGameProfile profile = new WrappedGameProfile(disguise.getUniqueId(), disguise.getFakeName());
-		try {
-			Object source = original.getHandle();
-			Object target = profile.getHandle();
-			@SuppressWarnings("unchecked")
-			Multimap<String, Object> from = (Multimap<String, Object>)source.getClass().getMethod("getProperties").invoke(source);
-			@SuppressWarnings("unchecked")
-			Multimap<String, Object> to = (Multimap<String, Object>)target.getClass().getMethod("getProperties").invoke(target);
-			to.putAll(from);
-		} catch(ReflectiveOperationException e) {
-			profile.getProperties().putAll(original.getProperties());
-		}
-		return profile;
+	static WrappedGameProfile fakeProfile(PlayerDisguise disguise) {
+		return fakeProfile(disguise, disguise.getUniqueId());
 	}
 
-	static WrappedGameProfile fakeProfile(PlayerDisguise disguise) {
-		WrappedGameProfile profile = new WrappedGameProfile(disguise.getUniqueId(), disguise.getFakeName());
+	static WrappedGameProfile fakeProfile(PlayerDisguise disguise, UUID id) {
+		WrappedGameProfile profile = new WrappedGameProfile(id, disguise.getFakeName());
 		if(disguise.hasSkin()) {
-			// Straight into the server's own profile object (not through ProtocolLib's converted view),
-			// so the skin is part of the profile the client receives.
+			// Straight into the server's own profile object (not through ProtocolLib's converted view).
 			Object property = WrappedSignedProperty.fromValues("textures", disguise.getSkinValue(), disguise.getSkinSignature()).getHandle();
 			try {
 				Object handle = profile.getHandle();
@@ -229,11 +214,17 @@ final class PacketRewriter extends PacketAdapter {
 		if(uuid == null) return;
 		PlayerDisguise disguise = manager.get(uuid);
 		Player viewer = event.getPlayer();
-		if(disguise == null || !disguise.getRemovedFor().contains(viewer.getUniqueId())) return;
-		event.setCancelled(true);
+		if(disguise == null || viewer.getUniqueId().equals(uuid)) return;
+		// The player appears under the disguise's own ID (matching its tab entry).
 		PacketContainer spawn = event.getPacket().shallowClone();
-		manager.sendTabAdd(viewer, disguise);
-		manager.sendRaw(viewer, spawn);
+		spawn.getUUIDs().write(0, disguise.getFakeUniqueId());
+		if(disguise.getRemovedFor().contains(viewer.getUniqueId())) {
+			event.setCancelled(true);
+			manager.sendTabAdd(viewer, disguise);
+			manager.sendRaw(viewer, spawn);
+			return;
+		}
+		event.setPacket(spawn);
 	}
 
 	static PacketContainer playerInfo(PlayerInfoAction action, PlayerDisguise disguise, WrappedGameProfile profile) {
