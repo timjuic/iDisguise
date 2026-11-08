@@ -12,6 +12,7 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
  * Use it instead of %player_name% where a disguised player's real name must not show,
  * e.g. InteractiveChat's "/msg %player_name%" click action.
  * %idisguise_tabprefix% = the TAB tab prefix of the rank others see (the disguise rank while disguised).
+ * %idisguise_swap_<placeholder>% = that placeholder with real names of disguised players swapped (e.g. a combat enemy).
  */
 final class PlaceholderHook extends PlaceholderExpansion {
 
@@ -61,6 +62,13 @@ final class PlaceholderHook extends PlaceholderExpansion {
 	public String onPlaceholderRequest(Player player, String params) {
 		if("name".equalsIgnoreCase(params)) return manager.visibleName(player);
 		if("tabprefix".equalsIgnoreCase(params)) return manager.realTabPrefix(player);
+		// %idisguise_swap_<placeholder>%: that placeholder with disguised players' real names swapped for
+		// the fake ones, e.g. %idisguise_swap_combatlogx_current_enemy_name%.
+		if(params.length() > 5 && params.regionMatches(true, 0, "swap_", 0, 5)) {
+			String inner = params.substring(5);
+			if(inner.regionMatches(true, 0, "swap_", 0, 5)) return "";
+			return manager.swapNames(PlaceholderAPI.setPlaceholders(player, "%" + inner + "%"));
+		}
 		return null;
 	}
 

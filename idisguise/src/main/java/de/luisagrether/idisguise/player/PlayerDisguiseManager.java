@@ -1665,6 +1665,12 @@ public final class PlayerDisguiseManager implements Listener {
 		return group == null ? "" : tabLook.tabPrefix(group, player.getWorld().getName());
 	}
 
+	/** Real names of disguised players swapped for the fake ones (for %idisguise_swap_...%). */
+	String swapNames(String text) {
+		if(text == null) return "";
+		return NameReplacer.replace(text, replacing);
+	}
+
 	/** %idisguise_name%: the name other players see. */
 	String visibleName(Player player) {
 		PlayerDisguise disguise = player == null ? null : disguises.get(player.getUniqueId());
