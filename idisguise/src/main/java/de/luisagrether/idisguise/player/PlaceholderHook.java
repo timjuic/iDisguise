@@ -1,5 +1,6 @@
 package de.luisagrether.idisguise.player;
 
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
 import me.clip.placeholderapi.PlaceholderAPI;
@@ -25,6 +26,12 @@ final class PlaceholderHook extends PlaceholderExpansion {
 
 	/** The DeluxeTags tag as it appears in chat, or null. */
 	static String chatTag(Player player) {
+		String tag = PlaceholderAPI.setPlaceholders(player, "%deluxetags_tag%");
+		return tag == null || tag.contains("%deluxetags_tag%") ? null : tag;
+	}
+
+	/** The same for a player who is offline (only when DeluxeTags can answer for offline players). */
+	static String chatTag(OfflinePlayer player) {
 		String tag = PlaceholderAPI.setPlaceholders(player, "%deluxetags_tag%");
 		return tag == null || tag.contains("%deluxetags_tag%") ? null : tag;
 	}

@@ -78,6 +78,7 @@ public final class PlayerDisguiseManager implements Listener {
 	private SkinResolver skins;
 	private ChatColors chatColors;
 	private boolean placeholderApi;
+	private boolean skinsRestorer;
 
 	public PlayerDisguiseManager(iDisguise plugin) {
 		this.plugin = plugin;
@@ -111,6 +112,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(!essentials.isAbsolute()) essentials = new File(Bukkit.getWorldContainer(), settings.essentialsConfig);
 		chatColors = new ChatColors(essentials);
 		placeholderApi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null;
+		skinsRestorer = Bukkit.getPluginManager().getPlugin("SkinsRestorer") != null;
 		debug("Hooks: LuckPerms " + (luckPerms != null ? "yes" : "NO") + ", TAB " + (tab != null ? "yes" : "NO")
 				+ ", SkinsRestorer " + (Bukkit.getPluginManager().getPlugin("SkinsRestorer") != null ? "yes" : "NO")
 				+ ", PlaceholderAPI " + (placeholderApi ? "yes" : "NO")
@@ -329,7 +331,8 @@ public final class PlayerDisguiseManager implements Listener {
 			SkinResolver.Skin skin = skins.resolve(name, knownUuid, settings.randomSkins);
 			debug("Skin for " + name + ": " + skin.source);
 			String finalRank = rank;
-			Bukkit.getScheduler().runTask(plugin, () -> apply(sender, target, name, finalRank, skin, done));
+			UUID finalUuid = knownUuid;
+			Bukkit.getScheduler().runTask(plugin, () -> apply(sender, target, name, finalRank, skin, finalUuid, done));
 		});
 	}
 
@@ -351,7 +354,7 @@ public final class PlayerDisguiseManager implements Listener {
 		return false;
 	}
 
-	private void apply(CommandSender sender, Player target, String name, String rank, SkinResolver.Skin skin, Consumer<Boolean> done) {
+	private void apply(CommandSender sender, Player target, String name, String rank, SkinResolver.Skin skin, UUID knownUuid, Consumer<Boolean> done) {
 		Language language = language();
 		if(!target.isOnline()) {
 			finish(done, false);
@@ -386,6 +389,21 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		markOnline(target, disguise);
 		Player owner = Bukkit.getPlayerExact(name);
+		// The chat tag of the player whose name this is (none for a made-up name).
+		if(placeholderApi) {
+			String tag = null;
+			try {
+				if(owner != null && owner != target) {
+					tag = PlaceholderHook.chatTag(owner);
+				} else if(knownUuid != null) {
+					tag = PlaceholderHook.chatTag(Bukkit.getOfflinePlayer(knownUuid));
+				}
+			} catch(Throwable t) {
+				debug("Could not read the chat tag of " + name, t);
+			}
+			disguise.setChatTag(tag == null ? "" : tag);
+			debug("Chat tag for " + name + ": '" + disguise.getChatTag() + "'");
+		}
 		if(owner != null && owner != target) {
 			disguise.setHiddenFromTab(true);
 			disguise.setOwnerRank(realRankOf(owner));
@@ -396,6 +414,7 @@ public final class PlayerDisguiseManager implements Listener {
 
 		applyLook(target, disguise);
 		refresh(target);
+		showSkin(target, disguise);
 
 		String shownRank = effectiveRank(disguise);
 		send(sender, language.PLAYER_DISGUISED.replace("%name%", name).replace("%rank%", shownRank == null ? "-" : shownRank));
@@ -411,8 +430,36 @@ public final class PlayerDisguiseManager implements Listener {
 		if(player.isOnline()) {
 			resetLook(player, disguise);
 			refresh(player);
+			restoreSkin(player);
 		}
 		return true;
+	}
+
+	/**
+	 * SkinsRestorer shows the disguise skin the way /skin does (not saved): clients that keep their own
+	 * skin per player (Orbit, Lunar ...) accept it this way, and the player sees it in F5 too.
+	 */
+	private void showSkin(Player player, PlayerDisguise disguise) {
+		if(!skinsRestorer || !disguise.hasSkin()) return;
+		try {
+			SkinsRestorerSkins.show(player, disguise.getSkinValue(), disguise.getSkinSignature());
+			debug("SkinsRestorer now shows the disguise skin on " + player.getName());
+		} catch(Throwable t) {
+			Throwable cause = t.getCause() != null ? t.getCause() : t;
+			plugin.getLogger().warning("SkinsRestorer could not show the disguise skin on " + player.getName() + ": " + cause);
+		}
+	}
+
+	private void restoreSkin(Player player) {
+		if(!skinsRestorer) return;
+		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+			try {
+				SkinsRestorerSkins.restore(player);
+			} catch(Throwable t) {
+				Throwable cause = t.getCause() != null ? t.getCause() : t;
+				plugin.getLogger().warning("SkinsRestorer could not give " + player.getName() + " their own skin back: " + cause);
+			}
+		});
 	}
 
 	private void markOnline(Player player, PlayerDisguise disguise) {
@@ -458,6 +505,11 @@ public final class PlayerDisguiseManager implements Listener {
 		if(tab != null) tab.apply(player, rank, disguise.getFakeName());
 		PlayerDisguiseSettings.Profile profile = disguise.getProfile();
 		if(luckPerms != null && profile != null && profile.fakeRankInChat) {
+			if(disguise.getRealPrefix() == null) {
+				luckPerms.setFakePrefix(player, null);
+				String real = luckPerms.prefix(player);
+				disguise.setRealPrefix(real == null ? "" : real);
+			}
 			String prefix = rank == null ? null : luckPerms.groupPrefix(rank);
 			luckPerms.setFakePrefix(player, prefix == null ? "" : prefix);
 			debug("Fake prefix of " + player.getName() + " (rank " + rank + "): '" + prefix + "', LuckPerms now gives '" + luckPerms.prefix(player) + "'");
@@ -645,6 +697,9 @@ public final class PlayerDisguiseManager implements Listener {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> {
 				if(joined.isOnline() && disguises.get(joined.getUniqueId()) == disguise) applyLook(joined, disguise);
 			}, 5L);
+			Bukkit.getScheduler().runTaskLater(plugin, () -> {
+				if(joined.isOnline() && disguises.get(joined.getUniqueId()) == disguise) showSkin(joined, disguise);
+			}, 40L);
 		}
 	}
 
@@ -681,10 +736,19 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		String format = event.getFormat();
 		String before = format;
+		if(profile.fakeRankInChat && luckPerms != null) {
+			// The real prefix is swapped for the fake rank's prefix right in the chat line (LuckPerms
+			// may keep giving the real one to other plugins).
+			String realPrefix = color(disguise.getRealPrefix());
+			String fakePrefix = color(luckPerms.groupPrefix(effectiveRank(disguise)));
+			if(!realPrefix.isEmpty() && !realPrefix.equals(fakePrefix)) {
+				int index = format.indexOf(realPrefix);
+				if(index >= 0) format = format.substring(0, index) + fakePrefix + format.substring(index + realPrefix.length());
+			}
+		}
 		if(profile.fakeRankInChat) {
-			// The prefix comes from the temporary LuckPerms prefix (see applyLook). The message colour
-			// of the fake rank also goes in front of the message, so it wins whatever EssentialsX
-			// put before it.
+			// The message colour of the fake rank also goes in front of the message, so it wins
+			// whatever EssentialsX put before it.
 			String fakeColor = chatColors.forGroup(effectiveRank(disguise));
 			int message = format.indexOf("%2$s");
 			if(fakeColor != null && message >= 0) {
@@ -697,12 +761,23 @@ public final class PlayerDisguiseManager implements Listener {
 			}
 		}
 		if(profile.hideChatTag) {
-			// DeluxeTags may not have filled in its tag yet at this point.
-			format = format.replace("{deluxetags_tag}", "");
-			String tag = placeholderApi ? PlaceholderHook.chatTag(player) : null;
-			if(tag != null && !tag.isEmpty()) {
-				int index = format.indexOf(tag);
-				if(index >= 0) format = format.substring(0, index) + format.substring(index + tag.length());
+			// Your own DeluxeTags tag is replaced by the tag of the player whose name you use
+			// (live while that player is online, none for a made-up name).
+			String shownTag = disguise.getChatTag() == null ? "" : disguise.getChatTag();
+			if(placeholderApi) {
+				Player owner = Bukkit.getPlayerExact(disguise.getFakeName());
+				if(owner != null && owner != player) {
+					String ownerTag = PlaceholderHook.chatTag(owner);
+					shownTag = ownerTag == null ? "" : ownerTag;
+				}
+			}
+			String ownTag = placeholderApi ? PlaceholderHook.chatTag(player) : null;
+			if(format.contains("{deluxetags_tag}")) {
+				// DeluxeTags hasn't filled in its tag yet at this point.
+				format = format.replace("{deluxetags_tag}", shownTag);
+			} else if(ownTag != null && !ownTag.isEmpty() && format.contains(ownTag)) {
+				int index = format.indexOf(ownTag);
+				format = format.substring(0, index) + shownTag + format.substring(index + ownTag.length());
 			}
 		}
 		try {

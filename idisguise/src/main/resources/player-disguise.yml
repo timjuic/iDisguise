@@ -68,7 +68,7 @@ profiles:
     # Chat shows the fake rank's prefix and message colour instead of the real ones.
     fake-rank-in-chat: true
 
-    # Hide the DeluxeTags tag (%deluxetags_tag%) in chat.
+    # Chat shows the DeluxeTags tag of the player whose name you use instead of your own (none for a made-up name).
     hide-chat-tag: true
 
     # Show this player in /disguise list (admins always see everyone).
@@ -88,7 +88,7 @@ profiles:
     # Chat shows the fake rank's prefix and message colour instead of the real ones.
     fake-rank-in-chat: true
 
-    # Hide the DeluxeTags tag (%deluxetags_tag%) in chat.
+    # Chat shows the DeluxeTags tag of the player whose name you use instead of your own (none for a made-up name).
     hide-chat-tag: true
 
     # Show this player in /disguise list (admins always see everyone).

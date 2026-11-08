@@ -36,6 +36,10 @@ public final class PlayerDisguise {
 	// Real rank of the player whose name this is, while that player is online (then both must
 	// look the same: 1.8 clients pick the nametag rank by name).
 	private volatile String ownerRank;
+	// DeluxeTags tag of the player whose name this is, shown in chat instead of the own tag.
+	private volatile String chatTag;
+	// The player's real chat prefix (LuckPerms), swapped for the fake one in chat.
+	private volatile String realPrefix;
 
 	public PlayerDisguise(UUID uuid, String realName, String fakeName, String rank, String skinValue, String skinSignature) {
 		this.uuid = uuid;
@@ -70,6 +74,10 @@ public final class PlayerDisguise {
 		this.profile = profile;
 		this.staff = staff;
 	}
+	public String getChatTag() { return chatTag; }
+	void setChatTag(String chatTag) { this.chatTag = chatTag; }
+	String getRealPrefix() { return realPrefix; }
+	void setRealPrefix(String realPrefix) { this.realPrefix = realPrefix; }
 	String getOwnerRank() { return ownerRank; }
 	void setOwnerRank(String ownerRank) { this.ownerRank = ownerRank; }
 
