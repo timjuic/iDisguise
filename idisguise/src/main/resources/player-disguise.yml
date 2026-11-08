@@ -5,16 +5,15 @@
 # Permissions (with commands.use-permission-nodes: true in config.yml):
 #   iDisguise.disguise.PLAYER   use player disguises
 #   iDisguise.random            /disguise random (a real Minecraft account's name and skin, random rank)
-#   iDisguise.rank.<rank>       use that fake rank, e.g. iDisguise.rank.gold
-#   iDisguise.rank.players      every rank in player-ranks
-#   iDisguise.rank.staff        every rank in staff-ranks
-#   iDisguise.rank.*            every rank
+#   iDisguise.rank.players      fake ranks: every rank in player-ranks
+#   iDisguise.rank.staff        fake ranks: every rank in staff-ranks
 #   iDisguise.player.anyname    use names of players who are online or have played here before
 #   iDisguise.player.staff      get the "staff" settings below and stay hidden in /disguise list
 #   iDisguise.listplayers       see who is disguised as whom in /disguise list (staff stay hidden)
-#   iDisguise.reveal            /disguise reveal players|mobs: see through disguises (only on your screen)
+#   iDisguise.reveal            /disguise reveal players: see through player disguises (only on your screen)
 #   iDisguise.whois             /disguise whois <name> and /disguise history <player> (disguise-log.txt)
-#   iDisguise.admin             see everyone in /disguise list (staff too) and the plugin version
+#   iDisguise.admin             see everyone in /disguise list (staff too), the plugin version and /disguise permissions
+# In game: /disguise permissions lists every permission (admins).
 
 # Turn player disguises on or off.
 enabled: true
@@ -32,7 +31,7 @@ player-ranks:
 - ludnica
 - ludnica+
 
-# Staff ranks that can be faked (iDisguise.rank.staff or iDisguise.rank.<rank>).
+# Staff ranks that can be faked (iDisguise.rank.staff).
 staff-ranks:
 - trialmod
 - mod

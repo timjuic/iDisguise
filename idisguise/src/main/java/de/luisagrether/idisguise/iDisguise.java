@@ -771,6 +771,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				if(self) sendStatus(target);
 			} else if(args[0].equalsIgnoreCase("list")) {
 				sendDisguiseList(sender);
+			} else if(args[0].equalsIgnoreCase("permissions") && hasPermissionAdmin(sender)) {
+				sendPermissions(sender);
 			} else if(self && args[0].equalsIgnoreCase("reveal")) {
 				playerDisguises.revealCommand(sender, args);
 			} else if(self && args[0].equalsIgnoreCase("whois")) {
@@ -1042,6 +1044,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			adminLines.add(new String[] {"/disguise whois <name>", language.HELP_CMD_WHOIS, "/disguise whois "});
 			adminLines.add(new String[] {"/disguise history <player>", language.HELP_CMD_HISTORY, "/disguise history "});
 		}
+		if(admin) {
+			adminLines.add(new String[] {"/disguise permissions", language.HELP_CMD_PERMISSIONS, "/disguise permissions"});
+		}
 
 		sender.sendMessage(language.HELP_TITLE.replace("%title%", title(sender)));
 		sendHelpLines(sender, lines);
@@ -1049,6 +1054,42 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			sender.sendMessage(language.HELP_ADMIN_TITLE);
 			sendHelpLines(sender, adminLines);
 		}
+	}
+
+	/** Admin texts: English in every language. */
+	private static final String[][] PERMISSIONS = {
+		{"#Player disguises"},
+		{"iDisguise.disguise.PLAYER", "use player disguises"},
+		{"iDisguise.random", "/disguise random"},
+		{"iDisguise.rank.players", "fake ranks: every rank in player-ranks"},
+		{"iDisguise.rank.staff", "fake ranks: every rank in staff-ranks"},
+		{"iDisguise.player.anyname", "names of real players (online or played here before)"},
+		{"iDisguise.player.staff", "staff settings, hidden in /disguise list, no cooldown"},
+		{"#Staff tools"},
+		{"iDisguise.listplayers", "see who is disguised as whom in /disguise list"},
+		{"iDisguise.reveal", "/disguise reveal players: see through player disguises"},
+		{"iDisguise.whois", "/disguise whois and /disguise history"},
+		{"iDisguise.see", "right-click a disguise mob to see who is inside"},
+		{"iDisguise.admin", "everyone in /disguise list, version, this list, no cooldown"},
+		{"#Mobs and others"},
+		{"iDisguise.disguise.<MOB>", "that mob, e.g. iDisguise.disguise.COW"},
+		{"iDisguise.disguise.*", "every mob AND player disguises"},
+		{"iDisguise.others", "/odisguise and /undisguise <player>"},
+		{"iDisguise.sound", "mob sounds (everyone by default)"},
+		{"iDisguise.bypass.regions", "disguise in blocked regions"},
+		{"iDisguise.*", "everything"}
+	};
+
+	private void sendPermissions(CommandSender sender) {
+		sender.sendMessage(language.PERMISSIONS_TITLE.replace("%title%", title(sender)));
+		for(String[] line : PERMISSIONS) {
+			if(line.length == 1) {
+				sender.sendMessage(language.PERMISSIONS_SECTION.replace("%section%", line[0].substring(1)));
+			} else {
+				sender.sendMessage(language.PERMISSIONS_LINE.replace("%node%", line[0]).replace("%description%", line[1]));
+			}
+		}
+		if(!config.USE_PERMISSION_NODES) sender.sendMessage(language.PERMISSIONS_NODES_OFF);
 	}
 
 	private void sendHelpLines(CommandSender sender, List<String[]> lines) {

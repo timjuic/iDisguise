@@ -324,9 +324,8 @@ public final class PlayerDisguiseManager implements Listener {
 		return result;
 	}
 
-	/** iDisguise.rank.<rank>, or the group nodes iDisguise.rank.players / .staff / .* */
+	/** iDisguise.rank.players: every rank in player-ranks, iDisguise.rank.staff: every rank in staff-ranks. */
 	private boolean canUseRank(CommandSender sender, String rank) {
-		if(has(sender, PERM_RANK + rank) || has(sender, PERM_RANK + "*")) return true;
 		return settings.isStaffRank(rank) ? has(sender, PERM_RANK + "staff") : has(sender, PERM_RANK + "players");
 	}
 

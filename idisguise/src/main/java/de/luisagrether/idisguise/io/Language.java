@@ -178,6 +178,16 @@ public class Language {
 	public String HELP_CMD_WHOIS = "Who is or was behind a disguise name";
 	@LastUpdated(60101)
 	public String HELP_CMD_HISTORY = "Every disguise a player has used";
+	@LastUpdated(60125)
+	public String HELP_CMD_PERMISSIONS = "Every permission of this plugin";
+	@LastUpdated(60125)
+	public String PERMISSIONS_TITLE = ChatColor.RED.toString() + ChatColor.BOLD + "Permissions " + ChatColor.DARK_GRAY + "\u00bb " + ChatColor.GRAY + "%title%";
+	@LastUpdated(60125)
+	public String PERMISSIONS_SECTION = ChatColor.YELLOW + "%section%";
+	@LastUpdated(60125)
+	public String PERMISSIONS_LINE = ChatColor.GOLD + "%node% " + ChatColor.DARK_GRAY + "- " + ChatColor.GRAY + "%description%";
+	@LastUpdated(60125)
+	public String PERMISSIONS_NODES_OFF = ChatColor.RED + "use-permission-nodes is false in config.yml: permissions are ignored, only operators can disguise.";
 	@LastUpdated(60106)
 	public String PLAYER_DISGUISE_NAME_UNAVAILABLE = c("%prefix%&cYou can't use that name right now.");
 	@LastUpdated(60106)
