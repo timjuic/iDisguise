@@ -723,8 +723,6 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 							language.CURRENTLY_DISGUISED_AS_PLAYER.replace("%targetSkin%", fakeName) :
 							language.ODISGUISE_CURRENTLY_DISGUISED_AS_PLAYER.replace("%player%", target.getName()).replace("%targetSkin%", fakeName)
 						);
-						// Like mob disguises: see yourself with the disguise for a few seconds.
-						if(self) playerDisguises.showPreview(target);
 					} else {
 						if(self) {
 							sender.sendMessage(language.CURRENTLY_DISGUISED_AS_ENTITY.replace("%entityType%", currentDisguise(target).name()));

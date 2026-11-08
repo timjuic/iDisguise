@@ -89,7 +89,6 @@ public final class PlayerDisguiseManager implements Listener {
 	private boolean skinsRestorer;
 	private RandomNames randomNames;
 	private DisguiseLog log;
-	private SelfPreview preview;
 	// Staff who see through disguises (only on their own screen).
 	private final Set<UUID> revealPlayers = ConcurrentHashMap.newKeySet();
 	private final Set<UUID> revealMobs = ConcurrentHashMap.newKeySet();
@@ -149,7 +148,6 @@ public final class PlayerDisguiseManager implements Listener {
 		});
 		randomNames.refill();
 		Bukkit.getPluginManager().registerEvents(new RankMenu.Clicks(plugin), plugin);
-		preview = new SelfPreview(plugin, this);
 		hookVanishEvents();
 		readTabPrefixes();
 		mobRevealTask = Bukkit.getScheduler().runTaskTimer(plugin, this::showMobNames, 20L, 20L);
@@ -182,7 +180,6 @@ public final class PlayerDisguiseManager implements Listener {
 	public void disable() {
 		if(log != null) log.close();
 		if(!available) return;
-		preview.stopAll();
 		mobRevealTask.cancel();
 		checkTask.cancel();
 		for(UUID uuid : new ArrayList<>(revealMobs)) {
@@ -592,7 +589,6 @@ public final class PlayerDisguiseManager implements Listener {
 		refresh(target);
 		log.start(target.getName(), target.getUniqueId(), "player", name, effectiveRank(disguise));
 		if(previous != null) log.end(target.getName(), target.getUniqueId(), "player", previous.getFakeName());
-		Bukkit.getScheduler().runTaskLater(plugin, () -> showPreview(target), 5L);
 
 		String shownRank = effectiveRank(disguise);
 		send(sender, language.PLAYER_DISGUISED.replace("%name%", name).replace("%rank%", shownRank == null ? "-" : shownRank));
@@ -606,7 +602,6 @@ public final class PlayerDisguiseManager implements Listener {
 		rebuildSnapshots();
 		save();
 		log.end(player.getName(), player.getUniqueId(), "player", disguise.getFakeName());
-		preview.stop(player);
 		if(player.isOnline()) {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
@@ -932,7 +927,6 @@ public final class PlayerDisguiseManager implements Listener {
 		lastTabInput.remove(quit.getUniqueId());
 		revealPlayers.remove(quit.getUniqueId());
 		revealMobs.remove(quit.getUniqueId());
-		preview.forget(quit.getUniqueId());
 		for(PlayerDisguise disguise : disguises.values()) {
 			disguise.getRemovedFor().remove(quit.getUniqueId());
 		}
@@ -1092,20 +1086,6 @@ public final class PlayerDisguiseManager implements Listener {
 			if(disguise.getRealName().equalsIgnoreCase(profileName)) return disguise;
 		}
 		return null;
-	}
-
-	// ---------------------------------------------------------------- self preview
-
-	/** The disguised player sees themselves with the disguise for 5 seconds. */
-	public void showPreview(Player player) {
-		PlayerDisguise disguise = disguises.get(player.getUniqueId());
-		if(!available || disguise == null || !player.isOnline()) return;
-		try {
-			preview.show(player, disguise, 100);
-		} catch(RuntimeException e) {
-			preview.stop(player);
-			packetError("preview", e);
-		}
 	}
 
 	// ---------------------------------------------------------------- staff: reveal
