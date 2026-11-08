@@ -45,6 +45,7 @@ final class PlayerDisguiseSettings {
 	final boolean visibleToOtherPlugins;
 	final java.util.Set<String> commandsNotTranslated = new java.util.HashSet<>();
 	final java.util.Set<String> repairAfterCommands = new java.util.HashSet<>();
+	final java.util.Set<String> blockedCommands = new java.util.HashSet<>();
 	final boolean swapInMenus;
 	final boolean swapInTitles;
 	final boolean swapInHolograms;
@@ -89,6 +90,9 @@ final class PlayerDisguiseSettings {
 		swapInHolograms = config.getBoolean("name-swap.holograms", true);
 		swapInSigns = config.getBoolean("name-swap.signs", true);
 		swapInScoreboard = config.getBoolean("name-swap.scoreboard", true);
+		for(String command : config.getStringList("blocked-while-disguised")) {
+			blockedCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
+		}
 		for(String command : config.getStringList("vanish-commands")) {
 			repairAfterCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
 		}

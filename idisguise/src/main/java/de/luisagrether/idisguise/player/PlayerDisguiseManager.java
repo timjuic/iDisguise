@@ -68,7 +68,6 @@ public final class PlayerDisguiseManager implements Listener {
 			"disguise", "d", "dis", "odisguise", "od", "undisguise", "ud", "undis", "idisguise"));
 	private static final Set<String> VANISH_EVENTS = new HashSet<>(java.util.Arrays.asList(
 			"de.myzelyam.api.vanish.PlayerShowEvent", "de.myzelyam.api.vanish.PlayerHideEvent"));
-	private static final Set<String> SKIN_COMMANDS = new HashSet<>(java.util.Arrays.asList("skin", "skins"));
 
 	private final iDisguise plugin;
 	private final Map<UUID, PlayerDisguise> disguises = new ConcurrentHashMap<>();
@@ -95,6 +94,7 @@ public final class PlayerDisguiseManager implements Listener {
 	private final Set<UUID> revealPlayers = ConcurrentHashMap.newKeySet();
 	private final Set<UUID> revealMobs = ConcurrentHashMap.newKeySet();
 	private org.bukkit.scheduler.BukkitTask mobRevealTask;
+	private org.bukkit.scheduler.BukkitTask checkTask;
 
 	public PlayerDisguiseManager(iDisguise plugin) {
 		this.plugin = plugin;
@@ -153,6 +153,7 @@ public final class PlayerDisguiseManager implements Listener {
 		hookVanishEvents();
 		readTabPrefixes();
 		mobRevealTask = Bukkit.getScheduler().runTaskTimer(plugin, this::showMobNames, 20L, 20L);
+		checkTask = Bukkit.getScheduler().runTaskTimer(plugin, this::check, 600L, 600L);
 		rewriter = new PacketRewriter(plugin, this);
 		rewriter.register();
 		Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -183,6 +184,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(!available) return;
 		preview.stopAll();
 		mobRevealTask.cancel();
+		checkTask.cancel();
 		for(UUID uuid : new ArrayList<>(revealMobs)) {
 			Player viewer = Bukkit.getPlayer(uuid);
 			if(viewer != null) hideMobNames(viewer);
@@ -963,7 +965,8 @@ public final class PlayerDisguiseManager implements Listener {
 		if(profile.fakeRankInChat && luckPerms != null) {
 			// The real prefix is swapped for the fake rank's prefix right in the chat line (LuckPerms
 			// may keep giving the real one to other plugins).
-			String realPrefix = color(disguise.getRealPrefix());
+			// The real prefix right now: the player may have got a new rank since disguising.
+			String realPrefix = color(luckPerms.prefix(player));
 			String fakePrefix = color(luckPerms.groupPrefix(effectiveRank(disguise)));
 			int index = realPrefix.isEmpty() ? -1 : format.indexOf(realPrefix);
 			if(index >= 0) {
@@ -1064,6 +1067,31 @@ public final class PlayerDisguiseManager implements Listener {
 		if(disguise == null || disguise.getProfile() == null) return;
 		plugin.getLogger().info("[Disguised] " + disguise.getRealName() + " as " + disguise.getFakeName() + ": "
 				+ ChatColor.stripColor(event.getMessage()));
+	}
+
+	/**
+	 * Every 30 seconds: a player who lost iDisguise.disguise.PLAYER is undisguised, and the disguise
+	 * rank is put back into TAB if TAB lost it (e.g. after /tab reload).
+	 */
+	private void check() {
+		for(PlayerDisguise disguise : new ArrayList<>(online)) {
+			Player player = Bukkit.getPlayer(disguise.getUniqueId());
+			if(player == null) continue;
+			if(!plugin.canDisguiseAsPlayer(player)) {
+				if(undisguise(player)) send(player, language().UNDISGUISED_NO_ACCESS);
+				continue;
+			}
+			if(tab != null) tab.ensure(player, effectiveRank(disguise), disguise.getFakeName());
+		}
+	}
+
+	/** An NPC copy of a disguised player (e.g. CombatLogX on logout) with the real name: the disguise for it, or null. */
+	PlayerDisguise disguiseOfCopy(String profileName) {
+		if(profileName == null) return null;
+		for(PlayerDisguise disguise : replacing) {
+			if(disguise.getRealName().equalsIgnoreCase(profileName)) return disguise;
+		}
+		return null;
 	}
 
 	// ---------------------------------------------------------------- self preview
@@ -1268,9 +1296,9 @@ public final class PlayerDisguiseManager implements Listener {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> repair(player), 10L);
 			Bukkit.getScheduler().runTaskLater(plugin, () -> repair(player), 40L);
 		}
-		if(SKIN_COMMANDS.contains(label) && disguises.containsKey(event.getPlayer().getUniqueId())) {
+		if(settings.blockedCommands.contains(label) && disguises.containsKey(event.getPlayer().getUniqueId())) {
 			event.setCancelled(true);
-			send(event.getPlayer(), language().SKIN_BLOCKED_WHILE_DISGUISED);
+			send(event.getPlayer(), language().COMMAND_BLOCKED_WHILE_DISGUISED.replace("%command%", "/" + label));
 			return;
 		}
 		if(OWN_COMMANDS.contains(label) || settings.commandsNotTranslated.contains(label) || parts.length < 2) return;

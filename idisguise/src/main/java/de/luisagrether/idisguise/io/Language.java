@@ -280,8 +280,8 @@ public class Language {
 	public String UNDISGUISED_REAL_PLAYER_JOINED = ChatColor.RED + "You were undisguised because " + ChatColor.WHITE + "%name%" + ChatColor.RED + " joined the server.";
 	@LastUpdated(60100)
 	public String UNDISGUISED_IN_COMBAT = ChatColor.RED + "You were undisguised because you entered combat.";
-	@LastUpdated(60100)
-	public String SKIN_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't change your skin while disguised.";
+	@LastUpdated(60105)
+	public String COMMAND_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't use " + ChatColor.WHITE + "%command%" + ChatColor.RED + " while disguised as a player.";
 
 	private iDisguise plugin;
 	

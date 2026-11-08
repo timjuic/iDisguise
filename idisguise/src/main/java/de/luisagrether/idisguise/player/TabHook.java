@@ -21,6 +21,7 @@ final class TabHook {
 	private final Method setTemporaryGroup;
 	private final Method getTabListFormatManager;
 	private final Method setName;
+	private final Method hasTemporaryGroup;
 
 	private TabHook(Plugin plugin) throws ReflectiveOperationException {
 		this.plugin = plugin;
@@ -33,6 +34,7 @@ final class TabHook {
 		setTemporaryGroup = tabPlayer.getMethod("setTemporaryGroup", String.class);
 		getTabListFormatManager = tabApi.getMethod("getTabListFormatManager");
 		setName = formatManager.getMethod("setName", tabPlayer, String.class);
+		hasTemporaryGroup = tabPlayer.getMethod("hasTemporaryGroup");
 	}
 
 	static TabHook create(Plugin plugin) {
@@ -42,6 +44,18 @@ final class TabHook {
 		} catch(Throwable t) {
 			plugin.getLogger().warning("TAB was found, but its API doesn't match TAB 5. Fake ranks won't show in the tab list / nametags.");
 			return null;
+		}
+	}
+
+	/** Re-applies the disguise rank when TAB lost it (e.g. after /tab reload). */
+	void ensure(Player player, String group, String name) {
+		if(group == null || !player.isOnline()) return;
+		try {
+			Object tabPlayer = getPlayer.invoke(getInstance.invoke(null), player.getUniqueId());
+			if(tabPlayer == null || !(Boolean)isLoaded.invoke(tabPlayer)) return;
+			if(!(Boolean)hasTemporaryGroup.invoke(tabPlayer)) apply(player, group, name);
+		} catch(Throwable t) {
+			// TAB is reloading: the next check tries again
 		}
 	}
 

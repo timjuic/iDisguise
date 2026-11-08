@@ -115,7 +115,17 @@ final class PacketRewriter extends PacketAdapter {
 		for(PlayerInfoData entry : entries) {
 			PlayerDisguise disguise = entry == null || entry.getProfile() == null ? null : manager.get(entry.getProfile().getUUID());
 			if(disguise == null) {
-				result.add(entry);
+				// An NPC with a disguised player's real name and its own ID (e.g. CombatLogX after a
+				// combat log): it shows the disguise name and skin too.
+				PlayerDisguise copyOf = action == PlayerInfoAction.ADD_PLAYER && entry != null && entry.getProfile() != null
+						? manager.disguiseOfCopy(entry.getProfile().getName()) : null;
+				if(copyOf != null && !copyOf.getUniqueId().equals(entry.getProfile().getUUID())) {
+					result.add(new PlayerInfoData(fakeProfile(copyOf, entry.getProfile().getUUID()), entry.getLatency(), entry.getGameMode(),
+							replaceNames(entry.getDisplayName())));
+					changed = true;
+				} else {
+					result.add(entry);
+				}
 				continue;
 			}
 			changed = true;

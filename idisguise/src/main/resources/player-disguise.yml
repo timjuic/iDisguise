@@ -97,6 +97,15 @@ name-swap:
   # across two pieces can't be swapped, and a longer fake name is cut at the end of its piece.
   scoreboard: true
 
+# Commands a player can't use while player-disguised (mob disguises are not affected).
+blocked-while-disguised:
+- skin
+- skins
+- nick
+- enick
+- nickname
+- enickname
+
 # Vanish commands. A vanish plugin may hide / show a player with its own packets, which iDisguise doesn't see.
 # When a disguised player uses one, their disguise is rebuilt for everyone a moment later (PremiumVanish is detected by itself).
 vanish-commands:
