@@ -182,14 +182,13 @@ public class Language {
 	public String RANDOM_NOT_READY = ChatColor.RED + "No random names are ready yet. Try again in a few seconds.";
 	@LastUpdated(60100)
 	public String RANK_MENU_TITLE = ChatColor.DARK_GRAY + "Rank for " + ChatColor.GOLD + "%name%";
-	@LastUpdated(60100)
-	public String RANK_MENU_HEADER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguising as " + ChatColor.WHITE + "%name%";
-	@LastUpdated(60100)
-	public String RANK_MENU_HEADER_LORE = ChatColor.GRAY + "Pick the rank other players will see.\n" + ChatColor.GRAY + "Player ranks on top, staff ranks below.";
-	@LastUpdated(60100)
-	public String RANK_MENU_RANK_LORE = ChatColor.GRAY + "Others will see you as:\n %preview%\n" + ChatColor.GRAY + "in chat, tab and above your head.\n\n"
-			+ ChatColor.YELLOW + "\u00bb Click to disguise";
-	@LastUpdated(60100)
+	@LastUpdated(60101)
+	public String RANK_MENU_HEADER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguising as " + ChatColor.YELLOW + ChatColor.BOLD + "%name%";
+	@LastUpdated(60101)
+	public String RANK_MENU_HEADER_LORE = ChatColor.GRAY + "Pick the rank other players will see.";
+	@LastUpdated(60101)
+	public String RANK_MENU_RANK_LORE = ChatColor.GRAY + "Others will see you like this in chat, tab and above your head.\n\n" + ChatColor.YELLOW + "\u00bb Click to disguise";
+	@LastUpdated(60101)
 	public String RANK_MENU_REAL_RANK = ChatColor.YELLOW + "Real rank of %name%";
 	@LastUpdated(60100)
 	public String RANK_MENU_NO_RANK = ChatColor.WHITE + "No rank";
@@ -214,14 +213,16 @@ public class Language {
 	public String HELP_CMD_CHECK = "Show your current disguise";
 	@LastUpdated(60100)
 	public String HELP_CMD_UNDISGUISE = "Remove your disguise";
-	@LastUpdated(60100)
-	public String HELP_CMD_LIST = "Who is disguised, and your disguises";
+	@LastUpdated(60101)
+	public String HELP_CMD_LIST = "Your available disguises, and disguised players";
 	@LastUpdated(60100)
 	public String HELP_CMD_ALTER = "Change your mob, e.g. setBaby()";
 	@LastUpdated(60100)
 	public String HELP_CMD_ODISGUISE = "Disguise another player";
 	@LastUpdated(60100)
 	public String HELP_CMD_UNDISGUISE_OTHER = "Undisguise another player";
+	@LastUpdated(60101)
+	public String HELP_ADMIN_TITLE = ChatColor.RED.toString() + ChatColor.BOLD + "Admin " + ChatColor.DARK_GRAY + "\u00bb " + ChatColor.GRAY + "Commands";
 	@LastUpdated(60100)
 	public String HELP_CLICK = ChatColor.GRAY + "Click to type this command";
 	@LastUpdated(60100)

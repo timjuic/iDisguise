@@ -153,6 +153,7 @@ public final class PlayerDisguiseManager implements Listener {
 			if(disguise != null) {
 				markOnline(player, disguise);
 				applyLook(player, disguise);
+				removeRealEntry(player);
 				refresh(player);
 			}
 		}
@@ -314,35 +315,31 @@ public final class PlayerDisguiseManager implements Listener {
 		Language language = language();
 		List<RankMenu.Entry> playerEntries = new ArrayList<>();
 		List<RankMenu.Entry> staffEntries = new ArrayList<>();
+		// "No rank" first, like the lowest rank.
+		playerEntries.add(new RankMenu.Entry(NO_RANK, RankMenu.item(settings.menuItem("no-rank"), ChatColor.WHITE + name,
+				RankMenu.lines(language.RANK_MENU_RANK_LORE))));
 		for(String rank : usableRanks(player)) {
-			RankMenu.Entry entry = new RankMenu.Entry(rank, rankItem(rank, rankTitle(rank), name));
+			RankMenu.Entry entry = new RankMenu.Entry(rank, rankItem(rank, name, null));
 			(settings.isStaffRank(rank) ? staffEntries : playerEntries).add(entry);
 		}
 		RankMenu.Entry real = realRank == null ? null : new RankMenu.Entry(null,
-				rankItem(realRank, language.RANK_MENU_REAL_RANK.replace("%name%", name) + ChatColor.GRAY + " (" + rankTitle(realRank) + ChatColor.GRAY + ")", name));
-		RankMenu.Entry none = new RankMenu.Entry(NO_RANK, RankMenu.item(settings.menuItem("no-rank"), language.RANK_MENU_NO_RANK,
-				RankMenu.lines(language.RANK_MENU_NO_RANK_LORE.replace("%name%", name))));
+				rankItem(realRank, name, language.RANK_MENU_REAL_RANK.replace("%name%", name)));
 		RankMenu.Entry cancel = new RankMenu.Entry(RankMenu.CANCEL, RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL,
 				RankMenu.lines(language.RANK_MENU_CANCEL_LORE)));
 		org.bukkit.inventory.ItemStack header = RankMenu.item(settings.menuItem("header"), language.RANK_MENU_HEADER.replace("%name%", name),
 				RankMenu.lines(language.RANK_MENU_HEADER_LORE));
 		org.bukkit.inventory.ItemStack frame = RankMenu.item(settings.menuItem("frame"), " ", null);
-		new RankMenu(language.RANK_MENU_TITLE.replace("%name%", name), header, frame, playerEntries, staffEntries, real, none, cancel,
+		new RankMenu(language.RANK_MENU_TITLE.replace("%name%", name), header, frame, playerEntries, staffEntries, real, cancel,
 				choice -> disguise(player, player, name, choice, done)).open(player);
 	}
 
-	/** The rank as players see it: its coloured prefix, or the rank name. */
-	private String rankTitle(String rank) {
-		String prefix = luckPerms == null ? null : luckPerms.groupPrefix(rank);
-		String colored = color(prefix).trim();
-		return ChatColor.stripColor(colored).trim().isEmpty() ? ChatColor.WHITE + rank : colored;
-	}
-
-	private org.bukkit.inventory.ItemStack rankItem(String rank, String title, String name) {
-		String prefix = luckPerms == null ? null : luckPerms.groupPrefix(rank);
-		String shownPrefix = color(prefix).trim();
-		String preview = (shownPrefix.isEmpty() ? "" : shownPrefix + " ") + ChatColor.GRAY + name;
-		return RankMenu.item(settings.menuItem(rank), title, RankMenu.lines(language().RANK_MENU_RANK_LORE.replace("%preview%", preview)));
+	/** A rank in the menu: named the way others will see you ("[Gold] Notch"). firstLine: optional extra lore line on top. */
+	private org.bukkit.inventory.ItemStack rankItem(String rank, String name, String firstLine) {
+		String prefix = color(luckPerms == null ? null : luckPerms.groupPrefix(rank)).trim();
+		String title = (ChatColor.stripColor(prefix).trim().isEmpty() ? ChatColor.WHITE + rank + " " : prefix + " ") + ChatColor.WHITE + name;
+		List<String> lore = RankMenu.lines(language().RANK_MENU_RANK_LORE);
+		if(firstLine != null) lore.add(0, firstLine);
+		return RankMenu.item(settings.menuItem(rank), title, lore);
 	}
 
 	/** /disguise random: a real Minecraft account's name and skin, and a random rank the player may use. */
@@ -541,6 +538,7 @@ public final class PlayerDisguiseManager implements Listener {
 		save();
 
 		applyLook(target, disguise);
+		removeRealEntry(target);
 		refresh(target);
 
 		String shownRank = effectiveRank(disguise);
@@ -560,6 +558,18 @@ public final class PlayerDisguiseManager implements Listener {
 			refresh(player);
 		}
 		return true;
+	}
+
+	/**
+	 * Other players' clients drop the player's normal tab entry before the disguise is added (it has
+	 * its own ID). Sent past the packet rewriter, which would otherwise turn it into the disguise ID.
+	 */
+	private void removeRealEntry(Player player) {
+		for(Player viewer : Bukkit.getOnlinePlayers()) {
+			if(viewer == player) continue;
+			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, null,
+					new WrappedGameProfile(player.getUniqueId(), player.getName())));
+		}
 	}
 
 	/** Other players' clients drop the tab entry the disguise had (it has its own ID). */

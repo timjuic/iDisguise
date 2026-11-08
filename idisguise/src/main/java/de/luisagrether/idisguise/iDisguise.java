@@ -1001,32 +1001,44 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		return hasPermissionAdmin(sender) ? language.TITLE_ADMIN.replace("%version%", getDescription().getVersion()) : language.TITLE_PLAYERS;
 	}
 
-	/** One line per command the sender can use: the command, then a short description. Click = typed into chat. */
+	/**
+	 * One line per command: the command, then a short description. Click = typed into chat.
+	 * Players see only what they can use; admins see every command of the plugin.
+	 */
 	private void sendHelpPage(CommandSender sender, int page) {
+		boolean admin = hasPermissionAdmin(sender);
+		boolean mobs = admin || hasAnyMobPermission(sender);
+		boolean players = playerDisguises.isAvailable() && (admin || hasPermission(sender, EntityType.PLAYER));
+		boolean random = playerDisguises.isAvailable() && (admin || playerDisguises.canUseRandom(sender));
 		List<String[]> lines = new ArrayList<>();
-		boolean player = sender instanceof Player;
-		boolean mobs = hasAnyMobPermission(sender);
-		boolean players = hasPermission(sender, EntityType.PLAYER) && playerDisguises.isAvailable();
-		if(player) {
-			if(mobs) lines.add(new String[] {"/disguise <mob>", language.HELP_CMD_MOB, "/disguise "});
-			if(players) lines.add(new String[] {"/disguise <name> [rank]", language.HELP_CMD_PLAYER, "/disguise "});
-			if(playerDisguises.canUseRandom(sender)) lines.add(new String[] {"/disguise random", language.HELP_CMD_RANDOM, "/disguise random"});
-			if(mobs || players) {
-				lines.add(new String[] {"/disguise", language.HELP_CMD_CHECK, "/disguise"});
-				lines.add(new String[] {"/undisguise", language.HELP_CMD_UNDISGUISE, "/undisguise"});
-			}
-			lines.add(new String[] {"/disguise list", language.HELP_CMD_LIST, "/disguise list"});
-			if(mobs && !config.STATEMENT_WHITELIST.isEmpty()) lines.add(new String[] {"/disguise <mob> <option>", language.HELP_CMD_ALTER, "/disguise "});
+		if(mobs) lines.add(new String[] {"/disguise <mob>", language.HELP_CMD_MOB, "/disguise "});
+		if(players) lines.add(new String[] {"/disguise <name> [rank]", language.HELP_CMD_PLAYER, "/disguise "});
+		if(random) lines.add(new String[] {"/disguise random", language.HELP_CMD_RANDOM, "/disguise random"});
+		if(mobs || players || random) {
+			lines.add(new String[] {"/disguise", language.HELP_CMD_CHECK, "/disguise"});
+			lines.add(new String[] {"/undisguise", language.HELP_CMD_UNDISGUISE, "/undisguise"});
 		}
-		if(hasPermissionOthers(sender)) {
-			lines.add(new String[] {"/odisguise <player> <disguise>", language.HELP_CMD_ODISGUISE, "/odisguise "});
-			lines.add(new String[] {"/undisguise <player>", language.HELP_CMD_UNDISGUISE_OTHER, "/undisguise "});
+		lines.add(new String[] {"/disguise list", language.HELP_CMD_LIST, "/disguise list"});
+		if(mobs && !config.STATEMENT_WHITELIST.isEmpty()) lines.add(new String[] {"/disguise <mob> <option>", language.HELP_CMD_ALTER, "/disguise "});
+
+		List<String[]> adminLines = new ArrayList<>();
+		if(admin || hasPermissionOthers(sender)) {
+			adminLines.add(new String[] {"/odisguise <player> <disguise>", language.HELP_CMD_ODISGUISE, "/odisguise "});
+			adminLines.add(new String[] {"/undisguise <player>", language.HELP_CMD_UNDISGUISE_OTHER, "/undisguise "});
 		}
 
 		sender.sendMessage(language.HELP_TITLE.replace("%title%", title(sender)));
+		sendHelpLines(sender, lines);
+		if(!adminLines.isEmpty()) {
+			sender.sendMessage(language.HELP_ADMIN_TITLE);
+			sendHelpLines(sender, adminLines);
+		}
+	}
+
+	private void sendHelpLines(CommandSender sender, List<String[]> lines) {
 		for(String[] line : lines) {
 			String text = language.HELP_LINE.replace("%command%", line[0]).replace("%description%", line[1]);
-			if(player) {
+			if(sender instanceof Player) {
 				net.md_5.bungee.api.chat.BaseComponent[] parts = net.md_5.bungee.api.chat.TextComponent.fromLegacyText(text);
 				net.md_5.bungee.api.chat.ClickEvent click = new net.md_5.bungee.api.chat.ClickEvent(net.md_5.bungee.api.chat.ClickEvent.Action.SUGGEST_COMMAND, line[2]);
 				net.md_5.bungee.api.chat.HoverEvent hover = new net.md_5.bungee.api.chat.HoverEvent(net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
