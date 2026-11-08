@@ -172,8 +172,8 @@ public class Language {
 	public String LIST_YOUR_DISGUISES = ChatColor.GOLD.toString() + ChatColor.BOLD + "Your disguises:";
 	@LastUpdated(60112)
 	public String LIST_PLAYER_TYPE = c("&a&lPLAYER");
-	@LastUpdated(60112)
-	public String LIST_LEGEND = c("&fwhite &7= available, &c&mred&r &7= no permission.");
+	@LastUpdated(60114)
+	public String LIST_LEGEND = c("&agreen &7= available, &cred &7= no permission.");
 	@LastUpdated(60106)
 	public String PLAYER_DISGUISED = c("%prefix%&7You are now disguised as &e%name% &7(rank: &e%rank%&7).");
 	@LastUpdated(60106)

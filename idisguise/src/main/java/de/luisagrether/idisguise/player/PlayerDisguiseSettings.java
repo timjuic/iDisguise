@@ -89,7 +89,7 @@ final class PlayerDisguiseSettings {
 		swapInTitles = config.getBoolean("name-swap.titles", true);
 		swapInHolograms = config.getBoolean("name-swap.holograms", true);
 		swapInSigns = config.getBoolean("name-swap.signs", true);
-		swapInScoreboard = config.getBoolean("name-swap.scoreboard", true);
+		swapInScoreboard = config.getBoolean("name-swap.scoreboard", false);
 		for(String command : config.getStringList("blocked-while-disguised")) {
 			blockedCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
 		}

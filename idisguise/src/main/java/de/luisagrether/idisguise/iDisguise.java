@@ -1022,7 +1022,6 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(players) lines.add(new String[] {"/disguise <name> [rank]", language.HELP_CMD_PLAYER, "/disguise "});
 		if(random) lines.add(new String[] {"/disguise random", language.HELP_CMD_RANDOM, "/disguise random"});
 		if(mobs || players || random) {
-			lines.add(new String[] {"/disguise", language.HELP_CMD_CHECK, "/disguise"});
 			lines.add(new String[] {"/undisguise", language.HELP_CMD_UNDISGUISE, "/undisguise"});
 		}
 		lines.add(new String[] {"/disguise list", playerDisguises.canListPlayers(sender) ? language.HELP_CMD_LIST : language.HELP_CMD_LIST_OWN, "/disguise list"});
@@ -1140,9 +1139,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			return;
 		}
 		if(has) {
-			line.append(ChatColor.WHITE).append(name).append(ChatColor.RESET);
+			line.append(ChatColor.GREEN).append(name).append(ChatColor.RESET);
 		} else {
-			line.append(ChatColor.RED).append(ChatColor.STRIKETHROUGH).append(name).append(ChatColor.RESET);
+			line.append(ChatColor.RED).append(name).append(ChatColor.RESET);
 		}
 	}
 

@@ -93,9 +93,10 @@ name-swap:
   holograms: true
   # Text on signs.
   signs: true
-  # Sidebar scoreboard lines (e.g. a KOTH capper). 1.8 lines are made of 16-character pieces: a name split
-  # across two pieces can't be swapped, and a longer fake name is cut at the end of its piece.
-  scoreboard: true
+  # Sidebar scoreboard lines (e.g. a KOTH capper). Off by default: with some scoreboard setups the sidebar
+  # could disappear (e.g. after combat). 1.8 lines are made of 16-character pieces: a name split across two
+  # pieces can't be swapped, and a longer fake name is cut at the end of its piece.
+  scoreboard: false
 
 # Commands a player can't use while player-disguised (mob disguises are not affected).
 blocked-while-disguised:
