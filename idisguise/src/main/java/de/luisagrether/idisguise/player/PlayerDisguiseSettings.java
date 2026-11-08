@@ -45,6 +45,11 @@ final class PlayerDisguiseSettings {
 	final boolean visibleToOtherPlugins;
 	final java.util.Set<String> commandsNotTranslated = new java.util.HashSet<>();
 	final java.util.Set<String> repairAfterCommands = new java.util.HashSet<>();
+	final boolean swapInMenus;
+	final boolean swapInTitles;
+	final boolean swapInHolograms;
+	final boolean swapInSigns;
+	final boolean swapInScoreboard;
 	private final java.util.Map<String, String> menuItems = new java.util.HashMap<>();
 	final String defaultRank;
 	final boolean copyRealRank;
@@ -79,6 +84,11 @@ final class PlayerDisguiseSettings {
 		blockKnownNamesForPlayers = config.getBoolean("block-known-names-for-players", true);
 		randomNamePool = Math.max(5, config.getInt("random-name-pool", 40));
 		visibleToOtherPlugins = config.getBoolean("visible-to-other-plugins", false);
+		swapInMenus = config.getBoolean("name-swap.menus", true);
+		swapInTitles = config.getBoolean("name-swap.titles", true);
+		swapInHolograms = config.getBoolean("name-swap.holograms", true);
+		swapInSigns = config.getBoolean("name-swap.signs", true);
+		swapInScoreboard = config.getBoolean("name-swap.scoreboard", true);
 		for(String command : config.getStringList("vanish-commands")) {
 			repairAfterCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
 		}

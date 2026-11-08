@@ -82,6 +82,21 @@ random-name-pool: 40
 # false = they only see mob disguises, so player disguises stay on in combat (see remove-in-combat below).
 visible-to-other-plugins: false
 
+# Where else a disguised player's real name is swapped for the fake one (chat, tab and nametags always are).
+# Turn one off if it ever causes trouble with another plugin.
+name-swap:
+  # Menu titles, item names and lore, and player heads (they show the disguise skin), e.g. /stats.
+  menus: true
+  # Big titles and subtitles on screen.
+  titles: true
+  # Holograms and other floating names.
+  holograms: true
+  # Text on signs.
+  signs: true
+  # Sidebar scoreboard lines (e.g. a KOTH capper). 1.8 lines are made of 16-character pieces: a name split
+  # across two pieces can't be swapped, and a longer fake name is cut at the end of its piece.
+  scoreboard: true
+
 # Vanish commands. A vanish plugin may hide / show a player with its own packets, which iDisguise doesn't see.
 # When a disguised player uses one, their disguise is rebuilt for everyone a moment later (PremiumVanish is detected by itself).
 vanish-commands:

@@ -1034,6 +1034,29 @@ public final class PlayerDisguiseManager implements Listener {
 		return before + (needsSpace ? " " : "") + prefix + " " + format.substring(at);
 	}
 
+	/**
+	 * The online player Bukkit would find for this text (like Bukkit.getPlayer): the exact name, or
+	 * else the shortest name starting with it. Null when nobody matches.
+	 */
+	private static Player matchingPlayer(String text) {
+		if(text.length() < 2 || !text.matches("[A-Za-z0-9_]+")) return null;
+		String lower = text.toLowerCase(Locale.ENGLISH);
+		Player best = null;
+		int bestDelta = Integer.MAX_VALUE;
+		for(Player player : Bukkit.getOnlinePlayers()) {
+			String name = player.getName().toLowerCase(Locale.ENGLISH);
+			if(name.equals(lower)) return player;
+			if(name.startsWith(lower)) {
+				int delta = name.length() - lower.length();
+				if(delta < bestDelta) {
+					best = player;
+					bestDelta = delta;
+				}
+			}
+		}
+		return best;
+	}
+
 	/** The server log always shows who really wrote a message (players never see this line). */
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onChatLog(AsyncPlayerChatEvent event) {
@@ -1058,6 +1081,10 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	// ---------------------------------------------------------------- staff: reveal
+
+	PlayerDisguiseSettings settings() {
+		return settings;
+	}
 
 	boolean isRevealingPlayers(UUID viewer) {
 		return revealPlayers.contains(viewer);
@@ -1248,8 +1275,11 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		if(OWN_COMMANDS.contains(label) || settings.commandsNotTranslated.contains(label) || parts.length < 2) return;
 
+		Player sender = event.getPlayer();
+		boolean staff = has(sender, PERM_REVEAL) || has(sender, PERM_ADMIN);
 		boolean changed = false;
 		for(int i = 1; i < parts.length; i++) {
+			boolean translated = false;
 			for(PlayerDisguise disguise : online) {
 				PlayerDisguiseSettings.Profile profile = disguise.getProfile();
 				if(profile == null || !profile.commandsUseFakeName || !parts[i].equalsIgnoreCase(disguise.getFakeName())) continue;
@@ -1257,7 +1287,20 @@ public final class PlayerDisguiseManager implements Listener {
 				if(Bukkit.getPlayerExact(disguise.getFakeName()) != null) continue;
 				parts[i] = disguise.getRealName();
 				changed = true;
+				translated = true;
 				break;
+			}
+			if(translated || staff) continue;
+			// The real name (or the start of it, which many plugins accept) of a disguised player acts
+			// like an offline player for everyone else: otherwise "/msg <real name>" would reach the
+			// disguised player and tell who they are. The invisible colour code makes the lookup fail.
+			Player match = matchingPlayer(parts[i]);
+			if(match != null && match != sender) {
+				PlayerDisguise disguise = disguises.get(match.getUniqueId());
+				if(disguise != null && disguise.getProfile() != null) {
+					parts[i] = parts[i] + ChatColor.RESET;
+					changed = true;
+				}
 			}
 		}
 		if(changed) event.setMessage("/" + String.join(" ", parts));

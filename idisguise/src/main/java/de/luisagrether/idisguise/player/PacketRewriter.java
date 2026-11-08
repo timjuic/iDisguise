@@ -47,6 +47,15 @@ final class PacketRewriter extends PacketAdapter {
 				PacketType.Play.Server.CHAT,
 				PacketType.Play.Server.TAB_COMPLETE,
 				PacketType.Play.Server.NAMED_ENTITY_SPAWN,
+				PacketType.Play.Server.OPEN_WINDOW,
+				PacketType.Play.Server.WINDOW_ITEMS,
+				PacketType.Play.Server.SET_SLOT,
+				PacketType.Play.Server.TITLE,
+				PacketType.Play.Server.ENTITY_METADATA,
+				PacketType.Play.Server.SPAWN_ENTITY_LIVING,
+				PacketType.Play.Server.UPDATE_SIGN,
+				PacketType.Play.Server.SCOREBOARD_SCORE,
+				PacketType.Play.Server.SCOREBOARD_OBJECTIVE,
 				PacketType.Play.Client.TAB_COMPLETE);
 		this.manager = manager;
 	}
@@ -84,6 +93,8 @@ final class PacketRewriter extends PacketAdapter {
 				rewriteTabComplete(event);
 			} else if(type == PacketType.Play.Server.NAMED_ENTITY_SPAWN) {
 				checkSpawn(event);
+			} else {
+				TextSwap.rewrite(event, manager);
 			}
 		} catch(RuntimeException e) {
 			manager.packetError(event.getPacketType().name(), e);
@@ -171,6 +182,7 @@ final class PacketRewriter extends PacketAdapter {
 	}
 
 	private void rewriteTeam(PacketEvent event) {
+		TextSwap.rewriteTeamTexts(event, manager);
 		PacketContainer packet = event.getPacket();
 		@SuppressWarnings("rawtypes")
 		Collection names = packet.getSpecificModifier(Collection.class).readSafely(0);
