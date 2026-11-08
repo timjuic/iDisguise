@@ -57,6 +57,8 @@ public final class PlayerDisguiseManager implements Listener {
 	public static final String PERM_RANK = "iDisguise.rank.";
 	public static final String PERM_ADMIN = "iDisguise.admin";
 	public static final String PERM_RANDOM = "iDisguise.random";
+	/** See who is disguised as whom in /disguise list (admins always do). */
+	public static final String PERM_LIST_PLAYERS = "iDisguise.listplayers";
 	/** rankInput meaning "explicitly no rank" (the default rank, never a copied one). */
 	public static final String NO_RANK = "\u0000no-rank";
 
@@ -269,6 +271,11 @@ public final class PlayerDisguiseManager implements Listener {
 	/** Other plugins (CombatLogX ...) see player disguises too. */
 	public boolean visibleToOtherPlugins() {
 		return settings != null && settings.visibleToOtherPlugins;
+	}
+
+	/** Whether /disguise list shows this sender who is disguised as whom. */
+	public boolean canListPlayers(CommandSender sender) {
+		return available && (has(sender, PERM_ADMIN) || has(sender, PERM_LIST_PLAYERS));
 	}
 
 	public boolean canUseRandom(CommandSender sender) {
@@ -755,6 +762,7 @@ public final class PlayerDisguiseManager implements Listener {
 		List<String> lines = new ArrayList<>();
 		if(!available) return lines;
 		boolean admin = has(viewer, PERM_ADMIN);
+		if(!admin && !has(viewer, PERM_LIST_PLAYERS)) return lines;
 		List<PlayerDisguise> shown = new ArrayList<>();
 		for(PlayerDisguise disguise : online) {
 			PlayerDisguiseSettings.Profile profile = disguise.getProfile();

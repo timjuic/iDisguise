@@ -11,6 +11,7 @@
 #   iDisguise.rank.*            every rank
 #   iDisguise.player.anyname    use names of players who are online or have played here before
 #   iDisguise.player.staff      get the "staff" settings below and stay hidden in /disguise list
+#   iDisguise.listplayers       see who is disguised as whom in /disguise list (staff stay hidden)
 #   iDisguise.admin             see everyone in /disguise list (staff too) and the plugin version
 
 # Turn player disguises on or off.

@@ -215,6 +215,8 @@ public class Language {
 	public String HELP_CMD_UNDISGUISE = "Remove your disguise";
 	@LastUpdated(60101)
 	public String HELP_CMD_LIST = "Your available disguises, and disguised players";
+	@LastUpdated(60101)
+	public String HELP_CMD_LIST_OWN = "Your available disguises";
 	@LastUpdated(60100)
 	public String HELP_CMD_ALTER = "Change your mob, e.g. setBaby()";
 	@LastUpdated(60100)

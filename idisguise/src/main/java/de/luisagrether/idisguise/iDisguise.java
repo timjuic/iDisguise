@@ -1018,7 +1018,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			lines.add(new String[] {"/disguise", language.HELP_CMD_CHECK, "/disguise"});
 			lines.add(new String[] {"/undisguise", language.HELP_CMD_UNDISGUISE, "/undisguise"});
 		}
-		lines.add(new String[] {"/disguise list", language.HELP_CMD_LIST, "/disguise list"});
+		lines.add(new String[] {"/disguise list", playerDisguises.canListPlayers(sender) ? language.HELP_CMD_LIST : language.HELP_CMD_LIST_OWN, "/disguise list"});
 		if(mobs && !config.STATEMENT_WHITELIST.isEmpty()) lines.add(new String[] {"/disguise <mob> <option>", language.HELP_CMD_ALTER, "/disguise "});
 
 		List<String[]> adminLines = new ArrayList<>();
