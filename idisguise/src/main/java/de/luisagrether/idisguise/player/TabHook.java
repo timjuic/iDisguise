@@ -22,6 +22,9 @@ final class TabHook {
 	private final Method getTabListFormatManager;
 	private final Method setName;
 	private final Method hasTemporaryGroup;
+	private final Method getGroup;
+	// Players TAB hasn't loaded, already reported once (no console spam).
+	private final java.util.Set<UUID> reported = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
 	private TabHook(Plugin plugin) throws ReflectiveOperationException {
 		this.plugin = plugin;
@@ -35,6 +38,7 @@ final class TabHook {
 		getTabListFormatManager = tabApi.getMethod("getTabListFormatManager");
 		setName = formatManager.getMethod("setName", tabPlayer, String.class);
 		hasTemporaryGroup = tabPlayer.getMethod("hasTemporaryGroup");
+		getGroup = tabPlayer.getMethod("getGroup");
 	}
 
 	static TabHook create(Plugin plugin) {
@@ -52,8 +56,14 @@ final class TabHook {
 		if(group == null || !player.isOnline()) return;
 		try {
 			Object tabPlayer = getPlayer.invoke(getInstance.invoke(null), player.getUniqueId());
-			if(tabPlayer == null || !(Boolean)isLoaded.invoke(tabPlayer)) return;
-			if(!(Boolean)hasTemporaryGroup.invoke(tabPlayer)) apply(player, group, name);
+			if(tabPlayer == null || !(Boolean)isLoaded.invoke(tabPlayer)) {
+				notLoaded(player);
+				return;
+			}
+			// Missing (e.g. after /tab reload) or a different group: put the disguise rank back.
+			if(!(Boolean)hasTemporaryGroup.invoke(tabPlayer) || !group.equalsIgnoreCase(String.valueOf(getGroup.invoke(tabPlayer)))) {
+				apply(player, group, name);
+			}
 		} catch(Throwable t) {
 			// TAB is reloading: the next check tries again
 		}
@@ -75,16 +85,28 @@ final class TabHook {
 			if(tabPlayer == null || !(Boolean)isLoaded.invoke(tabPlayer)) {
 				if(attempt < 20) {
 					Bukkit.getScheduler().runTaskLater(plugin, () -> apply(player, group, name, attempt + 1), 10L);
+				} else {
+					notLoaded(player);
 				}
 				return;
 			}
+			reported.remove(player.getUniqueId());
 			setTemporaryGroup.invoke(tabPlayer, group);
 			Object formatManager = getTabListFormatManager.invoke(api);
 			if(formatManager != null) {
 				setName.invoke(formatManager, tabPlayer, name);
 			}
 		} catch(Throwable t) {
-			plugin.getLogger().warning("Could not update TAB for " + player.getName() + ": " + t);
+			Throwable cause = t.getCause() != null ? t.getCause() : t;
+			plugin.getLogger().warning("Could not update TAB for " + player.getName() + ": " + cause);
+		}
+	}
+
+	/** TAB hasn't loaded this player: the fake rank can't show in tab / nametag yet (retried every 30 s). */
+	private void notLoaded(Player player) {
+		if(reported.add(player.getUniqueId())) {
+			plugin.getLogger().warning("TAB has not loaded " + player.getName() + " (no tab formatting / sidebar from TAB for them), so the"
+					+ " disguise rank can't show in tab and above the head yet. iDisguise retries every 30 seconds; /tab reload loads everyone again.");
 		}
 	}
 
