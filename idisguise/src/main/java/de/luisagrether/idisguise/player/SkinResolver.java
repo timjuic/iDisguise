@@ -73,11 +73,13 @@ final class SkinResolver {
 	}
 
 	private Skin ofName(String name, UUID knownUuid, StringBuilder notes) {
-		if(skinsRestorer) {
+		// SkinsRestorer only for players who have played here (the skin they use on this server).
+		// Any other name goes straight to Mojang, which returns that account's own, signed skin.
+		if(skinsRestorer && knownUuid != null) {
 			try {
 				Skin skin = fromSkinsRestorer(name, knownUuid);
 				if(skin != null) {
-					skin.source = "SkinsRestorer";
+					skin.source = "SkinsRestorer" + describe(skin);
 					return skin;
 				}
 			} catch(Throwable t) {
@@ -89,7 +91,7 @@ final class SkinResolver {
 		Skin skin = fromMojang(name);
 		if(skin != null) {
 			Skin mojang = new Skin(skin.value, skin.signature);
-			mojang.source = "Mojang";
+			mojang.source = "Mojang" + describe(skin);
 			return mojang;
 		}
 		return null;
@@ -99,6 +101,23 @@ final class SkinResolver {
 		UUID uuid = knownUuid != null ? knownUuid : UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
 		String[] property = SkinsRestorerSkins.find(uuid, name);
 		return property == null ? null : new Skin(property[0], property[1]);
+	}
+
+	/** " (skin of <account>, signed)" - read from the skin data itself, for the debug line. */
+	@SuppressWarnings("deprecation")
+	private static String describe(Skin skin) {
+		String owner = "?";
+		try {
+			String json = new String(java.util.Base64.getDecoder().decode(skin.value), StandardCharsets.UTF_8);
+			JsonElement data = new JsonParser().parse(json);
+			if(data.isJsonObject() && data.getAsJsonObject().has("profileName")) {
+				owner = data.getAsJsonObject().get("profileName").getAsString();
+			}
+		} catch(RuntimeException e) {
+			owner = "unreadable";
+		}
+		boolean signed = skin.signature != null && !skin.signature.isEmpty();
+		return " (skin of " + owner + ", " + (signed ? "signed" : "NOT signed") + ")";
 	}
 
 	@SuppressWarnings("deprecation")

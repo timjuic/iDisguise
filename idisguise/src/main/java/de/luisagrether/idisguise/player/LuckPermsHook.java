@@ -3,6 +3,8 @@ package de.luisagrether.idisguise.player;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+import java.util.logging.Logger;
+
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -21,12 +23,17 @@ final class LuckPermsHook {
 		this.api = api;
 	}
 
-	static LuckPermsHook create() {
+	static LuckPermsHook create(Logger logger) {
 		if(Bukkit.getPluginManager().getPlugin("LuckPerms") == null) return null;
 		try {
 			LuckPerms api = Bukkit.getServicesManager().load(LuckPerms.class);
-			return api == null ? null : new LuckPermsHook(api);
+			if(api == null) {
+				logger.warning("LuckPerms is installed but its API isn't available: fake ranks won't show in chat.");
+				return null;
+			}
+			return new LuckPermsHook(api);
 		} catch(Throwable t) {
+			logger.warning("Could not connect to LuckPerms (" + t + "): fake ranks won't show in chat.");
 			return null;
 		}
 	}

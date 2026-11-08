@@ -104,13 +104,17 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 
 		store = new PlayerDisguiseStore(plugin.getDataFolder(), plugin.getLogger());
-		luckPerms = Bukkit.getPluginManager().getPlugin("LuckPerms") != null ? LuckPermsHook.create() : null;
+		luckPerms = Bukkit.getPluginManager().getPlugin("LuckPerms") != null ? LuckPermsHook.create(plugin.getLogger()) : null;
 		tab = TabHook.create(plugin);
 		skins = new SkinResolver(plugin.getLogger());
 		File essentials = new File(settings.essentialsConfig);
 		if(!essentials.isAbsolute()) essentials = new File(Bukkit.getWorldContainer(), settings.essentialsConfig);
 		chatColors = new ChatColors(essentials);
 		placeholderApi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null;
+		debug("Hooks: LuckPerms " + (luckPerms != null ? "yes" : "NO") + ", TAB " + (tab != null ? "yes" : "NO")
+				+ ", SkinsRestorer " + (Bukkit.getPluginManager().getPlugin("SkinsRestorer") != null ? "yes" : "NO")
+				+ ", PlaceholderAPI " + (placeholderApi ? "yes" : "NO")
+				+ ", EssentialsX chat colours " + (essentials.isFile() ? "read from " + essentials.getPath() : "NOT FOUND at " + essentials.getPath()));
 
 		for(PlayerDisguise disguise : store.load()) {
 			disguises.put(disguise.getUniqueId(), disguise);
@@ -456,6 +460,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(luckPerms != null && profile != null && profile.fakeRankInChat) {
 			String prefix = rank == null ? null : luckPerms.groupPrefix(rank);
 			luckPerms.setFakePrefix(player, prefix == null ? "" : prefix);
+			debug("Fake prefix of " + player.getName() + " (rank " + rank + "): '" + prefix + "', LuckPerms now gives '" + luckPerms.prefix(player) + "'");
 		}
 	}
 
@@ -662,7 +667,9 @@ public final class PlayerDisguiseManager implements Listener {
 		rebuildSnapshots();
 	}
 
-	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+	// HIGH, not HIGHEST: Factions (relation-coloured faction tags) builds its own copy of the
+	// message for every player at HIGHEST, so the change has to be made before that.
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
 	public void onChat(AsyncPlayerChatEvent event) {
 		Player player = event.getPlayer();
 		PlayerDisguise disguise = disguises.get(player.getUniqueId());
@@ -689,8 +696,10 @@ public final class PlayerDisguiseManager implements Listener {
 				event.setMessage(fakeColor + event.getMessage());
 			}
 		}
-		if(profile.hideChatTag && placeholderApi) {
-			String tag = PlaceholderHook.chatTag(player);
+		if(profile.hideChatTag) {
+			// DeluxeTags may not have filled in its tag yet at this point.
+			format = format.replace("{deluxetags_tag}", "");
+			String tag = placeholderApi ? PlaceholderHook.chatTag(player) : null;
 			if(tag != null && !tag.isEmpty()) {
 				int index = format.indexOf(tag);
 				if(index >= 0) format = format.substring(0, index) + format.substring(index + tag.length());
