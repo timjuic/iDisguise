@@ -59,6 +59,8 @@ public final class PlayerDisguiseManager implements Listener {
 	public static final String PERM_RANDOM = "iDisguise.random";
 	/** See who is disguised as whom in /disguise list (admins always do). */
 	public static final String PERM_LIST_PLAYERS = "iDisguise.listplayers";
+	public static final String PERM_REVEAL = "iDisguise.reveal";
+	public static final String PERM_WHOIS = "iDisguise.whois";
 	/** rankInput meaning "explicitly no rank" (the default rank, never a copied one). */
 	public static final String NO_RANK = "\u0000no-rank";
 
@@ -85,6 +87,12 @@ public final class PlayerDisguiseManager implements Listener {
 	private boolean placeholderApi;
 	private boolean skinsRestorer;
 	private RandomNames randomNames;
+	private DisguiseLog log;
+	private SelfPreview preview;
+	// Staff who see through disguises (only on their own screen).
+	private final Set<UUID> revealPlayers = ConcurrentHashMap.newKeySet();
+	private final Set<UUID> revealMobs = ConcurrentHashMap.newKeySet();
+	private org.bukkit.scheduler.BukkitTask mobRevealTask;
 
 	public PlayerDisguiseManager(iDisguise plugin) {
 		this.plugin = plugin;
@@ -93,6 +101,8 @@ public final class PlayerDisguiseManager implements Listener {
 	// ---------------------------------------------------------------- start / stop
 
 	public void enable() {
+		// The log also records mob disguises, so it exists even when player disguises are off.
+		log = new DisguiseLog(plugin.getDataFolder(), plugin.getLogger());
 		settings = new PlayerDisguiseSettings(plugin);
 		if(!settings.enabled) {
 			unavailableReason = "turned off in player-disguise.yml";
@@ -137,6 +147,8 @@ public final class PlayerDisguiseManager implements Listener {
 		});
 		randomNames.refill();
 		Bukkit.getPluginManager().registerEvents(new RankMenu.Clicks(plugin), plugin);
+		preview = new SelfPreview(plugin, this);
+		mobRevealTask = Bukkit.getScheduler().runTaskTimer(plugin, this::showMobNames, 20L, 20L);
 		rewriter = new PacketRewriter(plugin, this);
 		rewriter.register();
 		Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -163,7 +175,14 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	public void disable() {
+		if(log != null) log.close();
 		if(!available) return;
+		preview.stopAll();
+		mobRevealTask.cancel();
+		for(UUID uuid : new ArrayList<>(revealMobs)) {
+			Player viewer = Bukkit.getPlayer(uuid);
+			if(viewer != null) hideMobNames(viewer);
+		}
 		for(Player player : Bukkit.getOnlinePlayers()) {
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
 			if(disguise != null) resetLook(player, disguise);
@@ -487,7 +506,8 @@ public final class PlayerDisguiseManager implements Listener {
 			if(other.getUniqueId().equals(target.getUniqueId())) continue;
 			if(other.getFakeName().equalsIgnoreCase(name)) return language().PLAYER_DISGUISE_NAME_TAKEN;
 			// The real name of someone who is disguised right now: names would get mixed up.
-			if(other.getProfile() != null && other.getRealName().equalsIgnoreCase(name)) return language().PLAYER_DISGUISE_NAME_TAKEN;
+			// No name in this message: it would tell who is disguised.
+			if(other.getProfile() != null && other.getRealName().equalsIgnoreCase(name)) return language().PLAYER_DISGUISE_NAME_UNAVAILABLE;
 		}
 		return null;
 	}
@@ -561,6 +581,9 @@ public final class PlayerDisguiseManager implements Listener {
 		applyLook(target, disguise);
 		removeRealEntry(target);
 		refresh(target);
+		log.start(target.getName(), target.getUniqueId(), "player", name, effectiveRank(disguise));
+		if(previous != null) log.end(target.getName(), target.getUniqueId(), "player", previous.getFakeName());
+		Bukkit.getScheduler().runTaskLater(plugin, () -> showPreview(target), 5L);
 
 		String shownRank = effectiveRank(disguise);
 		send(sender, language.PLAYER_DISGUISED.replace("%name%", name).replace("%rank%", shownRank == null ? "-" : shownRank));
@@ -573,6 +596,8 @@ public final class PlayerDisguiseManager implements Listener {
 		if(disguise == null) return false;
 		rebuildSnapshots();
 		save();
+		log.end(player.getName(), player.getUniqueId(), "player", disguise.getFakeName());
+		preview.stop(player);
 		if(player.isOnline()) {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
@@ -819,6 +844,14 @@ public final class PlayerDisguiseManager implements Listener {
 		// The player who joined is still disguised from before.
 		PlayerDisguise disguise = disguises.get(joined.getUniqueId());
 		if(disguise == null) return;
+		// No longer allowed to use player disguises (e.g. a rank ran out): the disguise ends.
+		if(!plugin.canDisguiseAsPlayer(joined)) {
+			disguises.remove(joined.getUniqueId());
+			save();
+			log.end(joined.getName(), joined.getUniqueId(), "player", disguise.getFakeName());
+			Bukkit.getScheduler().runTaskLater(plugin, () -> send(joined, language().UNDISGUISED_NO_ACCESS), 20L);
+			return;
+		}
 		markOnline(joined, disguise);
 		Player owner = Bukkit.getPlayerExact(disguise.getFakeName());
 		if(owner != null && owner != joined) {
@@ -828,6 +861,7 @@ public final class PlayerDisguiseManager implements Listener {
 			} else {
 				disguises.remove(joined.getUniqueId());
 				save();
+				log.end(joined.getName(), joined.getUniqueId(), "player", disguise.getFakeName());
 				Bukkit.getScheduler().runTaskLater(plugin, () -> send(joined,
 						language().UNDISGUISED_REAL_PLAYER_JOINED.replace("%name%", disguise.getFakeName())), 20L);
 			}
@@ -845,6 +879,9 @@ public final class PlayerDisguiseManager implements Listener {
 	public void onQuit(PlayerQuitEvent event) {
 		Player quit = event.getPlayer();
 		lastTabInput.remove(quit.getUniqueId());
+		revealPlayers.remove(quit.getUniqueId());
+		revealMobs.remove(quit.getUniqueId());
+		preview.forget(quit.getUniqueId());
 		for(PlayerDisguise disguise : disguises.values()) {
 			disguise.getRemovedFor().remove(quit.getUniqueId());
 		}
@@ -948,6 +985,195 @@ public final class PlayerDisguiseManager implements Listener {
 		return before + (needsSpace ? " " : "") + prefix + " " + format.substring(at);
 	}
 
+	/** The server log always shows who really wrote a message (players never see this line). */
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onChatLog(AsyncPlayerChatEvent event) {
+		PlayerDisguise disguise = disguises.get(event.getPlayer().getUniqueId());
+		if(disguise == null || disguise.getProfile() == null) return;
+		plugin.getLogger().info("[Disguised] " + disguise.getRealName() + " as " + disguise.getFakeName() + ": "
+				+ ChatColor.stripColor(event.getMessage()));
+	}
+
+	// ---------------------------------------------------------------- self preview
+
+	/** The disguised player sees themselves with the disguise for 5 seconds. */
+	public void showPreview(Player player) {
+		PlayerDisguise disguise = disguises.get(player.getUniqueId());
+		if(!available || disguise == null || !player.isOnline()) return;
+		try {
+			preview.show(player, disguise, 100);
+		} catch(RuntimeException e) {
+			preview.stop(player);
+			packetError("preview", e);
+		}
+	}
+
+	// ---------------------------------------------------------------- staff: reveal
+
+	boolean isRevealingPlayers(UUID viewer) {
+		return revealPlayers.contains(viewer);
+	}
+
+	/** /disguise reveal players|mobs: toggles seeing through disguises, on the sender's own screen only. */
+	public void revealCommand(CommandSender sender, String[] args) {
+		Language language = language();
+		if(!(sender instanceof Player)) {
+			sender.sendMessage(language.CONSOLE_USE_COMMAND);
+			return;
+		}
+		Player viewer = (Player)sender;
+		if(!available || !has(sender, PERM_REVEAL)) {
+			send(sender, language.DISGUISE_NO_PERMISSION);
+			return;
+		}
+		String what = args.length > 1 ? args[1].toLowerCase(Locale.ENGLISH) : "";
+		if(what.equals("players")) {
+			boolean on = revealPlayers.add(viewer.getUniqueId());
+			if(!on) revealPlayers.remove(viewer.getUniqueId());
+			for(PlayerDisguise disguise : online) {
+				Player disguised = Bukkit.getPlayer(disguise.getUniqueId());
+				if(disguised == null || disguised == viewer) continue;
+				// Drop the entry the viewer has now, then let the server send the player again.
+				sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise, on
+						? new WrappedGameProfile(disguise.getFakeUniqueId(), disguise.getFakeName())
+						: new WrappedGameProfile(disguised.getUniqueId(), disguised.getName())));
+				disguise.getRemovedFor().remove(viewer.getUniqueId());
+				if(viewer.canSee(disguised)) {
+					viewer.hidePlayer(disguised);
+					viewer.showPlayer(disguised);
+				}
+			}
+			send(sender, on ? language.REVEAL_PLAYERS_ON : language.REVEAL_PLAYERS_OFF);
+		} else if(what.equals("mobs")) {
+			boolean on = revealMobs.add(viewer.getUniqueId());
+			if(on) {
+				showMobNames();
+			} else {
+				revealMobs.remove(viewer.getUniqueId());
+				hideMobNames(viewer);
+			}
+			send(sender, on ? language.REVEAL_MOBS_ON : language.REVEAL_MOBS_OFF);
+		} else {
+			send(sender, language.REVEAL_USAGE);
+		}
+	}
+
+	/** Staff with reveal mobs on see the real player's name above every disguise mob. */
+	private void showMobNames() {
+		if(revealMobs.isEmpty()) return;
+		for(UUID uuid : revealMobs) {
+			Player viewer = Bukkit.getPlayer(uuid);
+			if(viewer == null) continue;
+			for(Map.Entry<UUID, org.bukkit.entity.Entity> entry : plugin.getMobDisguises().entrySet()) {
+				org.bukkit.entity.Entity mob = entry.getValue();
+				Player disguised = Bukkit.getPlayer(entry.getKey());
+				if(disguised == null || mob == null || !mob.getWorld().equals(viewer.getWorld())) continue;
+				if(mob.getLocation().distanceSquared(viewer.getLocation()) > 96 * 96) continue;
+				try {
+					sendRaw(viewer, mobName(mob.getEntityId(), ChatColor.RED + disguised.getName(), true));
+				} catch(RuntimeException e) {
+					packetError("ENTITY_METADATA", e);
+					return;
+				}
+			}
+		}
+	}
+
+	private void hideMobNames(Player viewer) {
+		for(org.bukkit.entity.Entity mob : plugin.getMobDisguises().values()) {
+			if(mob == null || !mob.getWorld().equals(viewer.getWorld())) continue;
+			String name = mob.getCustomName();
+			try {
+				sendRaw(viewer, mobName(mob.getEntityId(), name == null ? "" : name, mob.isCustomNameVisible()));
+			} catch(RuntimeException e) {
+				packetError("ENTITY_METADATA", e);
+				return;
+			}
+		}
+	}
+
+	/** 1.8 entity metadata: 2 = custom name, 3 = always show the name. */
+	private static PacketContainer mobName(int entityId, String name, boolean visible) {
+		PacketContainer packet = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_METADATA);
+		packet.getIntegers().write(0, entityId);
+		packet.getWatchableCollectionModifier().write(0, java.util.Arrays.asList(
+				new com.comphenix.protocol.wrappers.WrappedWatchableObject(2, name),
+				new com.comphenix.protocol.wrappers.WrappedWatchableObject(3, (byte)(visible ? 1 : 0))));
+		return packet;
+	}
+
+	// ---------------------------------------------------------------- staff: whois / history
+
+	/** Mob disguises go into the same log. */
+	public void logMob(Player player, org.bukkit.entity.EntityType type, boolean start) {
+		if(log == null) return;
+		if(start) {
+			log.start(player.getName(), player.getUniqueId(), "mob", type.name(), null);
+		} else {
+			log.end(player.getName(), player.getUniqueId(), "mob", type.name());
+		}
+	}
+
+	/** /disguise whois <name>: who is (or was) behind a disguise name. */
+	public void whoisCommand(CommandSender sender, String[] args) {
+		Language language = language();
+		if(!has(sender, PERM_WHOIS)) {
+			send(sender, language.DISGUISE_NO_PERMISSION);
+			return;
+		}
+		if(args.length < 2) {
+			send(sender, language.WHOIS_USAGE);
+			return;
+		}
+		String name = args[1];
+		PlayerDisguise current = null;
+		for(PlayerDisguise disguise : disguises.values()) {
+			if(disguise.getFakeName().equalsIgnoreCase(name)) current = disguise;
+		}
+		PlayerDisguise now = current;
+		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+			List<DisguiseLog.Session> sessions = DisguiseLog.newest(log.sessions(name, null), 8);
+			Bukkit.getScheduler().runTask(plugin, () -> {
+				sendUnchanged(sender, language.WHOIS_HEADER.replace("%name%", name));
+				if(now != null) {
+					sendUnchanged(sender, language.WHOIS_NOW.replace("%player%", now.getRealName())
+							.replace("%state%", now.getProfile() != null ? language.WHOIS_ONLINE : language.WHOIS_OFFLINE));
+				}
+				if(sessions.isEmpty() && now == null) sendUnchanged(sender, language.WHOIS_NONE);
+				for(DisguiseLog.Session session : sessions) sendUnchanged(sender, line(language, session));
+			});
+		});
+	}
+
+	/** /disguise history <player>: every disguise a real player used. */
+	public void historyCommand(CommandSender sender, String[] args) {
+		Language language = language();
+		if(!has(sender, PERM_WHOIS)) {
+			send(sender, language.DISGUISE_NO_PERMISSION);
+			return;
+		}
+		if(args.length < 2) {
+			send(sender, language.HISTORY_USAGE);
+			return;
+		}
+		String name = args[1];
+		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+			List<DisguiseLog.Session> sessions = DisguiseLog.newest(log.sessions(null, name), 10);
+			Bukkit.getScheduler().runTask(plugin, () -> {
+				sendUnchanged(sender, language.HISTORY_HEADER.replace("%player%", name));
+				if(sessions.isEmpty()) sendUnchanged(sender, language.HISTORY_NONE);
+				for(DisguiseLog.Session session : sessions) sendUnchanged(sender, line(language, session));
+			});
+		});
+	}
+
+	private static String line(Language language, DisguiseLog.Session session) {
+		String disguise = session.kind.equals("mob") ? session.disguise.toLowerCase(Locale.ENGLISH) : session.disguise
+				+ (session.rank.equals("-") ? "" : " (" + session.rank + ")");
+		return language.LOG_ENTRY.replace("%start%", session.start).replace("%end%", session.end != null ? session.end : language.LOG_STILL_ON)
+				.replace("%player%", session.realName).replace("%disguise%", disguise);
+	}
+
 	private static String color(String text) {
 		return text == null ? "" : ChatColor.translateAlternateColorCodes('&', text);
 	}
@@ -965,7 +1191,7 @@ public final class PlayerDisguiseManager implements Listener {
 			send(event.getPlayer(), language().SKIN_BLOCKED_WHILE_DISGUISED);
 			return;
 		}
-		if(OWN_COMMANDS.contains(label) || parts.length < 2) return;
+		if(OWN_COMMANDS.contains(label) || settings.commandsNotTranslated.contains(label) || parts.length < 2) return;
 
 		boolean changed = false;
 		for(int i = 1; i < parts.length; i++) {

@@ -12,6 +12,8 @@
 #   iDisguise.player.anyname    use names of players who are online or have played here before
 #   iDisguise.player.staff      get the "staff" settings below and stay hidden in /disguise list
 #   iDisguise.listplayers       see who is disguised as whom in /disguise list (staff stay hidden)
+#   iDisguise.reveal            /disguise reveal players|mobs: see through disguises (only on your screen)
+#   iDisguise.whois             /disguise whois <name> and /disguise history <player> (disguise-log.txt)
 #   iDisguise.admin             see everyone in /disguise list (staff too) and the plugin version
 
 # Turn player disguises on or off.
@@ -79,6 +81,17 @@ random-name-pool: 40
 # Other plugins (e.g. CombatLogX, which removes disguises in combat) also see player disguises.
 # false = they only see mob disguises, so player disguises stay on in combat (see remove-in-combat below).
 visible-to-other-plugins: false
+
+# Commands where a disguise name is NOT changed into the real name (e.g. LuckPerms, so /lp user <name>
+# always means the real account with that name).
+commands-not-translated:
+- lp
+- luckperms
+- lpb
+- perm
+- perms
+- permission
+- permissions
 
 # Skins used when the name has no skin of its own (not a player of this server and no Minecraft account).
 # One is picked at random. Use names of real Minecraft accounts.

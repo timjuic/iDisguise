@@ -722,6 +722,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 							language.CURRENTLY_DISGUISED_AS_PLAYER.replace("%targetSkin%", fakeName) :
 							language.ODISGUISE_CURRENTLY_DISGUISED_AS_PLAYER.replace("%player%", target.getName()).replace("%targetSkin%", fakeName)
 						);
+						// Like mob disguises: see yourself with the disguise for a few seconds.
+						if(self) playerDisguises.showPreview(target);
 					} else {
 						if(self) {
 							sender.sendMessage(language.CURRENTLY_DISGUISED_AS_ENTITY.replace("%entityType%", currentDisguise(target).name()));
@@ -770,6 +772,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				sendHelpPage(sender, page);
 			} else if(args[0].equalsIgnoreCase("list")) {
 				sendDisguiseList(sender);
+			} else if(self && args[0].equalsIgnoreCase("reveal")) {
+				playerDisguises.revealCommand(sender, args);
+			} else if(self && args[0].equalsIgnoreCase("whois")) {
+				playerDisguises.whoisCommand(sender, args);
+			} else if(self && args[0].equalsIgnoreCase("history")) {
+				playerDisguises.historyCommand(sender, args);
 			} else if(args[0].equalsIgnoreCase("random") && playerDisguises.isAvailable()) {
 				if(!playerDisguises.canUseRandom(sender)) {
 					sender.sendMessage(language.DISGUISE_NO_PERMISSION);
@@ -922,7 +930,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					}
 				} catch(IllegalArgumentException e) {
 					// Not a mob: /disguise <name> [rank]
-					if(ACCOUNTNAME.matcher(args[0]).matches() && playerDisguises.isAvailable()) {
+					if(ACCOUNTNAME.matcher(args[0]).matches() && playerDisguises.isAvailable() && canDisguiseAsPlayer(sender)) {
 						disguisePlayerCommand(sender, target, self, args[0], args.length > 1 ? args[1] : null);
 					} else {
 						if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
@@ -1025,6 +1033,14 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(admin || hasPermissionOthers(sender)) {
 			adminLines.add(new String[] {"/odisguise <player> <disguise>", language.HELP_CMD_ODISGUISE, "/odisguise "});
 			adminLines.add(new String[] {"/undisguise <player>", language.HELP_CMD_UNDISGUISE_OTHER, "/undisguise "});
+		}
+		if(admin || hasNode(sender, PlayerDisguiseManager.PERM_REVEAL)) {
+			adminLines.add(new String[] {"/disguise reveal players", language.HELP_CMD_REVEAL_PLAYERS, "/disguise reveal players"});
+			adminLines.add(new String[] {"/disguise reveal mobs", language.HELP_CMD_REVEAL_MOBS, "/disguise reveal mobs"});
+		}
+		if(admin || hasNode(sender, PlayerDisguiseManager.PERM_WHOIS)) {
+			adminLines.add(new String[] {"/disguise whois <name>", language.HELP_CMD_WHOIS, "/disguise whois "});
+			adminLines.add(new String[] {"/disguise history <player>", language.HELP_CMD_HISTORY, "/disguise history "});
 		}
 
 		sender.sendMessage(language.HELP_TITLE.replace("%title%", title(sender)));
@@ -1157,6 +1173,11 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				completions.add("?");
 				completions.add("list");
 				if(playerDisguises.canUseRandom(sender)) completions.add("random");
+				if(self && hasNode(sender, PlayerDisguiseManager.PERM_REVEAL)) completions.add("reveal");
+				if(self && hasNode(sender, PlayerDisguiseManager.PERM_WHOIS)) {
+					completions.add("whois");
+					completions.add("history");
+				}
 				for(EntityType type : EntityType.values()) {
 					if(type.equals(EntityType.PLAYER) && !playerDisguises.isAvailable()) continue;
 					if(!config.DISGUISE_TYPE_BLACKLIST.contains(type.name()) && (!(sender instanceof Player) || hasPermission((Player)sender, type))) {
@@ -1348,6 +1369,16 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		return sender.hasPermission("iDisguise.*") || sender.hasPermission(node);
 	}
 
+	/** iDisguise.disguise.PLAYER (or operators without permission nodes). */
+	public boolean canDisguiseAsPlayer(CommandSender sender) {
+		return hasPermission(sender, EntityType.PLAYER);
+	}
+
+	/** Live view of the mob disguises: player -> disguise mob. */
+	public Map<UUID, Entity> getMobDisguises() {
+		return java.util.Collections.unmodifiableMap(disguiseMap);
+	}
+
 	public boolean isPlayerNameBlacklisted(String name) {
 		return config.PLAYER_DISGUISE_BLACKLIST.contains(name.toLowerCase(Locale.ENGLISH));
 	}
@@ -1443,6 +1474,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			entity.teleport(player.getLocation());
 		}
 		disguiseMap.put(player.getUniqueId(), entity);
+		if(playerDisguises != null) playerDisguises.logMob(player, type, true);
 		if(config.KEEP_TAB_LIST_WHEN_DISGUISED && LegacyInjector_injectAll != null) {
 			// Hide the player entity from observers via NMS tracker injection. Skips Bukkit's
 			// hidePlayer entirely so canSee, tab list, /tpa, /msg, online status etc. all stay
@@ -1527,6 +1559,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			return EntityType.PLAYER;
 		} else {
 			Entity entity = disguiseMap.remove(player.getUniqueId());
+			if(playerDisguises != null) playerDisguises.logMob(player, entity.getType(), false);
 			entity.remove();
 			// Clear the invisibility we applied at disguise time. Otherwise an undisguise that
 			// happens during the 5s viewself grace leaves the player invisible.

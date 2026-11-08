@@ -70,6 +70,8 @@ final class PacketRewriter extends PacketAdapter {
 	@Override
 	public void onPacketSending(PacketEvent event) {
 		if(event.isCancelled() || manager.isEmpty()) return;
+		// Staff with "/disguise reveal players" on see everyone as they really are.
+		if(event.getPlayer() != null && manager.isRevealingPlayers(event.getPlayer().getUniqueId())) return;
 		try {
 			PacketType type = event.getPacketType();
 			if(type == PacketType.Play.Server.PLAYER_INFO) {

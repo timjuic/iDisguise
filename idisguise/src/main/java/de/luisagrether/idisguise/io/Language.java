@@ -225,6 +225,51 @@ public class Language {
 	public String HELP_CMD_UNDISGUISE_OTHER = "Undisguise another player";
 	@LastUpdated(60101)
 	public String HELP_ADMIN_TITLE = ChatColor.RED.toString() + ChatColor.BOLD + "Admin " + ChatColor.DARK_GRAY + "\u00bb " + ChatColor.GRAY + "Commands";
+	@LastUpdated(60101)
+	public String HELP_CMD_REVEAL_PLAYERS = "See disguised players as who they really are (only you)";
+	@LastUpdated(60101)
+	public String HELP_CMD_REVEAL_MOBS = "See who is inside disguise mobs (only you)";
+	@LastUpdated(60101)
+	public String HELP_CMD_WHOIS = "Who is or was behind a disguise name";
+	@LastUpdated(60101)
+	public String HELP_CMD_HISTORY = "Every disguise a player has used";
+	@LastUpdated(60101)
+	public String PLAYER_DISGUISE_NAME_UNAVAILABLE = ChatColor.RED + "You can't use that name right now.";
+	@LastUpdated(60101)
+	public String UNDISGUISED_NO_ACCESS = ChatColor.RED + "Your player disguise was removed because you no longer have access to it.";
+	@LastUpdated(60101)
+	public String REVEAL_PLAYERS_ON = ChatColor.GREEN + "You now see disguised players as who they really are (only on your screen).";
+	@LastUpdated(60101)
+	public String REVEAL_PLAYERS_OFF = ChatColor.GOLD + "You see player disguises again.";
+	@LastUpdated(60101)
+	public String REVEAL_MOBS_ON = ChatColor.GREEN + "You now see the real player's name above every disguise mob (only on your screen).";
+	@LastUpdated(60101)
+	public String REVEAL_MOBS_OFF = ChatColor.GOLD + "Disguise mobs no longer show the real player's name.";
+	@LastUpdated(60101)
+	public String REVEAL_USAGE = ChatColor.RED + "Use /disguise reveal players or /disguise reveal mobs";
+	@LastUpdated(60101)
+	public String WHOIS_USAGE = ChatColor.RED + "Use /disguise whois <name>";
+	@LastUpdated(60101)
+	public String HISTORY_USAGE = ChatColor.RED + "Use /disguise history <player>";
+	@LastUpdated(60101)
+	public String WHOIS_HEADER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguise name " + ChatColor.YELLOW + "%name%" + ChatColor.GOLD + ":";
+	@LastUpdated(60101)
+	public String WHOIS_NOW = ChatColor.GRAY + " Now: " + ChatColor.WHITE + "%player% " + ChatColor.GRAY + "(%state%)";
+	@LastUpdated(60101)
+	public String WHOIS_ONLINE = "online";
+	@LastUpdated(60101)
+	public String WHOIS_OFFLINE = "offline, still disguised";
+	@LastUpdated(60101)
+	public String WHOIS_NONE = ChatColor.GRAY + " Nobody has used this name.";
+	@LastUpdated(60101)
+	public String HISTORY_HEADER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguises of " + ChatColor.YELLOW + "%player%" + ChatColor.GOLD + ":";
+	@LastUpdated(60101)
+	public String HISTORY_NONE = ChatColor.GRAY + " No disguises found.";
+	@LastUpdated(60101)
+	public String LOG_ENTRY = ChatColor.GRAY + " %start% " + ChatColor.DARK_GRAY + "- " + ChatColor.GRAY + "%end%" + ChatColor.DARK_GRAY + ": "
+			+ ChatColor.WHITE + "%player% " + ChatColor.GRAY + "as " + ChatColor.YELLOW + "%disguise%";
+	@LastUpdated(60101)
+	public String LOG_STILL_ON = "still on";
 	@LastUpdated(60100)
 	public String HELP_CLICK = ChatColor.GRAY + "Click to type this command";
 	@LastUpdated(60100)
