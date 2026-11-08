@@ -576,6 +576,7 @@ public final class PlayerDisguiseManager implements Listener {
 		plugin.removeMobDisguise(target);
 
 		PlayerDisguise disguise = new PlayerDisguise(target.getUniqueId(), target.getName(), name, rank, skin.value, skin.signature);
+		disguise.setGivenByStaff(sender != target);
 		if(previous != null && previous.getPreviousDisplayName() != null) {
 			disguise.setPreviousDisplayName(previous.getPreviousDisplayName());
 		}
@@ -749,11 +750,8 @@ public final class PlayerDisguiseManager implements Listener {
 	private void resetLook(Player player, PlayerDisguise disguise) {
 		String previous = disguise.getPreviousDisplayName();
 		player.setDisplayName(previous != null ? previous : player.getName());
-		if(tab != null) {
-			Bukkit.getScheduler().runTaskLater(plugin, () -> {
-				if(player.isOnline() && !disguises.containsKey(player.getUniqueId())) tab.apply(player, null, null);
-			}, 10L);
-		}
+		// Right away, so the refresh after it already carries the real rank.
+		if(tab != null) tab.apply(player, null, null);
 	}
 
 	/**
@@ -973,7 +971,20 @@ public final class PlayerDisguiseManager implements Listener {
 			disguise.getRemovedFor().remove(quit.getUniqueId());
 		}
 		PlayerDisguise own = disguises.get(quit.getUniqueId());
-		if(own != null) own.setOffline();
+		if(own != null && own.isGivenByStaff()) {
+			// Given with /odisguise: ends when the player leaves.
+			disguises.remove(quit.getUniqueId());
+			save();
+			log.end(quit.getName(), quit.getUniqueId(), "player", own.getFakeName());
+			for(Player viewer : Bukkit.getOnlinePlayers()) {
+				if(viewer != quit) sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, own,
+						new WrappedGameProfile(own.getFakeUniqueId(), own.getFakeName())));
+			}
+			own.setOffline();
+			own = null;
+		} else if(own != null) {
+			own.setOffline();
+		}
 
 		// A staff member disguised as the player who left shows up in tab again.
 		for(PlayerDisguise disguise : online) {
@@ -1113,7 +1124,7 @@ public final class PlayerDisguiseManager implements Listener {
 		for(PlayerDisguise disguise : new ArrayList<>(online)) {
 			Player player = Bukkit.getPlayer(disguise.getUniqueId());
 			if(player == null) continue;
-			if(!plugin.canDisguiseAsPlayer(player)) {
+			if(!disguise.isGivenByStaff() && !plugin.canDisguiseAsPlayer(player)) {
 				if(undisguise(player)) send(player, language().UNDISGUISED_NO_ACCESS);
 				continue;
 			}

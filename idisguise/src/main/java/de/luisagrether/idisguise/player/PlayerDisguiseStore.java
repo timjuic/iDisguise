@@ -80,6 +80,8 @@ final class PlayerDisguiseStore {
 	void save(Collection<PlayerDisguise> disguises) {
 		YamlConfiguration yaml = new YamlConfiguration();
 		for(PlayerDisguise disguise : disguises) {
+			// Disguises given with /odisguise end when the player leaves: never saved.
+			if(disguise.isGivenByStaff()) continue;
 			String key = disguise.getUniqueId().toString();
 			yaml.set(key + ".real-name", disguise.getRealName());
 			yaml.set(key + ".name", disguise.getFakeName());

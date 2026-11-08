@@ -38,6 +38,8 @@ public final class PlayerDisguise {
 	// Real rank of the player whose name this is, while that player is online (then both must
 	// look the same: 1.8 clients pick the nametag rank by name).
 	private volatile String ownerRank;
+	// Put on by someone else (/odisguise): no own permission needed, ends when the player leaves.
+	private volatile boolean givenByStaff;
 	// DeluxeTags tag of the player whose name this is, shown in chat instead of the own tag.
 	private volatile String chatTag;
 
@@ -79,6 +81,8 @@ public final class PlayerDisguise {
 	}
 	public String getChatTag() { return chatTag; }
 	void setChatTag(String chatTag) { this.chatTag = chatTag; }
+	boolean isGivenByStaff() { return givenByStaff; }
+	void setGivenByStaff(boolean givenByStaff) { this.givenByStaff = givenByStaff; }
 	String getOwnerRank() { return ownerRank; }
 	void setOwnerRank(String ownerRank) { this.ownerRank = ownerRank; }
 

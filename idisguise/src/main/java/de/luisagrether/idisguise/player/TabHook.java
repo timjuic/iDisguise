@@ -23,6 +23,9 @@ final class TabHook {
 	private final Method setName;
 	private final Method hasTemporaryGroup;
 	private final Method getGroup;
+	private final Method getNameTagManager;
+	private final Method pauseTeamHandling;
+	private final Method resumeTeamHandling;
 	// Players TAB hasn't loaded, already reported once (no console spam).
 	private final java.util.Set<UUID> reported = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -39,6 +42,10 @@ final class TabHook {
 		setName = formatManager.getMethod("setName", tabPlayer, String.class);
 		hasTemporaryGroup = tabPlayer.getMethod("hasTemporaryGroup");
 		getGroup = tabPlayer.getMethod("getGroup");
+		getNameTagManager = tabApi.getMethod("getNameTagManager");
+		Class<?> nameTagManager = Class.forName("me.neznamy.tab.api.nametag.NameTagManager");
+		pauseTeamHandling = nameTagManager.getMethod("pauseTeamHandling", tabPlayer);
+		resumeTeamHandling = nameTagManager.getMethod("resumeTeamHandling", tabPlayer);
 	}
 
 	static TabHook create(Plugin plugin) {
@@ -96,10 +103,37 @@ final class TabHook {
 			if(formatManager != null) {
 				setName.invoke(formatManager, tabPlayer, name);
 			}
+			rebuildNameTag(player);
 		} catch(Throwable t) {
 			Throwable cause = t.getCause() != null ? t.getCause() : t;
 			plugin.getLogger().warning("Could not update TAB for " + player.getName() + ": " + cause);
 		}
+	}
+
+	/**
+	 * Makes TAB remove and re-create the player's nametag team for everyone. After a rank switch TAB
+	 * sometimes left the old team (old rank above the head) on other players' screens.
+	 */
+	private void rebuildNameTag(Player player) {
+		Bukkit.getScheduler().runTaskLater(plugin, () -> {
+			if(!player.isOnline()) return;
+			try {
+				Object api = getInstance.invoke(null);
+				Object manager = getNameTagManager.invoke(api);
+				Object tabPlayer = getPlayer.invoke(api, player.getUniqueId());
+				if(manager == null || tabPlayer == null) return;
+				pauseTeamHandling.invoke(manager, tabPlayer);
+				Bukkit.getScheduler().runTaskLater(plugin, () -> {
+					try {
+						if(player.isOnline()) resumeTeamHandling.invoke(manager, tabPlayer);
+					} catch(Throwable t) {
+						plugin.getLogger().warning("Could not rebuild the nametag of " + player.getName() + ": " + t);
+					}
+				}, 2L);
+			} catch(Throwable t) {
+				plugin.getLogger().warning("Could not rebuild the nametag of " + player.getName() + ": " + t);
+			}
+		}, 2L);
 	}
 
 	/** TAB hasn't loaded this player: the fake rank can't show in tab / nametag yet (retried every 30 s). */
