@@ -768,6 +768,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					}
 				}
 				sendHelpPage(sender, page);
+				if(self) sendStatus(target);
 			} else if(args[0].equalsIgnoreCase("list")) {
 				sendDisguiseList(sender);
 			} else if(self && args[0].equalsIgnoreCase("reveal")) {
