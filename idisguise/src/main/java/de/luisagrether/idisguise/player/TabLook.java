@@ -63,11 +63,24 @@ final class TabLook {
 	}
 
 	Look look(Player viewer, Player target, String group) {
+		return look(viewer, target, group, null, null);
+	}
+
+	/** factions + owner: the faction placeholders show that player's faction instead of the target's. */
+	Look look(Player viewer, Player target, String group, FactionsHook factions, java.util.UUID owner) {
 		String world = target.getWorld().getName();
 		String name = property(group, world, "customtabname");
 		if(name.isEmpty()) name = target.getName();
-		String tabLine = fill(property(group, world, "tabprefix") + name + property(group, world, "tabsuffix"), viewer, target);
-		return new Look(tabLine, fill(property(group, world, "tagprefix"), viewer, target), fill(property(group, world, "tagsuffix"), viewer, target));
+		String tabLine = fill(owner(property(group, world, "tabprefix") + name + property(group, world, "tabsuffix"), viewer, factions, owner), viewer, target);
+		return new Look(tabLine, fill(owner(property(group, world, "tagprefix"), viewer, factions, owner), viewer, target),
+				fill(owner(property(group, world, "tagsuffix"), viewer, factions, owner), viewer, target));
+	}
+
+	private static String owner(String text, Player viewer, FactionsHook factions, java.util.UUID owner) {
+		if(factions == null || owner == null || !text.contains("factionsuuid_")) return text;
+		if(text.contains("%rel_factionsuuid_relation_color%")) text = text.replace("%rel_factionsuuid_relation_color%", factions.relationColor(viewer, owner));
+		if(text.contains("%factionsuuid_faction_name%")) text = text.replace("%factionsuuid_faction_name%", factions.factionName(owner));
+		return text;
 	}
 
 	/** per-world group, then group, then _DEFAULT_ (TAB's order). */

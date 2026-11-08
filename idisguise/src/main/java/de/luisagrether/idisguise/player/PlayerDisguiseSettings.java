@@ -42,6 +42,7 @@ final class PlayerDisguiseSettings {
 	final List<String> staffRanks;
 	final boolean blockKnownNamesForPlayers;
 	final int cooldownSeconds;
+	final boolean realPlayerFaction;
 	final int randomNamePool;
 	final boolean visibleToOtherPlugins;
 	final java.util.Set<String> commandsNotTranslated = new java.util.HashSet<>();
@@ -85,6 +86,7 @@ final class PlayerDisguiseSettings {
 		ranks = Collections.unmodifiableList(all);
 		blockKnownNamesForPlayers = config.getBoolean("block-known-names-for-players", true);
 		cooldownSeconds = Math.max(0, config.getInt("cooldown-seconds", 5));
+		realPlayerFaction = config.getBoolean("real-player-faction", true);
 		randomNamePool = Math.max(5, config.getInt("random-name-pool", 40));
 		visibleToOtherPlugins = config.getBoolean("visible-to-other-plugins", false);
 		swapInMenus = config.getBoolean("name-swap.menus", true);

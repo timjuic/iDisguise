@@ -285,16 +285,33 @@ final class PacketRewriter extends PacketAdapter {
 			return;
 		}
 		PacketContainer packet = event.getPacket();
+		PacketContainer copy = null;
+		// Disguised as a real player: the nametag shows that player's faction, not your own.
+		Integer mode = packet.getIntegers().readSafely(1);
+		if(mode != null && (mode == 0 || mode == 2) && event.getPlayer() != null) {
+			TabLook.Look look = manager.ownerTeamLook(event.getPlayer().getUniqueId(), packet.getStrings().readSafely(0));
+			if(look != null) {
+				copy = packet.shallowClone();
+				copy.getStrings().write(2, PlayerDisguiseManager.cut(look.tagPrefix, 16));
+				copy.getStrings().write(3, PlayerDisguiseManager.cut(look.tagSuffix, 16));
+			}
+		}
 		@SuppressWarnings("rawtypes")
 		Collection names = packet.getSpecificModifier(Collection.class).readSafely(0);
-		if(names == null || names.isEmpty()) return;
+		if(names == null || names.isEmpty()) {
+			if(copy != null) event.setPacket(copy);
+			return;
+		}
 		// Never for a name whose real player is online: the 1.8 client picks the nametag by name,
 		// so moving that name would change the real player's nametag too.
 		List<PlayerDisguise> disguises = new ArrayList<>();
 		for(PlayerDisguise disguise : manager.allOnline()) {
 			if(!disguise.isHiddenFromTab()) disguises.add(disguise);
 		}
-		if(disguises.isEmpty()) return;
+		if(disguises.isEmpty()) {
+			if(copy != null) event.setPacket(copy);
+			return;
+		}
 		List<String> result = new ArrayList<>(names.size());
 		boolean changed = false;
 		for(Object name : names) {
@@ -306,10 +323,11 @@ final class PacketRewriter extends PacketAdapter {
 				result.add(String.valueOf(name));
 			}
 		}
-		if(!changed) return;
-		PacketContainer copy = packet.shallowClone();
-		copy.getSpecificModifier(Collection.class).write(0, result);
-		event.setPacket(copy);
+		if(changed) {
+			if(copy == null) copy = packet.shallowClone();
+			copy.getSpecificModifier(Collection.class).write(0, result);
+		}
+		if(copy != null) event.setPacket(copy);
 	}
 
 	/** A sidebar line team (TAB names them "TAB-Sidebar-..."; their entries start with a colour code). */

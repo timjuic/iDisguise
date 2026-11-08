@@ -78,6 +78,11 @@ block-known-names-for-players: true
 # Staff (iDisguise.player.staff) and admins don't wait. 0 = no cooldown.
 cooldown-seconds: 5
 
+# Disguised as a real player (one who has played here): chat, nametag and tab show THAT player's faction
+# (live, also while they are offline) instead of your own, and /f commands with the name mean that player.
+# Needs FactionsUUID. Your own faction is not shown, but you are still in it (claims, PvP, /f chat).
+real-player-faction: true
+
 # /disguise random uses names of real Minecraft accounts (found through Mojang, never players of this server).
 # How many such names are kept ready, so the command is instant.
 random-name-pool: 40

@@ -68,6 +68,8 @@ final class PlayerDisguiseStore {
 				PlayerDisguise disguise = new PlayerDisguise(uuid, realName, fakeName, section.getString("rank"),
 						section.getString("skin-value"), section.getString("skin-signature"));
 				disguise.setChatTag(section.getString("chat-tag"));
+				String owner = section.getString("owner-uuid");
+				if(owner != null) disguise.setOwnerUuid(UUID.fromString(owner));
 				result.add(disguise);
 			} catch(IllegalArgumentException e) {
 				logger.warning("Skipping an invalid entry in player-disguises.yml: " + key);
@@ -89,6 +91,7 @@ final class PlayerDisguiseStore {
 			yaml.set(key + ".skin-value", disguise.getSkinValue());
 			yaml.set(key + ".skin-signature", disguise.getSkinSignature());
 			yaml.set(key + ".chat-tag", disguise.getChatTag());
+			if(disguise.getOwnerUuid() != null) yaml.set(key + ".owner-uuid", disguise.getOwnerUuid().toString());
 		}
 		String content = "# Active player disguises. Don't edit this file while the server is running.\n" + yaml.saveToString();
 		writer.execute(() -> write(content));
