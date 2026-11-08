@@ -56,29 +56,22 @@ final class RankMenu implements InventoryHolder {
 	RankMenu(String title, ItemStack header, ItemStack frame, List<Entry> playerRanks, List<Entry> staffRanks,
 			Entry realRank, Entry cancel, Consumer<String> choose) {
 		this.choose = choose;
-		// Player ranks (with "no rank" first): rows of 5 with a free slot between them.
-		// Staff ranks: rows of up to 9 side by side, after an empty row.
+		// Player ranks ("no rank" first), slot by slot from the left; then an empty row and the staff ranks.
 		List<int[]> layout = new ArrayList<>(); // {row, column, index in all}
 		List<Entry> all = new ArrayList<>();
 		int row = 1;
-		for(int i = 0; i < playerRanks.size(); i += 5, row++) {
-			int count = Math.min(5, playerRanks.size() - i);
-			int start = (9 - (count * 2 - 1)) / 2;
-			for(int k = 0; k < count; k++) {
-				layout.add(new int[] {row, start + k * 2, all.size()});
-				all.add(playerRanks.get(i + k));
-			}
+		for(int i = 0; i < playerRanks.size(); i++) {
+			layout.add(new int[] {row + i / 9, i % 9, all.size()});
+			all.add(playerRanks.get(i));
 		}
+		row += (playerRanks.size() + 8) / 9;
 		if(!staffRanks.isEmpty()) {
 			row++; // the gap
-			for(int i = 0; i < staffRanks.size(); i += 9, row++) {
-				int count = Math.min(9, staffRanks.size() - i);
-				int start = (9 - count) / 2;
-				for(int k = 0; k < count; k++) {
-					layout.add(new int[] {row, start + k, all.size()});
-					all.add(staffRanks.get(i + k));
-				}
+			for(int i = 0; i < staffRanks.size(); i++) {
+				layout.add(new int[] {row + i / 9, i % 9, all.size()});
+				all.add(staffRanks.get(i));
 			}
+			row += (staffRanks.size() + 8) / 9;
 		}
 		int rows = Math.min(6, row + 1);
 		// 1.8 menu titles are at most 32 characters.

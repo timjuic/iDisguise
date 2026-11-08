@@ -289,31 +289,45 @@ public final class PlayerDisguiseManager implements Listener {
 	public void disguiseCommand(CommandSender sender, Player target, String name, String rankInput, boolean self, Consumer<Boolean> done) {
 		Player owner = Bukkit.getPlayerExact(name);
 		boolean menu = available && rankInput == null && self && sender instanceof Player
-				&& (owner == null || owner == target) && usableRanks(sender).size() >= 2
+				&& (owner == null || owner == target) && !usableRanks(sender).isEmpty()
 				&& iDisguise.ACCOUNTNAME.matcher(name).matches() && !"random".equalsIgnoreCase(name);
 		if(!menu) {
 			disguise(sender, target, name, rankInput, done);
 			return;
 		}
-		// Check the name first, so the menu only opens for a name that can be used.
+		// Check the name first: the menu only opens for a name that can be used.
+		// Otherwise the normal path runs and says why not.
 		String problem = nameProblem(target, name);
-		if(problem != null || plugin.isPlayerNameBlacklisted(name)) {
+		boolean blockKnown = !has(sender, PERM_ANY_NAME) && settings.blockKnownNamesForPlayers;
+		if(problem != null || plugin.isPlayerNameBlacklisted(name)
+				|| (luckPerms == null && blockKnown && hasPlayedBefore(name, target))) {
 			disguise(sender, target, name, rankInput, done);
 			return;
 		}
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 			String realRank = null;
+			boolean known = false;
 			try {
-				if(luckPerms != null && settings.copyRealRank && luckPerms.lookupUniqueId(name).get(10, TimeUnit.SECONDS) != null) {
-					String group = luckPerms.lookupPrimaryGroup(name).get(10, TimeUnit.SECONDS);
-					if(settings.isCopyableGroup(group)) realRank = group.toLowerCase(Locale.ENGLISH);
+				if(luckPerms != null) {
+					UUID uuid = luckPerms.lookupUniqueId(name).get(10, TimeUnit.SECONDS);
+					known = uuid != null && !uuid.equals(target.getUniqueId());
+					if(uuid != null && settings.copyRealRank) {
+						String group = luckPerms.lookupPrimaryGroup(name).get(10, TimeUnit.SECONDS);
+						if(settings.isCopyableGroup(group)) realRank = group.toLowerCase(Locale.ENGLISH);
+					}
 				}
 			} catch(Exception e) {
 				debug("LuckPerms lookup failed for " + name, e);
 			}
+			boolean refused = known && blockKnown;
 			String finalRealRank = realRank;
 			Bukkit.getScheduler().runTask(plugin, () -> {
-				if(target.isOnline()) openRankMenu(target, name, finalRealRank, done);
+				if(!target.isOnline()) return;
+				if(refused) {
+					disguise(sender, target, name, rankInput, done);
+				} else {
+					openRankMenu(target, name, finalRealRank, done);
+				}
 			});
 		});
 	}
