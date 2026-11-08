@@ -1293,12 +1293,14 @@ public final class PlayerDisguiseManager implements Listener {
 			if(translated || staff) continue;
 			// The real name (or the start of it, which many plugins accept) of a disguised player acts
 			// like an offline player for everyone else: otherwise "/msg <real name>" would reach the
-			// disguised player and tell who they are. The invisible colour code makes the lookup fail.
+			// disguised player and tell who they are. An invisible colour code INSIDE the name makes the
+			// lookup fail, and keeps the name swap from turning the reply ("Dann1e not found") into the
+			// fake name, which would link the two.
 			Player match = matchingPlayer(parts[i]);
 			if(match != null && match != sender) {
 				PlayerDisguise disguise = disguises.get(match.getUniqueId());
 				if(disguise != null && disguise.getProfile() != null) {
-					parts[i] = parts[i] + ChatColor.RESET;
+					parts[i] = parts[i].charAt(0) + ChatColor.RESET.toString() + parts[i].substring(1);
 					changed = true;
 				}
 			}
