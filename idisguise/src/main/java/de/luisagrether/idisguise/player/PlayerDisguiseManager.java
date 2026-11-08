@@ -728,7 +728,15 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		player.setDisplayName(disguise.getFakeName());
 		String rank = effectiveRank(disguise);
-		if(tab != null) tab.apply(player, rank, disguise.getFakeName());
+		// A moment after the refresh (hide / show): TAB reacts to both, and doing them at the same time
+		// made it send the nametag team twice ("team already exists" on the client).
+		if(tab != null) {
+			Bukkit.getScheduler().runTaskLater(plugin, () -> {
+				if(player.isOnline() && disguises.get(player.getUniqueId()) == disguise) {
+					tab.apply(player, effectiveRank(disguise), disguise.getFakeName());
+				}
+			}, 10L);
+		}
 		PlayerDisguiseSettings.Profile profile = disguise.getProfile();
 		if(luckPerms != null && profile != null && profile.fakeRankInChat) {
 			if(disguise.getRealPrefix() == null) {
@@ -745,7 +753,11 @@ public final class PlayerDisguiseManager implements Listener {
 	private void resetLook(Player player, PlayerDisguise disguise) {
 		String previous = disguise.getPreviousDisplayName();
 		player.setDisplayName(previous != null ? previous : player.getName());
-		if(tab != null) tab.apply(player, null, null);
+		if(tab != null) {
+			Bukkit.getScheduler().runTaskLater(plugin, () -> {
+				if(player.isOnline() && !disguises.containsKey(player.getUniqueId())) tab.apply(player, null, null);
+			}, 10L);
+		}
 		if(luckPerms != null) luckPerms.setFakePrefix(player, null);
 	}
 

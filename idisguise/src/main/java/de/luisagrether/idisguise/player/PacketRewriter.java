@@ -79,7 +79,11 @@ final class PacketRewriter extends PacketAdapter {
 	public void onPacketSending(PacketEvent event) {
 		if(event.isCancelled() || manager.isEmpty()) return;
 		if(event.getPacketType() == PacketType.Play.Server.SCOREBOARD_TEAM && event.getPlayer() != null) {
-			manager.trackTeam(event.getPlayer().getUniqueId(), event.getPacket());
+			try {
+				manager.trackTeam(event.getPlayer().getUniqueId(), event.getPacket());
+			} catch(RuntimeException e) {
+				manager.packetError("SCOREBOARD_TEAM (tracking)", e);
+			}
 		}
 		// Staff with "/disguise reveal players" on see everyone as they really are, with the real rank.
 		if(event.getPlayer() != null && manager.isRevealingPlayers(event.getPlayer().getUniqueId())) {
@@ -259,7 +263,12 @@ final class PacketRewriter extends PacketAdapter {
 	}
 
 	private void rewriteTeam(PacketEvent event) {
-		TextSwap.rewriteTeamTexts(event, manager);
+		// Sidebar lines are teams too: there only the visible text may change, never the entries
+		// (they are the lines' IDs; a changed ID breaks the whole sidebar on 1.8).
+		if(isSidebarTeam(event.getPacket())) {
+			TextSwap.rewriteTeamTexts(event, manager);
+			return;
+		}
 		PacketContainer packet = event.getPacket();
 		@SuppressWarnings("rawtypes")
 		Collection names = packet.getSpecificModifier(Collection.class).readSafely(0);
@@ -286,6 +295,21 @@ final class PacketRewriter extends PacketAdapter {
 		PacketContainer copy = packet.shallowClone();
 		copy.getSpecificModifier(Collection.class).write(0, result);
 		event.setPacket(copy);
+	}
+
+	/** A sidebar line team (TAB names them "TAB-Sidebar-..."; their entries start with a colour code). */
+	@SuppressWarnings("rawtypes")
+	private static boolean isSidebarTeam(PacketContainer packet) {
+		String team = packet.getStrings().readSafely(0);
+		if(team != null && team.toLowerCase(java.util.Locale.ENGLISH).contains("sidebar")) return true;
+		Collection entries = packet.getSpecificModifier(Collection.class).readSafely(0);
+		if(entries != null) {
+			for(Object entry : entries) {
+				String text = String.valueOf(entry);
+				if(!text.isEmpty() && text.charAt(0) == org.bukkit.ChatColor.COLOR_CHAR) return true;
+			}
+		}
+		return false;
 	}
 
 	private static String fakeNameOf(String realName, Collection<PlayerDisguise> disguises) {
