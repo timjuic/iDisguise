@@ -839,7 +839,11 @@ public final class PlayerDisguiseManager implements Listener {
 			viewer.hidePlayer(player);
 			viewer.showPlayer(player);
 		}
-		// The player's own tab entry.
+		resendOwnEntry(player);
+	}
+
+	/** The player's own tab entry again (through the rewriter, which decides the name in it). */
+	private void resendOwnEntry(Player player) {
 		WrappedGameProfile own = WrappedGameProfile.fromPlayer(player);
 		sendRaw(player, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, null, own));
 		PacketContainer add = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.PLAYER_INFO);
@@ -896,6 +900,8 @@ public final class PlayerDisguiseManager implements Listener {
 		Set<UUID> viewers = new HashSet<>(disguise.getRemovedFor());
 		disguise.getRemovedFor().clear();
 		if(player == null) return;
+		// Own entry with the fake name again (it had the real one while the real player was online).
+		resendOwnEntry(player);
 		// Back to the chosen rank, and back into the nametag team under the fake name: reset the TAB
 		// group first so TAB sends the team again (the real player's team left with them).
 		if(tab != null) tab.apply(player, null, disguise.getFakeName());
@@ -914,6 +920,8 @@ public final class PlayerDisguiseManager implements Listener {
 		disguise.setHiddenFromTab(true);
 		disguise.setOwnerRank(realRankOf(owner));
 		applyLook(player, disguise);
+		// Own entry back to the real account name, so TAB gives the name back to the real player's team.
+		resendOwnEntry(player);
 		for(Player viewer : Bukkit.getOnlinePlayers()) {
 			if(viewer == player) continue;
 			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,

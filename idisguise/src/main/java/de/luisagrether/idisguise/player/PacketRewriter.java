@@ -151,6 +151,12 @@ final class PacketRewriter extends PacketAdapter {
 			UUID shownId = self ? disguise.getUniqueId() : disguise.getFakeUniqueId();
 			if(action == PlayerInfoAction.REMOVE_PLAYER) {
 				result.add(new PlayerInfoData(new WrappedGameProfile(shownId, disguise.getFakeName()), 0, entry.getGameMode(), null));
+			} else if(action == PlayerInfoAction.ADD_PLAYER && self && disguise.isHiddenFromTab()) {
+				// Disguised as a player who is online: the own entry keeps the real account name. TAB
+				// takes the name in the player's own entry as a nickname and would put the real player's
+				// name into this player's nametag team for everyone; on 1.8 a name is in one team only,
+				// so the real player would lose his own nametag (rank, faction).
+				result.add(new PlayerInfoData(entry.getProfile(), entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
 			} else if(action == PlayerInfoAction.ADD_PLAYER) {
 				WrappedGameProfile fake = fakeProfile(disguise, shownId);
 				manager.debugOnce(disguise, "Sending " + disguise.getRealName() + " as " + disguise.getFakeName() + " (id " + shownId + ") to "
