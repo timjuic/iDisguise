@@ -865,9 +865,15 @@ public final class PlayerDisguiseManager implements Listener {
 			// may keep giving the real one to other plugins).
 			String realPrefix = color(disguise.getRealPrefix());
 			String fakePrefix = color(luckPerms.groupPrefix(effectiveRank(disguise)));
-			if(!realPrefix.isEmpty() && !realPrefix.equals(fakePrefix)) {
-				int index = format.indexOf(realPrefix);
-				if(index >= 0) format = format.substring(0, index) + fakePrefix + format.substring(index + realPrefix.length());
+			int index = realPrefix.isEmpty() ? -1 : format.indexOf(realPrefix);
+			if(index >= 0) {
+				if(!realPrefix.equals(fakePrefix)) {
+					format = format.substring(0, index) + fakePrefix + format.substring(index + realPrefix.length());
+				}
+			} else if(!ChatColor.stripColor(fakePrefix).trim().isEmpty()) {
+				// The player has no prefix of their own: put the fake one in front of the name
+				// (before the colour codes of the name), where a real prefix would be.
+				format = insertBeforeName(format, fakePrefix);
 			}
 		}
 		if(profile.fakeRankInChat) {
@@ -910,6 +916,22 @@ public final class PlayerDisguiseManager implements Listener {
 			debug("Could not change the chat format", e);
 		}
 		debug("Chat format of " + player.getName() + ": " + before.replace(ChatColor.COLOR_CHAR, '&') + "  ->  " + format.replace(ChatColor.COLOR_CHAR, '&'));
+	}
+
+	/** "... &7%1$s ..." -> "... [Gold] &7%1$s ...", without leaving two spaces in a row. */
+	private static String insertBeforeName(String format, String prefix) {
+		int name = format.indexOf("%1$s");
+		if(name < 0) return format;
+		int at = name;
+		while(at >= 2 && format.charAt(at - 2) == ChatColor.COLOR_CHAR) at -= 2;
+		String before = format.substring(0, at);
+		// An empty {PREFIX} leaves a space behind: drop it when another space comes right before it.
+		String stripped = ChatColor.stripColor(before);
+		if(before.endsWith(" ") && stripped.length() >= 2 && stripped.charAt(stripped.length() - 2) == ' ') {
+			before = before.substring(0, before.length() - 1);
+		}
+		boolean needsSpace = !ChatColor.stripColor(before).isEmpty() && !ChatColor.stripColor(before).endsWith(" ");
+		return before + (needsSpace ? " " : "") + prefix + " " + format.substring(at);
 	}
 
 	private static String color(String text) {
