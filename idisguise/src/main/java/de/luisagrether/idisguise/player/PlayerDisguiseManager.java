@@ -94,6 +94,8 @@ public final class PlayerDisguiseManager implements Listener {
 	private org.bukkit.scheduler.BukkitTask checkTask;
 	private org.bukkit.scheduler.BukkitTask revealTask;
 	private TabLook tabLook;
+	// disguised player -> viewer -> tab line last sent by the keeper
+	private final Map<UUID, Map<UUID, String>> tabLines = new ConcurrentHashMap<>();
 	// viewer -> disguised player -> how TAB would show the real player (staff with reveal on)
 	private final Map<UUID, Map<UUID, TabLook.Look>> revealLooks = new ConcurrentHashMap<>();
 	// viewer -> TAB team name -> the disguised player in it, and TAB's last settings for the team
@@ -164,7 +166,10 @@ public final class PlayerDisguiseManager implements Listener {
 		hookVanishEvents();
 		tabLook = new TabLook();
 		checkTask = Bukkit.getScheduler().runTaskTimer(plugin, this::check, 600L, 600L);
-		revealTask = Bukkit.getScheduler().runTaskTimer(plugin, this::updateRevealLooks, 20L, 20L);
+		revealTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+			updateRevealLooks();
+			keepTabLines();
+		}, 20L, 20L);
 		rewriter = new PacketRewriter(plugin, this);
 		rewriter.register();
 		Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -602,6 +607,7 @@ public final class PlayerDisguiseManager implements Listener {
 		applyLook(target, disguise);
 		removeRealEntry(target);
 		refresh(target);
+		refreshLater(target, disguise);
 		log.start(target.getName(), target.getUniqueId(), "player", name, effectiveRank(disguise));
 		if(previous != null) log.end(target.getName(), target.getUniqueId(), "player", previous.getFakeName());
 
@@ -621,6 +627,7 @@ public final class PlayerDisguiseManager implements Listener {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
 			refresh(player);
+			refreshLater(player, null);
 		}
 		return true;
 	}
@@ -747,6 +754,23 @@ public final class PlayerDisguiseManager implements Listener {
 				if(player.isOnline() && !disguises.containsKey(player.getUniqueId())) tab.apply(player, null, null);
 			}, 10L);
 		}
+	}
+
+	/**
+	 * A second refresh once TAB has switched the rank (10 ticks after disguising): what other players
+	 * got in the first refresh could still carry the old rank, nametag team and sorting, and TAB can't
+	 * update the disguise's tab entry itself (it has its own ID). expected == null: undisguised.
+	 */
+	private void refreshLater(Player player, PlayerDisguise expected) {
+		Bukkit.getScheduler().runTaskLater(plugin, () -> {
+			if(!player.isOnline() || disguises.get(player.getUniqueId()) != expected) return;
+			tabLines.remove(player.getUniqueId());
+			for(Player viewer : Bukkit.getOnlinePlayers()) {
+				if(viewer == player || !viewer.canSee(player)) continue;
+				viewer.hidePlayer(player);
+				viewer.showPlayer(player);
+			}
+		}, 25L);
 	}
 
 	/**
@@ -942,6 +966,8 @@ public final class PlayerDisguiseManager implements Listener {
 		lastTabInput.remove(quit.getUniqueId());
 		revealPlayers.remove(quit.getUniqueId());
 		revealLooks.remove(quit.getUniqueId());
+		tabLines.remove(quit.getUniqueId());
+		for(Map<UUID, String> lines : tabLines.values()) lines.remove(quit.getUniqueId());
 		teams.remove(quit.getUniqueId());
 		for(PlayerDisguise disguise : disguises.values()) {
 			disguise.getRemovedFor().remove(quit.getUniqueId());
@@ -1150,6 +1176,41 @@ public final class PlayerDisguiseManager implements Listener {
 			}
 			send(sender, on ? language.REVEAL_PLAYERS_ON : language.REVEAL_PLAYERS_OFF);
 		}
+	}
+
+	/**
+	 * Every second: the tab line (rank, name, faction) of each disguised player as every other player
+	 * should see it, built like TAB would from groups.yml with the disguise rank. TAB can't update the
+	 * disguise's tab entry (it has its own ID), so without this a rank or faction change, or a TAB update
+	 * that came too early, would stay wrong for other players.
+	 */
+	private void keepTabLines() {
+		if(tabLook == null || online.isEmpty()) return;
+		for(PlayerDisguise disguise : online) {
+			Player target = Bukkit.getPlayer(disguise.getUniqueId());
+			if(target == null || disguise.isHiddenFromTab()) continue;
+			Map<UUID, String> sent = tabLines.computeIfAbsent(disguise.getUniqueId(), id -> new ConcurrentHashMap<>());
+			for(Player viewer : Bukkit.getOnlinePlayers()) {
+				if(viewer == target || !viewer.canSee(target) || revealPlayers.contains(viewer.getUniqueId())
+						|| disguise.getRemovedFor().contains(viewer.getUniqueId())) continue;
+				String line;
+				try {
+					line = NameReplacer.replace(tabLook.look(viewer, target, effectiveRank(disguise)).tabLine, replacing);
+				} catch(RuntimeException e) {
+					debug("Could not build the tab line of " + target.getName(), e);
+					return;
+				}
+				if(line.equals(sent.get(viewer.getUniqueId()))) continue;
+				sent.put(viewer.getUniqueId(), line);
+				sendRaw(viewer, PacketRewriter.displayName(disguise.getFakeUniqueId(), disguise.getFakeName(), target, line));
+			}
+		}
+	}
+
+	/** The viewer's game got the disguise's tab entry again: the keeper sends the line once more. */
+	void forgetTabLine(UUID disguised, UUID viewer) {
+		Map<UUID, String> sent = tabLines.get(disguised);
+		if(sent != null) sent.remove(viewer);
 	}
 
 	/** How the viewer (reveal players on) should see this disguised player, or null. */

@@ -157,6 +157,7 @@ final class PacketRewriter extends PacketAdapter {
 						+ event.getPlayer().getName() + (fake.getProperties().containsKey("textures") ? " with the disguise skin" : " WITHOUT a skin (none was found)"));
 				result.add(new PlayerInfoData(fake, entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
 				disguise.getRemovedFor().remove(viewer);
+				if(!self) manager.forgetTabLine(disguise.getUniqueId(), viewer);
 				if(disguise.isHiddenFromTab() && !self) {
 					manager.scheduleTabRemoval(disguise, event.getPlayer());
 				}
@@ -229,6 +230,15 @@ final class PacketRewriter extends PacketAdapter {
 		packet.getPlayerInfoAction().write(0, PlayerInfoAction.UPDATE_DISPLAY_NAME);
 		packet.getPlayerInfoDataLists().write(0, Collections.singletonList(new PlayerInfoData(
 				new WrappedGameProfile(player.getUniqueId(), player.getName()), 0, NativeGameMode.fromBukkit(player.getGameMode()), legacy(text))));
+		return packet;
+	}
+
+	/** An UPDATE_DISPLAY_NAME for a disguise's own tab entry (sent past the rewriter). */
+	static PacketContainer displayName(UUID entry, String name, Player player, String text) {
+		PacketContainer packet = new PacketContainer(PacketType.Play.Server.PLAYER_INFO);
+		packet.getPlayerInfoAction().write(0, PlayerInfoAction.UPDATE_DISPLAY_NAME);
+		packet.getPlayerInfoDataLists().write(0, Collections.singletonList(new PlayerInfoData(
+				new WrappedGameProfile(entry, name), 0, NativeGameMode.fromBukkit(player.getGameMode()), legacy(text))));
 		return packet;
 	}
 
