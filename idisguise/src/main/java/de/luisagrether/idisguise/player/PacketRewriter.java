@@ -79,8 +79,22 @@ final class PacketRewriter extends PacketAdapter {
 	@Override
 	public void onPacketSending(PacketEvent event) {
 		if(event.isCancelled() || manager.isEmpty()) return;
-		// Staff with "/disguise reveal players" on see everyone as they really are.
-		if(event.getPlayer() != null && manager.isRevealingPlayers(event.getPlayer().getUniqueId())) return;
+		if(event.getPacketType() == PacketType.Play.Server.SCOREBOARD_TEAM && event.getPlayer() != null) {
+			manager.trackTeam(event.getPlayer().getUniqueId(), event.getPacket());
+		}
+		// Staff with "/disguise reveal players" on see everyone as they really are, with the real rank.
+		if(event.getPlayer() != null && manager.isRevealingPlayers(event.getPlayer().getUniqueId())) {
+			try {
+				if(event.getPacketType() == PacketType.Play.Server.PLAYER_INFO) {
+					revealPlayerInfo(event);
+				} else if(event.getPacketType() == PacketType.Play.Server.SCOREBOARD_TEAM) {
+					revealTeam(event);
+				}
+			} catch(RuntimeException e) {
+				manager.packetError(event.getPacketType().name(), e);
+			}
+			return;
+		}
 		try {
 			PacketType type = event.getPacketType();
 			if(type == PacketType.Play.Server.PLAYER_INFO) {
@@ -160,6 +174,60 @@ final class PacketRewriter extends PacketAdapter {
 		PacketContainer copy = packet.shallowClone();
 		copy.getPlayerInfoDataLists().write(0, result);
 		event.setPacket(copy);
+	}
+
+	/** Reveal players: the tab line of a disguised player as TAB would show the real player. */
+	private void revealPlayerInfo(PacketEvent event) {
+		PacketContainer packet = event.getPacket();
+		PlayerInfoAction action = packet.getPlayerInfoAction().readSafely(0);
+		if(action != PlayerInfoAction.ADD_PLAYER && action != PlayerInfoAction.UPDATE_DISPLAY_NAME) return;
+		List<PlayerInfoData> entries = packet.getPlayerInfoDataLists().readSafely(0);
+		if(entries == null) return;
+		UUID viewer = event.getPlayer().getUniqueId();
+		List<PlayerInfoData> result = new ArrayList<>(entries.size());
+		boolean changed = false;
+		for(PlayerInfoData entry : entries) {
+			UUID id = entry == null || entry.getProfile() == null ? null : entry.getProfile().getUUID();
+			TabLook.Look look = id == null || manager.get(id) == null ? null : manager.revealLook(viewer, id);
+			if(look == null) {
+				result.add(entry);
+				continue;
+			}
+			result.add(new PlayerInfoData(entry.getProfile(), entry.getLatency(), entry.getGameMode(), legacy(look.tabLine)));
+			changed = true;
+		}
+		if(!changed) return;
+		PacketContainer copy = packet.shallowClone();
+		copy.getPlayerInfoDataLists().write(0, result);
+		event.setPacket(copy);
+	}
+
+	/** Reveal players: the nametag of a disguised player with the real rank. */
+	private void revealTeam(PacketEvent event) {
+		PacketContainer packet = event.getPacket();
+		String team = packet.getStrings().readSafely(0);
+		Integer mode = packet.getIntegers().readSafely(1);
+		if(team == null || mode == null || (mode != 0 && mode != 2)) return;
+		PlayerDisguiseManager.TeamState state = manager.teamOf(event.getPlayer().getUniqueId(), team);
+		TabLook.Look look = state == null ? null : manager.revealLook(event.getPlayer().getUniqueId(), state.player);
+		if(look == null) return;
+		PacketContainer copy = packet.shallowClone();
+		copy.getStrings().write(2, PlayerDisguiseManager.cut(look.tagPrefix, 16));
+		copy.getStrings().write(3, PlayerDisguiseManager.cut(look.tagSuffix, 16));
+		event.setPacket(copy);
+	}
+
+	private static WrappedChatComponent legacy(String text) {
+		return WrappedChatComponent.fromJson(ComponentSerializer.toString(net.md_5.bungee.api.chat.TextComponent.fromLegacyText(text)));
+	}
+
+	/** An UPDATE_DISPLAY_NAME for one player (sent past the rewriter). */
+	static PacketContainer displayName(Player player, String text) {
+		PacketContainer packet = new PacketContainer(PacketType.Play.Server.PLAYER_INFO);
+		packet.getPlayerInfoAction().write(0, PlayerInfoAction.UPDATE_DISPLAY_NAME);
+		packet.getPlayerInfoDataLists().write(0, Collections.singletonList(new PlayerInfoData(
+				new WrappedGameProfile(player.getUniqueId(), player.getName()), 0, NativeGameMode.fromBukkit(player.getGameMode()), legacy(text))));
+		return packet;
 	}
 
 	static WrappedGameProfile fakeProfile(PlayerDisguise disguise) {
