@@ -1034,8 +1034,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			adminLines.add(new String[] {"/undisguise <player>", language.HELP_CMD_UNDISGUISE_OTHER, "/undisguise "});
 		}
 		if(admin || hasNode(sender, PlayerDisguiseManager.PERM_REVEAL)) {
-			adminLines.add(new String[] {"/disguise reveal players", language.HELP_CMD_REVEAL_PLAYERS, "/disguise reveal players"});
-			adminLines.add(new String[] {"/disguise reveal mobs", language.HELP_CMD_REVEAL_MOBS, "/disguise reveal mobs"});
+			adminLines.add(new String[] {"/disguise reveal", language.HELP_CMD_REVEAL_PLAYERS, "/disguise reveal"});
 		}
 		if(admin || hasNode(sender, PlayerDisguiseManager.PERM_WHOIS)) {
 			adminLines.add(new String[] {"/disguise whois <name>", language.HELP_CMD_WHOIS, "/disguise whois "});
@@ -1371,11 +1370,6 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	/** iDisguise.disguise.PLAYER (or operators without permission nodes). */
 	public boolean canDisguiseAsPlayer(CommandSender sender) {
 		return hasPermission(sender, EntityType.PLAYER);
-	}
-
-	/** Live view of the mob disguises: player -> disguise mob. */
-	public Map<UUID, Entity> getMobDisguises() {
-		return java.util.Collections.unmodifiableMap(disguiseMap);
 	}
 
 	public boolean isPlayerNameBlacklisted(String name) {

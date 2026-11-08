@@ -14,7 +14,7 @@ import org.bukkit.entity.Player;
 /**
  * How TAB would show a player with their REAL rank: groups.yml (tabprefix, customtabname, tabsuffix,
  * tagprefix, tagsuffix, _DEFAULT_ and per-world) and the placeholder output replacements from TAB's
- * config.yml. Used for staff with /disguise reveal players on (TAB itself only knows the disguise).
+ * config.yml. Used for staff with /disguise reveal on (TAB itself only knows the disguise).
  * Placeholders are filled through PlaceholderAPI; call on the main thread.
  */
 final class TabLook {

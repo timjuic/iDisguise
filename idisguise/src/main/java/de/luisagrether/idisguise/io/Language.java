@@ -234,10 +234,8 @@ public class Language {
 	public String HELP_CMD_UNDISGUISE_OTHER = "Undisguise another player";
 	@LastUpdated(60101)
 	public String HELP_ADMIN_TITLE = ChatColor.RED.toString() + ChatColor.BOLD + "Admin " + ChatColor.DARK_GRAY + "\u00bb " + ChatColor.GRAY + "Commands";
-	@LastUpdated(60101)
+	@LastUpdated(60110)
 	public String HELP_CMD_REVEAL_PLAYERS = "See disguised players as who they really are (only you)";
-	@LastUpdated(60101)
-	public String HELP_CMD_REVEAL_MOBS = "See who is inside disguise mobs (only you)";
 	@LastUpdated(60101)
 	public String HELP_CMD_WHOIS = "Who is or was behind a disguise name";
 	@LastUpdated(60101)
@@ -250,12 +248,6 @@ public class Language {
 	public String REVEAL_PLAYERS_ON = c("%prefix%&aYou now see disguised players as who they really are &7(only on your screen)&a.");
 	@LastUpdated(60106)
 	public String REVEAL_PLAYERS_OFF = c("%prefix%&7You see player disguises again.");
-	@LastUpdated(60106)
-	public String REVEAL_MOBS_ON = c("%prefix%&aYou now see the real player's name above every disguise mob &7(only on your screen)&a.");
-	@LastUpdated(60106)
-	public String REVEAL_MOBS_OFF = c("%prefix%&7Disguise mobs no longer show the real player's name.");
-	@LastUpdated(60106)
-	public String REVEAL_USAGE = c("%prefix%&cUse &e/disguise reveal players &cor &e/disguise reveal mobs");
 	@LastUpdated(60106)
 	public String WHOIS_USAGE = c("%prefix%&cUse &e/disguise whois <name>");
 	@LastUpdated(60106)

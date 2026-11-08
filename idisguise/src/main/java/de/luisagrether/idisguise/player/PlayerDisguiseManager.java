@@ -91,12 +91,10 @@ public final class PlayerDisguiseManager implements Listener {
 	private DisguiseLog log;
 	// Staff who see through disguises (only on their own screen).
 	private final Set<UUID> revealPlayers = ConcurrentHashMap.newKeySet();
-	private final Set<UUID> revealMobs = ConcurrentHashMap.newKeySet();
-	private org.bukkit.scheduler.BukkitTask mobRevealTask;
 	private org.bukkit.scheduler.BukkitTask checkTask;
 	private org.bukkit.scheduler.BukkitTask revealTask;
 	private TabLook tabLook;
-	// viewer -> disguised player -> how TAB would show the real player (staff with reveal players on)
+	// viewer -> disguised player -> how TAB would show the real player (staff with reveal on)
 	private final Map<UUID, Map<UUID, TabLook.Look>> revealLooks = new ConcurrentHashMap<>();
 	// viewer -> TAB team name -> the disguised player in it, and TAB's last settings for the team
 	private final Map<UUID, Map<String, TeamState>> teams = new ConcurrentHashMap<>();
@@ -165,7 +163,6 @@ public final class PlayerDisguiseManager implements Listener {
 		Bukkit.getPluginManager().registerEvents(new RankMenu.Clicks(plugin), plugin);
 		hookVanishEvents();
 		tabLook = new TabLook();
-		mobRevealTask = Bukkit.getScheduler().runTaskTimer(plugin, this::showMobNames, 20L, 20L);
 		checkTask = Bukkit.getScheduler().runTaskTimer(plugin, this::check, 600L, 600L);
 		revealTask = Bukkit.getScheduler().runTaskTimer(plugin, this::updateRevealLooks, 20L, 20L);
 		rewriter = new PacketRewriter(plugin, this);
@@ -196,13 +193,8 @@ public final class PlayerDisguiseManager implements Listener {
 	public void disable() {
 		if(log != null) log.close();
 		if(!available) return;
-		mobRevealTask.cancel();
 		checkTask.cancel();
 		revealTask.cancel();
-		for(UUID uuid : new ArrayList<>(revealMobs)) {
-			Player viewer = Bukkit.getPlayer(uuid);
-			if(viewer != null) hideMobNames(viewer);
-		}
 		for(Player player : Bukkit.getOnlinePlayers()) {
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
 			if(disguise != null) resetLook(player, disguise);
@@ -945,7 +937,6 @@ public final class PlayerDisguiseManager implements Listener {
 		revealPlayers.remove(quit.getUniqueId());
 		revealLooks.remove(quit.getUniqueId());
 		teams.remove(quit.getUniqueId());
-		revealMobs.remove(quit.getUniqueId());
 		for(PlayerDisguise disguise : disguises.values()) {
 			disguise.getRemovedFor().remove(quit.getUniqueId());
 		}
@@ -1117,7 +1108,7 @@ public final class PlayerDisguiseManager implements Listener {
 		return revealPlayers.contains(viewer);
 	}
 
-	/** /disguise reveal players|mobs: toggles seeing through disguises, on the sender's own screen only. */
+	/** /disguise reveal: toggles seeing through player disguises, on the sender's own screen only. */
 	public void revealCommand(CommandSender sender, String[] args) {
 		Language language = language();
 		if(!(sender instanceof Player)) {
@@ -1129,8 +1120,7 @@ public final class PlayerDisguiseManager implements Listener {
 			send(sender, language.DISGUISE_NO_PERMISSION);
 			return;
 		}
-		String what = args.length > 1 ? args[1].toLowerCase(Locale.ENGLISH) : "";
-		if(what.equals("players")) {
+		{
 			boolean on = revealPlayers.add(viewer.getUniqueId());
 			if(!on) revealPlayers.remove(viewer.getUniqueId());
 			if(on) {
@@ -1153,17 +1143,6 @@ public final class PlayerDisguiseManager implements Listener {
 				resendTeam(viewer, disguise, on);
 			}
 			send(sender, on ? language.REVEAL_PLAYERS_ON : language.REVEAL_PLAYERS_OFF);
-		} else if(what.equals("mobs")) {
-			boolean on = revealMobs.add(viewer.getUniqueId());
-			if(on) {
-				showMobNames();
-			} else {
-				revealMobs.remove(viewer.getUniqueId());
-				hideMobNames(viewer);
-			}
-			send(sender, on ? language.REVEAL_MOBS_ON : language.REVEAL_MOBS_OFF);
-		} else {
-			send(sender, language.REVEAL_USAGE);
 		}
 	}
 
@@ -1175,7 +1154,7 @@ public final class PlayerDisguiseManager implements Listener {
 
 	/**
 	 * Every second (main thread, placeholders need it): the real look of every disguised player for
-	 * every staff member with reveal players on. Changes are sent straight away.
+	 * every staff member with reveal on. Changes are sent straight away.
 	 */
 	private void updateRevealLooks() {
 		if(revealPlayers.isEmpty() || tabLook == null) return;
@@ -1270,50 +1249,6 @@ public final class PlayerDisguiseManager implements Listener {
 		String result = text.length() > length ? text.substring(0, length) : text;
 		if(result.endsWith(String.valueOf(ChatColor.COLOR_CHAR))) result = result.substring(0, result.length() - 1);
 		return result;
-	}
-
-	/** Staff with reveal mobs on see the real player's name above every disguise mob. */
-	private void showMobNames() {
-		if(revealMobs.isEmpty()) return;
-		for(UUID uuid : revealMobs) {
-			Player viewer = Bukkit.getPlayer(uuid);
-			if(viewer == null) continue;
-			for(Map.Entry<UUID, org.bukkit.entity.Entity> entry : plugin.getMobDisguises().entrySet()) {
-				org.bukkit.entity.Entity mob = entry.getValue();
-				Player disguised = Bukkit.getPlayer(entry.getKey());
-				if(disguised == null || mob == null || !mob.getWorld().equals(viewer.getWorld())) continue;
-				if(mob.getLocation().distanceSquared(viewer.getLocation()) > 96 * 96) continue;
-				try {
-					sendRaw(viewer, mobName(mob.getEntityId(), ChatColor.RED + disguised.getName(), true));
-				} catch(RuntimeException e) {
-					packetError("ENTITY_METADATA", e);
-					return;
-				}
-			}
-		}
-	}
-
-	private void hideMobNames(Player viewer) {
-		for(org.bukkit.entity.Entity mob : plugin.getMobDisguises().values()) {
-			if(mob == null || !mob.getWorld().equals(viewer.getWorld())) continue;
-			String name = mob.getCustomName();
-			try {
-				sendRaw(viewer, mobName(mob.getEntityId(), name == null ? "" : name, mob.isCustomNameVisible()));
-			} catch(RuntimeException e) {
-				packetError("ENTITY_METADATA", e);
-				return;
-			}
-		}
-	}
-
-	/** 1.8 entity metadata: 2 = custom name, 3 = always show the name. */
-	private static PacketContainer mobName(int entityId, String name, boolean visible) {
-		PacketContainer packet = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_METADATA);
-		packet.getIntegers().write(0, entityId);
-		packet.getWatchableCollectionModifier().write(0, java.util.Arrays.asList(
-				new com.comphenix.protocol.wrappers.WrappedWatchableObject(2, name),
-				new com.comphenix.protocol.wrappers.WrappedWatchableObject(3, (byte)(visible ? 1 : 0))));
-		return packet;
 	}
 
 	// ---------------------------------------------------------------- staff: whois / history
