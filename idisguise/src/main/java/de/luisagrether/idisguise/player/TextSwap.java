@@ -24,8 +24,9 @@ import com.comphenix.protocol.wrappers.nbt.NbtFactory;
  *   titles     big text in the middle of the screen
  *   holograms  floating names (armor stands, mob names)
  *   signs      sign text
- *   scoreboard sidebar lines (team prefix / suffix and title; never the score entries: they are the
- *              lines' IDs, and a changed ID gets out of step with TAB's updates and breaks the sidebar)
+ *   scoreboard sidebar line texts (team prefix / suffix). Never the score entries or the objective:
+ *              listening to those made ProtocolLib deliver them out of order, and the 1.8 client then
+ *              dropped the sidebar (missing after joining, gone after combat).
  * Only the copy a player's game receives changes; the server's items, entities and data never do.
  * Each part has its own switch in player-disguise.yml (name-swap).
  */
@@ -52,8 +53,6 @@ final class TextSwap {
 			if(settings.swapInHolograms) spawnLiving(event, disguises);
 		} else if(type == PacketType.Play.Server.UPDATE_SIGN) {
 			if(settings.swapInSigns) sign(event, disguises);
-		} else if(type == PacketType.Play.Server.SCOREBOARD_OBJECTIVE) {
-			if(settings.swapInScoreboard) strings(event, new int[] {1}, 32, disguises);
 		}
 	}
 
