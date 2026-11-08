@@ -156,6 +156,10 @@ final class TextSwap {
 	private static void windowItems(PacketEvent event, Collection<PlayerDisguise> disguises) {
 		// Creative players send items back to the server: never change what they hold.
 		if(event.getPlayer().getGameMode() == GameMode.CREATIVE) return;
+		// The player's own inventory: items they renamed themselves stay as they are (an item named
+		// after a disguised player would otherwise show the fake name and tell who it is).
+		Integer window = event.getPacket().getIntegers().readSafely(0);
+		if(window == null || window <= 0) return;
 		ItemStack[] items = event.getPacket().getItemArrayModifier().readSafely(0);
 		if(items == null) return;
 		ItemStack[] result = new ItemStack[items.length];
@@ -173,6 +177,8 @@ final class TextSwap {
 
 	private static void setSlot(PacketEvent event, Collection<PlayerDisguise> disguises) {
 		if(event.getPlayer().getGameMode() == GameMode.CREATIVE) return;
+		Integer window = event.getPacket().getIntegers().readSafely(0);
+		if(window == null || window <= 0) return;
 		ItemStack item = event.getPacket().getItemModifier().readSafely(0);
 		ItemStack replaced = item(item, disguises);
 		if(replaced == null) return;

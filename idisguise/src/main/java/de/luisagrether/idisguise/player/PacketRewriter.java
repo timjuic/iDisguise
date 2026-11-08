@@ -403,11 +403,14 @@ final class PacketRewriter extends PacketAdapter {
 		List<String> result = new ArrayList<>();
 		boolean changed = false;
 		for(String suggestion : suggestions) {
-			String fake = fakeNameOf(suggestion, disguises);
-			String value = fake != null ? fake : suggestion;
-			if(fake != null) changed = true;
-			if(!containsIgnoreCase(result, value)) {
-				result.add(value);
+			// A disguised player's real name: dropped, never turned into the fake name ("Dann" + TAB
+			// must not complete to the disguise). The fake name is added below when it fits what was typed.
+			if(fakeNameOf(suggestion, disguises) != null) {
+				changed = true;
+				continue;
+			}
+			if(!containsIgnoreCase(result, suggestion)) {
+				result.add(suggestion);
 			} else {
 				changed = true;
 			}

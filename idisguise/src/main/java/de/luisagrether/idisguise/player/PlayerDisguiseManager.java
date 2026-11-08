@@ -995,6 +995,18 @@ public final class PlayerDisguiseManager implements Listener {
 		rebuildSnapshots();
 	}
 
+	/**
+	 * What a player types in chat stays as typed: otherwise "is Dann1e online?" would reach everyone
+	 * (the writer too) as "is Hall3f online?" and tell who is behind the disguise.
+	 */
+	@EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+	public void onChatTyped(AsyncPlayerChatEvent event) {
+		Collection<PlayerDisguise> names = replacing;
+		if(names.isEmpty()) return;
+		String marked = NameReplacer.markTyped(event.getMessage(), names);
+		if(!marked.equals(event.getMessage())) event.setMessage(marked);
+	}
+
 	// HIGH, not HIGHEST: Factions (relation-coloured faction tags) builds its own copy of the
 	// message for every player at HIGHEST, so the change has to be made before that.
 	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)

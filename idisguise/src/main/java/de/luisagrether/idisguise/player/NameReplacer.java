@@ -33,6 +33,20 @@ final class NameReplacer {
 		return name.charAt(0) + MARKER + name.substring(1);
 	}
 
+	/** Marks every real name of a disguised player in text a player typed, so the name swap leaves it as typed. */
+	static String markTyped(String text, Collection<PlayerDisguise> disguises) {
+		if(!mentionsAny(text, disguises)) return text;
+		String result = text;
+		for(PlayerDisguise disguise : disguises) {
+			Matcher matcher = disguise.getRealNamePattern().matcher(result);
+			StringBuffer out = new StringBuffer();
+			while(matcher.find()) matcher.appendReplacement(out, Matcher.quoteReplacement(mark(matcher.group())));
+			matcher.appendTail(out);
+			result = out.toString();
+		}
+		return result;
+	}
+
 	static Pattern wordPattern(String name) {
 		return Pattern.compile("(?:(?<=§[0-9a-fk-orA-FK-OR])|(?<![A-Za-z0-9_]))" + Pattern.quote(name) + "(?![A-Za-z0-9_])",
 				Pattern.CASE_INSENSITIVE);
