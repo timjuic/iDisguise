@@ -312,20 +312,37 @@ public final class PlayerDisguiseManager implements Listener {
 
 	private void openRankMenu(Player player, String name, String realRank, Consumer<Boolean> done) {
 		Language language = language();
-		List<RankMenu.Option> options = new ArrayList<>();
-		if(realRank != null) {
-			String prefix = luckPerms == null ? null : luckPerms.groupPrefix(realRank);
-			options.add(new RankMenu.Option(null, prefix, color(prefix != null ? prefix : realRank),
-					language.MENU_REAL_RANK.replace("%name%", name).replace("%rank%", realRank)));
-		}
+		List<RankMenu.Entry> playerEntries = new ArrayList<>();
+		List<RankMenu.Entry> staffEntries = new ArrayList<>();
 		for(String rank : usableRanks(player)) {
-			String prefix = luckPerms == null ? null : luckPerms.groupPrefix(rank);
-			String title = prefix != null && !ChatColor.stripColor(color(prefix)).trim().isEmpty() ? color(prefix).trim() : ChatColor.WHITE + rank;
-			options.add(new RankMenu.Option(rank, prefix, title, language.MENU_RANK_LORE.replace("%name%", name).replace("%rank%", rank)));
+			RankMenu.Entry entry = new RankMenu.Entry(rank, rankItem(rank, rankTitle(rank), name));
+			(settings.isStaffRank(rank) ? staffEntries : playerEntries).add(entry);
 		}
-		options.add(new RankMenu.Option(NO_RANK, "&7", language.MENU_NO_RANK, language.MENU_RANK_LORE.replace("%name%", name).replace("%rank%", "-")));
-		new RankMenu(language.MENU_TITLE.replace("%name%", name), options,
+		RankMenu.Entry real = realRank == null ? null : new RankMenu.Entry(null,
+				rankItem(realRank, language.RANK_MENU_REAL_RANK.replace("%name%", name) + ChatColor.GRAY + " (" + rankTitle(realRank) + ChatColor.GRAY + ")", name));
+		RankMenu.Entry none = new RankMenu.Entry(NO_RANK, RankMenu.item(settings.menuItem("no-rank"), language.RANK_MENU_NO_RANK,
+				RankMenu.lines(language.RANK_MENU_NO_RANK_LORE.replace("%name%", name))));
+		RankMenu.Entry cancel = new RankMenu.Entry(RankMenu.CANCEL, RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL,
+				RankMenu.lines(language.RANK_MENU_CANCEL_LORE)));
+		org.bukkit.inventory.ItemStack header = RankMenu.item(settings.menuItem("header"), language.RANK_MENU_HEADER.replace("%name%", name),
+				RankMenu.lines(language.RANK_MENU_HEADER_LORE));
+		org.bukkit.inventory.ItemStack frame = RankMenu.item(settings.menuItem("frame"), " ", null);
+		new RankMenu(language.RANK_MENU_TITLE.replace("%name%", name), header, frame, playerEntries, staffEntries, real, none, cancel,
 				choice -> disguise(player, player, name, choice, done)).open(player);
+	}
+
+	/** The rank as players see it: its coloured prefix, or the rank name. */
+	private String rankTitle(String rank) {
+		String prefix = luckPerms == null ? null : luckPerms.groupPrefix(rank);
+		String colored = color(prefix).trim();
+		return ChatColor.stripColor(colored).trim().isEmpty() ? ChatColor.WHITE + rank : colored;
+	}
+
+	private org.bukkit.inventory.ItemStack rankItem(String rank, String title, String name) {
+		String prefix = luckPerms == null ? null : luckPerms.groupPrefix(rank);
+		String shownPrefix = color(prefix).trim();
+		String preview = (shownPrefix.isEmpty() ? "" : shownPrefix + " ") + ChatColor.GRAY + name;
+		return RankMenu.item(settings.menuItem(rank), title, RankMenu.lines(language().RANK_MENU_RANK_LORE.replace("%preview%", preview)));
 	}
 
 	/** /disguise random: a real Minecraft account's name and skin, and a random rank the player may use. */

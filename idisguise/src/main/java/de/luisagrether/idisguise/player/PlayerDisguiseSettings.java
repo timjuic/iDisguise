@@ -43,6 +43,7 @@ final class PlayerDisguiseSettings {
 	final boolean blockKnownNamesForPlayers;
 	final int randomNamePool;
 	final boolean visibleToOtherPlugins;
+	private final java.util.Map<String, String> menuItems = new java.util.HashMap<>();
 	final String defaultRank;
 	final boolean copyRealRank;
 	final List<String> randomSkins;
@@ -76,6 +77,12 @@ final class PlayerDisguiseSettings {
 		blockKnownNamesForPlayers = config.getBoolean("block-known-names-for-players", true);
 		randomNamePool = Math.max(5, config.getInt("random-name-pool", 40));
 		visibleToOtherPlugins = config.getBoolean("visible-to-other-plugins", false);
+		ConfigurationSection items = config.getConfigurationSection("menu-items");
+		if(items != null) {
+			for(String key : items.getKeys(false)) {
+				menuItems.put(key.toLowerCase(Locale.ENGLISH), items.getString(key));
+			}
+		}
 		String configuredDefault = config.getString("default-rank", "default");
 		defaultRank = configuredDefault == null || configuredDefault.isEmpty() ? null : configuredDefault.toLowerCase(Locale.ENGLISH);
 		copyRealRank = config.getBoolean("copy-real-rank", true);
@@ -141,6 +148,15 @@ final class PlayerDisguiseSettings {
 		int read;
 		while((read = input.read(buffer)) != -1) out.write(buffer, 0, read);
 		return out.toByteArray();
+	}
+
+	/** Item of a rank (or "no-rank", "cancel", "header", "frame") in the rank menu, e.g. "GOLD_NUGGET" or "STAINED_CLAY:4". */
+	String menuItem(String key) {
+		String item = menuItems.get(key.toLowerCase(Locale.ENGLISH));
+		if(item == null && key.toLowerCase(Locale.ENGLISH).endsWith("_temp")) {
+			item = menuItems.get(key.toLowerCase(Locale.ENGLISH).substring(0, key.length() - 5));
+		}
+		return item != null ? item : "STAINED_CLAY:0";
 	}
 
 	boolean isStaffRank(String rank) {

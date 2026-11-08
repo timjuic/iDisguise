@@ -1001,41 +1001,54 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		return hasPermissionAdmin(sender) ? language.TITLE_ADMIN.replace("%version%", getDescription().getVersion()) : language.TITLE_PLAYERS;
 	}
 
+	/** One line per command the sender can use: the command, then a short description. Click = typed into chat. */
 	private void sendHelpPage(CommandSender sender, int page) {
-		List<List<String>> helpPages = new ArrayList<>();
-		helpPages.add(new ArrayList<>());
-
-		if(sender instanceof Player) {
-			addHelpMessage(helpPages, language.HELP_DISGUISE_MOB);
-			if(hasPermission(sender, EntityType.PLAYER) && playerDisguises.isAvailable()) {
-				addHelpMessage(helpPages, language.HELP_DISGUISE_PLAYER);
+		List<String[]> lines = new ArrayList<>();
+		boolean player = sender instanceof Player;
+		boolean mobs = hasAnyMobPermission(sender);
+		boolean players = hasPermission(sender, EntityType.PLAYER) && playerDisguises.isAvailable();
+		if(player) {
+			if(mobs) lines.add(new String[] {"/disguise <mob>", language.HELP_CMD_MOB, "/disguise "});
+			if(players) lines.add(new String[] {"/disguise <name> [rank]", language.HELP_CMD_PLAYER, "/disguise "});
+			if(playerDisguises.canUseRandom(sender)) lines.add(new String[] {"/disguise random", language.HELP_CMD_RANDOM, "/disguise random"});
+			if(mobs || players) {
+				lines.add(new String[] {"/disguise", language.HELP_CMD_CHECK, "/disguise"});
+				lines.add(new String[] {"/undisguise", language.HELP_CMD_UNDISGUISE, "/undisguise"});
 			}
-			if(playerDisguises.canUseRandom(sender)) {
-				addHelpMessage(helpPages, language.HELP_DISGUISE_RANDOM);
-			}
-			addHelpMessage(helpPages, language.HELP_DISGUISE_CHECK);
-			addHelpMessage(helpPages, language.HELP_UNDISGUISE);
-			addHelpMessage(helpPages, language.HELP_DISGUISE_ALTER);
-			addHelpMessage(helpPages, language.HELP_DISGUISE_LIST);
-			addHelpMessage(helpPages, language.HELP_INGAME_HELP);
-			if(hasPermissionAdmin(sender)) addHelpMessage(helpPages, language.HELP_DISGUISE_PERMISSION);
+			lines.add(new String[] {"/disguise list", language.HELP_CMD_LIST, "/disguise list"});
+			if(mobs && !config.STATEMENT_WHITELIST.isEmpty()) lines.add(new String[] {"/disguise <mob> <option>", language.HELP_CMD_ALTER, "/disguise "});
 		}
 		if(hasPermissionOthers(sender)) {
-			if(!helpPages.get(helpPages.size() - 1).isEmpty()) helpPages.add(new ArrayList<>());
-			addHelpMessage(helpPages, language.HELP_ODISGUISE);
-			addHelpMessage(helpPages, language.HELP_UNDISGUISE_OTHER);
-			addHelpMessage(helpPages, language.HELP_ODISGUISE_INFO);
-			if(!(sender instanceof Player)) addHelpMessage(helpPages, language.HELP_INGAME_HELP_2);
-			if(hasPermissionAdmin(sender)) addHelpMessage(helpPages, language.HELP_ODISGUISE_PERMISSION);
+			lines.add(new String[] {"/odisguise <player> <disguise>", language.HELP_CMD_ODISGUISE, "/odisguise "});
+			lines.add(new String[] {"/undisguise <player>", language.HELP_CMD_UNDISGUISE_OTHER, "/undisguise "});
 		}
 
-		if(page < 1) page = 1;
-		if(page > helpPages.size()) page = helpPages.size();
-
-		sender.sendMessage(language.HELP_PAGE_TITLE.replace("%title%", title(sender)).replace("%number%", page + "/" + helpPages.size()));
-		for(String line : helpPages.get(page - 1)) {
-			sender.sendMessage(line);
+		sender.sendMessage(language.HELP_TITLE.replace("%title%", title(sender)));
+		for(String[] line : lines) {
+			String text = language.HELP_LINE.replace("%command%", line[0]).replace("%description%", line[1]);
+			if(player) {
+				net.md_5.bungee.api.chat.BaseComponent[] parts = net.md_5.bungee.api.chat.TextComponent.fromLegacyText(text);
+				net.md_5.bungee.api.chat.ClickEvent click = new net.md_5.bungee.api.chat.ClickEvent(net.md_5.bungee.api.chat.ClickEvent.Action.SUGGEST_COMMAND, line[2]);
+				net.md_5.bungee.api.chat.HoverEvent hover = new net.md_5.bungee.api.chat.HoverEvent(net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
+						net.md_5.bungee.api.chat.TextComponent.fromLegacyText(language.HELP_CLICK));
+				for(net.md_5.bungee.api.chat.BaseComponent part : parts) {
+					part.setClickEvent(click);
+					part.setHoverEvent(hover);
+				}
+				((Player)sender).spigot().sendMessage(parts);
+			} else {
+				sender.sendMessage(text);
+			}
 		}
+	}
+
+	/** True when the sender may disguise as at least one mob. */
+	private boolean hasAnyMobPermission(CommandSender sender) {
+		for(EntityType type : EntityType.values()) {
+			if(type == EntityType.PLAYER || config.DISGUISE_TYPE_BLACKLIST.contains(type.name())) continue;
+			if(hasPermission(sender, type)) return true;
+		}
+		return false;
 	}
 
 	private void sendDisguiseList(CommandSender sender) {

@@ -1,12 +1,13 @@
 package de.luisagrether.idisguise.player;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -21,40 +22,82 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The rank menu after /disguise <name>: one dye per rank, coloured like the rank.
+ * The rank menu after /disguise <name>:
+ *   row 1  frame with a name tag in the middle (who you disguise as)
+ *   row 2  player ranks
+ *   row 3  empty (only when staff ranks follow)
+ *   row 4  staff ranks
+ *   last   real rank of that player / no rank / cancel
  * Every click is cancelled; the choice runs on the next tick, only while this menu is still open.
  */
 final class RankMenu implements InventoryHolder {
 
-	static final class Option {
-		// what is passed on as the rank (null = the player's real rank, NO_RANK = no rank)
+	/** One clickable entry. value: the rank passed on (null = real rank, NO_RANK = no rank). */
+	static final class Entry {
 		final String value;
-		final String prefix;
-		final String title;
-		final String lore;
+		final ItemStack item;
 
-		Option(String value, String prefix, String title, String lore) {
+		Entry(String value, ItemStack item) {
 			this.value = value;
-			this.prefix = prefix;
-			this.title = title;
-			this.lore = lore;
+			this.item = item;
 		}
 	}
+
+	static final String CANCEL = "\u0000cancel";
 
 	private final Inventory inventory;
-	private final List<Option> options;
+	private final Map<Integer, String> actions = new HashMap<>();
 	private final Consumer<String> choose;
 
-	RankMenu(String title, List<Option> options, Consumer<String> choose) {
-		this.options = options;
+	/**
+	 * header: the name tag on top. playerRanks / staffRanks: one entry per rank (staff may be empty).
+	 * realRank (may be null), noRank, cancel: the bottom row.
+	 */
+	RankMenu(String title, ItemStack header, ItemStack frame, List<Entry> playerRanks, List<Entry> staffRanks,
+			Entry realRank, Entry noRank, Entry cancel, Consumer<String> choose) {
 		this.choose = choose;
-		int rows = Math.min(6, Math.max(1, (options.size() + 8) / 9));
+		List<List<Entry>> rankRows = new ArrayList<>();
+		addRows(rankRows, playerRanks);
+		int firstStaffRow = -1;
+		if(!staffRanks.isEmpty()) {
+			rankRows.add(new ArrayList<>()); // the gap
+			firstStaffRow = rankRows.size();
+			addRows(rankRows, staffRanks);
+		}
+		int rows = Math.min(6, 1 + rankRows.size() + 1);
 		// 1.8 menu titles are at most 32 characters.
 		this.inventory = Bukkit.createInventory(this, rows * 9, title.length() > 32 ? title.substring(0, 32) : title);
-		for(int i = 0; i < options.size() && i < rows * 9; i++) {
-			inventory.setItem(i, item(options.get(i)));
+
+		for(int slot = 0; slot < 9; slot++) inventory.setItem(slot, frame);
+		inventory.setItem(4, header);
+
+		for(int row = 0; row < rankRows.size() && row + 1 < rows - 1; row++) {
+			List<Entry> entries = rankRows.get(row);
+			int start = (row + 1) * 9 + (9 - entries.size()) / 2;
+			for(int i = 0; i < entries.size(); i++) {
+				put(start + i, entries.get(i));
+			}
+		}
+
+		int bottom = (rows - 1) * 9;
+		if(realRank != null) put(bottom + 2, realRank);
+		put(bottom + 4, noRank);
+		put(bottom + 6, cancel);
+	}
+
+	private static void addRows(List<List<Entry>> rows, List<Entry> entries) {
+		for(int i = 0; i < entries.size(); i += 9) {
+			rows.add(new ArrayList<>(entries.subList(i, Math.min(entries.size(), i + 9))));
 		}
 	}
+
+	private void put(int slot, Entry entry) {
+		inventory.setItem(slot, entry.item);
+		actions.put(slot, entry.value == null ? REAL_RANK : entry.value);
+	}
+
+	// Marker for "real rank": the map can't tell a null value from a missing slot.
+	private static final String REAL_RANK = "\u0000real-rank";
 
 	void open(Player player) {
 		player.openInventory(inventory);
@@ -65,61 +108,48 @@ final class RankMenu implements InventoryHolder {
 		return inventory;
 	}
 
-	@SuppressWarnings("deprecation")
-	private static ItemStack item(Option option) {
-		Material dye = Material.matchMaterial("INK_SACK");
-		if(dye == null) dye = Material.PAPER;
-		ItemStack item = new ItemStack(dye, 1, dyeColor(option.prefix));
-		ItemMeta meta = item.getItemMeta();
-		meta.setDisplayName(option.title);
-		meta.setLore(Collections.singletonList(option.lore));
-		item.setItemMeta(meta);
-		return item;
-	}
+	// ---------------------------------------------------------------- items
 
 	/**
-	 * Dye colour from the rank's prefix: the first real colour in it (grey brackets like "&8[" are
-	 * skipped), e.g. "&8[&e&lGold&8]" -> yellow.
+	 * An item from "MATERIAL" or "MATERIAL:data" (1.8 names, e.g. GOLD_NUGGET or STAINED_CLAY:4).
+	 * Unknown names fall back to paper, so a typo in the config never breaks the menu.
 	 */
-	static short dyeColor(String prefix) {
-		char found = 0;
-		char fallback = 0;
-		if(prefix != null) {
-			for(int i = 0; i + 1 < prefix.length(); i++) {
-				char marker = prefix.charAt(i);
-				if(marker != '&' && marker != ChatColor.COLOR_CHAR) continue;
-				char code = Character.toLowerCase(prefix.charAt(i + 1));
-				if("0123456789abcdef".indexOf(code) < 0) continue;
-				if(fallback == 0) fallback = code;
-				if("078f".indexOf(code) < 0) {
-					found = code;
-					break;
+	@SuppressWarnings("deprecation")
+	static ItemStack item(String spec, String name, List<String> lore) {
+		Material material = null;
+		short data = 0;
+		if(spec != null) {
+			String[] parts = spec.trim().split(":");
+			material = Material.matchMaterial(parts[0]);
+			if(parts.length > 1) {
+				try {
+					data = Short.parseShort(parts[1]);
+				} catch(NumberFormatException e) {
+					data = 0;
 				}
 			}
 		}
-		char code = found != 0 ? found : fallback;
-		switch(code) {
-			case '0': return 0;   // ink sac
-			case '1': return 4;   // lapis
-			case '2': return 2;   // green
-			case '3': return 6;   // cyan
-			case '4': return 1;   // red
-			case '5': return 5;   // purple
-			case '6': return 14;  // orange
-			case '7': return 7;   // light gray
-			case '8': return 8;   // gray
-			case '9': return 4;   // lapis (blue)
-			case 'a': return 10;  // lime
-			case 'b': return 12;  // light blue
-			case 'c': return 1;   // red
-			case 'd': return 9;   // pink
-			case 'e': return 11;  // yellow
-			case 'f': return 15;  // white
-			default: return 8;
+		if(material == null) {
+			material = Material.PAPER;
+			data = 0;
 		}
+		ItemStack item = new ItemStack(material, 1, data);
+		ItemMeta meta = item.getItemMeta();
+		if(meta != null) {
+			meta.setDisplayName(name);
+			if(lore != null) meta.setLore(lore);
+			item.setItemMeta(meta);
+		}
+		return item;
 	}
 
-	/** Cancels every click in the menu and runs the chosen option. Registered once. */
+	static List<String> lines(String text) {
+		return new ArrayList<>(Arrays.asList(text.split("\n")));
+	}
+
+	// ---------------------------------------------------------------- clicks
+
+	/** Cancels every click in the menu and runs the chosen entry. Registered once. */
 	static final class Clicks implements Listener {
 
 		private final Plugin plugin;
@@ -134,14 +164,14 @@ final class RankMenu implements InventoryHolder {
 			event.setCancelled(true);
 			RankMenu menu = (RankMenu)event.getView().getTopInventory().getHolder();
 			int slot = event.getRawSlot();
-			if(slot < 0 || slot >= menu.inventory.getSize() || slot >= menu.options.size()) return;
-			if(!(event.getWhoClicked() instanceof Player)) return;
+			if(!menu.actions.containsKey(slot) || !(event.getWhoClicked() instanceof Player)) return;
 			Player player = (Player)event.getWhoClicked();
-			String value = menu.options.get(slot).value;
+			String action = menu.actions.get(slot);
 			Bukkit.getScheduler().runTask(plugin, () -> {
-				if(!player.isOnline() || !(player.getOpenInventory().getTopInventory().getHolder() == menu)) return;
+				if(!player.isOnline() || player.getOpenInventory().getTopInventory().getHolder() != menu) return;
 				player.closeInventory();
-				menu.choose.accept(value);
+				if(CANCEL.equals(action)) return;
+				menu.choose.accept(REAL_RANK.equals(action) ? null : action);
 			});
 		}
 
@@ -150,10 +180,6 @@ final class RankMenu implements InventoryHolder {
 			if(event.getView().getTopInventory().getHolder() instanceof RankMenu) event.setCancelled(true);
 		}
 
-	}
-
-	static List<Option> copy(List<Option> options) {
-		return new ArrayList<>(options);
 	}
 
 }

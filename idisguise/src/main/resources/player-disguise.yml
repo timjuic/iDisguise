@@ -38,6 +38,29 @@ staff-ranks:
 - sradmin
 - vlasnik
 
+# Items in the rank menu after /disguise <name>: MATERIAL or MATERIAL:data (Minecraft 1.8 names).
+# no-rank, cancel, header (top middle) and frame (top row) are the other buttons.
+menu-items:
+  gold: GOLD_NUGGET
+  emerald: EMERALD
+  diamond: DIAMOND
+  obsidian: OBSIDIAN
+  wither: SOUL_SAND
+  blaze: BLAZE_ROD
+  herobrine: REDSTONE
+  ludnica: GOLD_INGOT
+  ludnica+: GOLD_BLOCK
+  trialmod: STAINED_CLAY:4
+  mod: STAINED_CLAY:3
+  srmod: STAINED_CLAY:11
+  admin: STAINED_CLAY:6
+  sradmin: STAINED_CLAY:14
+  vlasnik: STAINED_CLAY:1
+  no-rank: STAINED_CLAY:8
+  cancel: BARRIER
+  header: NAME_TAG
+  frame: STAINED_GLASS_PANE:7
+
 # Rank used when no rank is given (and none can be copied). Use the group of players without a rank.
 default-rank: default
 
