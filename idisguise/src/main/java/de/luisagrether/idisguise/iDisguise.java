@@ -1145,16 +1145,6 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 	}
 
-	private void addHelpMessage(List<List<String>> helpPages, String helpMessage) {
-		String[] lines = helpMessage.split("\\\\\\\\");
-		if(helpPages.get(helpPages.size() - 1).size() + lines.length > 9) {
-			helpPages.add(new ArrayList<>());
-		}
-		for(int i = 0; i < lines.length; i++) {
-			helpPages.get(helpPages.size() - 1).add((i == 0 ? "- " : "  ") + lines[i]);
-		}
-	}
-
 	public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
 		List<String> completions = new ArrayList<String>();
 

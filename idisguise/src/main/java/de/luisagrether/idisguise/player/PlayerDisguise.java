@@ -40,8 +40,6 @@ public final class PlayerDisguise {
 	private volatile String ownerRank;
 	// DeluxeTags tag of the player whose name this is, shown in chat instead of the own tag.
 	private volatile String chatTag;
-	// The player's real chat prefix (LuckPerms), swapped for the fake one in chat.
-	private volatile String realPrefix;
 
 	public PlayerDisguise(UUID uuid, String realName, String fakeName, String rank, String skinValue, String skinSignature) {
 		this.uuid = uuid;
@@ -81,8 +79,6 @@ public final class PlayerDisguise {
 	}
 	public String getChatTag() { return chatTag; }
 	void setChatTag(String chatTag) { this.chatTag = chatTag; }
-	String getRealPrefix() { return realPrefix; }
-	void setRealPrefix(String realPrefix) { this.realPrefix = realPrefix; }
 	String getOwnerRank() { return ownerRank; }
 	void setOwnerRank(String ownerRank) { this.ownerRank = ownerRank; }
 

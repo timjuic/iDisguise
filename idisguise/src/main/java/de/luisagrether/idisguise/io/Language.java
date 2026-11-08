@@ -18,15 +18,9 @@ public class Language {
     @LastUpdated(60001)
 	public String CONSOLE_USE_COMMAND = ChatColor.RED + "This command is for players only.";
 	@LastUpdated(60106)
-	public String CURRENTLY_DISGUISED_AS_PLAYER = c("%prefix%&7You are disguised as &e%targetSkin%&7.");
-	@LastUpdated(60106)
 	public String ODISGUISE_CURRENTLY_DISGUISED_AS_PLAYER = c("%prefix%&e%player% &7is disguised as &e%targetSkin%&7.");
 	@LastUpdated(60106)
-	public String CURRENTLY_DISGUISED_AS_ENTITY = c("%prefix%&7You are disguised as &e%entityType%&7.");
-	@LastUpdated(60106)
 	public String ODISGUISE_CURRENTLY_DISGUISED_AS_ENTITY = c("%prefix%&e%player% &7is disguised as &e%entityType%&7.");
-	@LastUpdated(60106)
-	public String CURRENTLY_NOT_DISGUISED = c("%prefix%&7You are not disguised.");
 	@LastUpdated(60106)
 	public String ODISGUISE_CURRENTLY_NOT_DISGUISED = c("%prefix%&e%player% &7is not disguised.");
 	@LastUpdated(60106)
@@ -74,55 +68,6 @@ public class Language {
 	@LastUpdated(60106)
 	public String UNDISGUISE_NOTIFICATION = c("%prefix%&7You were undisguised by &e%sender%&7.");
 
-	@LastUpdated(60100)
-	public String HELP_PAGE_TITLE = ChatColor.DARK_GREEN + "===== " + ChatColor.BOLD + "%title%" + ChatColor.RESET + ChatColor.DARK_GREEN + " Help Page %number% =====";
-	@LastUpdated(60001)
-	public String HELP_DISGUISE_MOB = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguise as a mob: " + ChatColor.ITALIC + "/disguise <entity-type>\\\\"
-							        + ChatColor.GOLD + "Example: " + ChatColor.ITALIC + "/disguise zombie\\\\"
-							        + ChatColor.GOLD + "Use [TAB] to get a list of all entity types.\\\\"
-							        + ChatColor.GOLD + "After disguising, you will be able to see your own disguise\\\\"
-									+ ChatColor.GOLD + "for five seconds.";
-	@LastUpdated(60100)
-	public String HELP_DISGUISE_PLAYER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguise as a player: " + ChatColor.ITALIC + "/disguise <name> [rank]\\\\"
-							           + ChatColor.GOLD + "Example: " + ChatColor.ITALIC + "/disguise Marko gold\\\\"
-							           + ChatColor.GOLD + "Other players see that name, skin and rank everywhere.";
-    @LastUpdated(60001)
-	public String HELP_DISGUISE_CHECK = ChatColor.GOLD.toString() + ChatColor.BOLD + "Check your disguise: " + ChatColor.ITALIC + "/disguise\\\\"
-									  + ChatColor.GOLD + "You will be able to see your own disguise for another five\\\\"
-									  + ChatColor.GOLD + "seconds.";
-	@LastUpdated(60001)
-	public String HELP_UNDISGUISE = ChatColor.GOLD.toString() + ChatColor.BOLD + "Undisguise: " + ChatColor.ITALIC + "/undisguise";
-	@LastUpdated(60001)
-	public String HELP_DISGUISE_ALTER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Alter your disguise: " + ChatColor.ITALIC + "/disguise <type> <statement> ...\\\\"
-									  + ChatColor.GOLD + "Example: " + ChatColor.ITALIC + "/disguise horse setColor(WHITE) setBaby()\\\\"
-									  + ChatColor.GOLD + "Use [TAB] after entering the entity type to get a list of all\\\\"
-									  + ChatColor.GOLD + "possible statements.";
-	@LastUpdated(60001)
-	public String HELP_INGAME_HELP = ChatColor.GOLD.toString() + ChatColor.BOLD + "In-game help: " + ChatColor.ITALIC + "/disguise ? [page]";
-	public String HELP_DISGUISE_LIST = ChatColor.GOLD.toString() + ChatColor.BOLD + "List available disguises: " + ChatColor.ITALIC + "/disguise list";
-	@LastUpdated(60001)
-	public String HELP_DISGUISE_PERMISSION = ChatColor.GOLD + "By default, only server operators can use the commands.\\\\"
-										   + ChatColor.GOLD + "If you enable " + ChatColor.ITALIC + "commands.use-permission-nodes" + ChatColor.RESET + ChatColor.GOLD + " in the\\\\"
-										   + ChatColor.GOLD + ChatColor.ITALIC + "config.yml" + ChatColor.RESET + ChatColor.GOLD + ", disguising requires the permission node\\\\"
-										   + ChatColor.GOLD + ChatColor.BOLD + "iDisguise.disguise.<entity-type>\\\\"
-										   + ChatColor.GOLD + "(e.g., " + ChatColor.ITALIC + "iDisguise.disguise.SNOW_GOLEM" + ChatColor.RESET + ChatColor.GOLD + " for the snow golem)\\\\"
-										   + ChatColor.GOLD + "or the wildcard " + ChatColor.BOLD + "iDisguise.disguise.*";
-	@LastUpdated(60001)
-	public String HELP_ODISGUISE = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguise another player: " + ChatColor.ITALIC + "/odisguise <player>\\\\"
-	                             + ChatColor.GOLD + ChatColor.BOLD + ChatColor.ITALIC + "<entity-type>";
-	@LastUpdated(60001)
-	public String HELP_UNDISGUISE_OTHER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Undisguise another player: " + ChatColor.ITALIC + "/undisguise <player>";
-	@LastUpdated(60001)
-	public String HELP_ODISGUISE_INFO = ChatColor.GOLD + "Player disguise and statements work as well.";
-	@LastUpdated(60001)
-	public String HELP_INGAME_HELP_2 = ChatColor.GOLD.toString() + ChatColor.BOLD + "In-game help: " + ChatColor.ITALIC + "/odisguise ? [page]";
-	@LastUpdated(60001)
-	public String HELP_ODISGUISE_PERMISSION = ChatColor.GOLD + "By default, only server operators can use these commands.\\\\"
-											+ ChatColor.GOLD + "If you enable " + ChatColor.ITALIC + "commands.use-permission-nodes" + ChatColor.RESET + ChatColor.GOLD + " in the\\\\"
-											+ ChatColor.GOLD + ChatColor.ITALIC + "config.yml" + ChatColor.RESET + ChatColor.GOLD + ", these commands require the permission node\\\\"
-											+ ChatColor.GOLD + ChatColor.BOLD + "iDisguise.others" + ChatColor.RESET + ChatColor.GOLD + " AND the respective disguise-specific\\\\"
-											+ ChatColor.GOLD + "permission node.";
-
     @LastUpdated(60001)
 	public String UPDATE_AVAILABLE = ChatColor.GOLD + "[iDisguise] An update is available: %version%";
 	@LastUpdated(60001)
@@ -159,8 +104,6 @@ public class Language {
 	@LastUpdated(60100)
 	public String TITLE_ADMIN = "iDisguise %version%";
 	@LastUpdated(60100)
-	public String LIST_TITLE = ChatColor.DARK_GREEN + "===== " + ChatColor.BOLD + "%title%" + ChatColor.RESET + ChatColor.DARK_GREEN + " =====";
-	@LastUpdated(60100)
 	public String LIST_DISGUISED_PLAYERS = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguised players:";
 	@LastUpdated(60100)
 	public String LIST_DISGUISED_NOBODY = ChatColor.GRAY + " Nobody is disguised right now.";
@@ -184,9 +127,6 @@ public class Language {
 	public String PLAYER_DISGUISE_NAME_ONLINE = c("%prefix%&e%name% &cis online, you can't disguise as them.");
 	@LastUpdated(60106)
 	public String PLAYER_DISGUISE_NAME_PLAYED_BEFORE = c("%prefix%&e%name% &chas played on this server, you can't disguise as them.");
-	@LastUpdated(60100)
-	public String HELP_DISGUISE_RANDOM = ChatColor.GOLD.toString() + ChatColor.BOLD + "Random player disguise: " + ChatColor.ITALIC + "/disguise random\\\\"
-	                                   + ChatColor.GOLD + "A real player's name and skin with a random rank.";
 	@LastUpdated(60106)
 	public String RANDOM_NOT_READY = c("%prefix%&cNo random names are ready yet. Try again in a few seconds.");
 	@LastUpdated(60100)
@@ -218,8 +158,6 @@ public class Language {
 	public String HELP_CMD_PLAYER = "Disguise as a player";
 	@LastUpdated(60100)
 	public String HELP_CMD_RANDOM = "Random player disguise";
-	@LastUpdated(60112)
-	public String HELP_CMD_CHECK = "Help and your active disguise";
 	@LastUpdated(60100)
 	public String HELP_CMD_UNDISGUISE = "Remove your disguise";
 	@LastUpdated(60101)

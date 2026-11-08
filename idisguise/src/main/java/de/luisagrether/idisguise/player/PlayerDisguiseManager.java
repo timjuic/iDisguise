@@ -737,17 +737,6 @@ public final class PlayerDisguiseManager implements Listener {
 				}
 			}, 10L);
 		}
-		PlayerDisguiseSettings.Profile profile = disguise.getProfile();
-		if(luckPerms != null && profile != null && profile.fakeRankInChat) {
-			if(disguise.getRealPrefix() == null) {
-				luckPerms.setFakePrefix(player, null);
-				String real = luckPerms.prefix(player);
-				disguise.setRealPrefix(real == null ? "" : real);
-			}
-			String prefix = rank == null ? null : luckPerms.groupPrefix(rank);
-			luckPerms.setFakePrefix(player, prefix == null ? "" : prefix);
-			debug("Fake prefix of " + player.getName() + " (rank " + rank + "): '" + prefix + "', LuckPerms now gives '" + luckPerms.prefix(player) + "'");
-		}
 	}
 
 	private void resetLook(Player player, PlayerDisguise disguise) {
@@ -758,7 +747,6 @@ public final class PlayerDisguiseManager implements Listener {
 				if(player.isOnline() && !disguises.containsKey(player.getUniqueId())) tab.apply(player, null, null);
 			}, 10L);
 		}
-		if(luckPerms != null) luckPerms.setFakePrefix(player, null);
 	}
 
 	/**
