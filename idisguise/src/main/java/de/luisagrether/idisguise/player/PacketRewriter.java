@@ -54,7 +54,6 @@ final class PacketRewriter extends PacketAdapter {
 				PacketType.Play.Server.ENTITY_METADATA,
 				PacketType.Play.Server.SPAWN_ENTITY_LIVING,
 				PacketType.Play.Server.UPDATE_SIGN,
-				PacketType.Play.Server.SCOREBOARD_SCORE,
 				PacketType.Play.Server.SCOREBOARD_OBJECTIVE,
 				PacketType.Play.Client.TAB_COMPLETE);
 		this.manager = manager;
