@@ -117,8 +117,10 @@ public class Language {
 	public String LIST_PLAYER_TYPE = c("&a&lPLAYER");
 	@LastUpdated(60114)
 	public String LIST_LEGEND = c("&agreen &7= available, &cred &7= no permission.");
+	@LastUpdated(60126)
+	public String PLAYER_DISGUISE_LOADING = c("%prefix%&7Loading disguise as &e%name%&7...");
 	@LastUpdated(60106)
-	public String PLAYER_DISGUISED = c("%prefix%&7You are now disguised as &e%name% &7(rank: &e%rank%&7).");
+	public String PLAYER_DISGUISED =c("%prefix%&7You are now disguised as &e%name% &7(rank: &e%rank%&7).");
 	@LastUpdated(60106)
 	public String PLAYER_DISGUISE_RANK_UNKNOWN = c("%prefix%&cUnknown rank: &e%rank%&c. Ranks you can use: &e%ranks%");
 	@LastUpdated(60106)

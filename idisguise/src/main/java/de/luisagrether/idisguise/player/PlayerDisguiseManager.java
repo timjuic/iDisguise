@@ -547,6 +547,8 @@ public final class PlayerDisguiseManager implements Listener {
 		boolean joinedWithoutLuckPerms = luckPerms == null && blockKnown && hasPlayedBefore(name, target);
 
 		String rankArgument = chosenRank;
+		// Rank and skin lookups can take a few seconds: say it is working.
+		send(sender, language.PLAYER_DISGUISE_LOADING.replace("%name%", name));
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 			UUID knownUuid = null;
 			String rank = rankArgument;
@@ -1647,12 +1649,19 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	/**
-	 * %idisguise_tabprefix%: the TAB tab prefix of the player's REAL rank (groups.yml), for their own
-	 * scoreboard: %tab_tabprefix% shows the disguise rank while disguised.
+	 * %idisguise_tabprefix%: the TAB tab prefix (groups.yml) of the rank other players see: the disguise
+	 * rank while player-disguised ("no rank" = default-rank), otherwise the real rank.
 	 */
 	String realTabPrefix(Player player) {
-		if(player == null || luckPerms == null || tabLook == null) return "";
-		String group = luckPerms.primaryGroup(player);
+		if(player == null || tabLook == null) return "";
+		PlayerDisguise disguise = disguises.get(player.getUniqueId());
+		String group;
+		if(disguise != null && disguise.getProfile() != null) {
+			group = effectiveRank(disguise);
+			if(group == null) group = settings.defaultRank;
+		} else {
+			group = luckPerms == null ? null : luckPerms.primaryGroup(player);
+		}
 		return group == null ? "" : tabLook.tabPrefix(group, player.getWorld().getName());
 	}
 

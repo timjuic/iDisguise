@@ -11,7 +11,7 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
  * %idisguise_name% = the name other players see (the fake name while disguised, else the real one).
  * Use it instead of %player_name% where a disguised player's real name must not show,
  * e.g. InteractiveChat's "/msg %player_name%" click action.
- * %idisguise_tabprefix% = the TAB tab prefix of the player's real rank (for their own scoreboard).
+ * %idisguise_tabprefix% = the TAB tab prefix of the rank others see (the disguise rank while disguised).
  */
 final class PlaceholderHook extends PlaceholderExpansion {
 
