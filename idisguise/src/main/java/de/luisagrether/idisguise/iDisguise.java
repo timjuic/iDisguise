@@ -480,6 +480,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		language = new Language(this);
 		language.loadData();
 		language.saveData();
+		language.applyPrefix();
 
 		worldGuardRegions = WorldGuardRegions.detect(this);
 		if(worldGuardRegions == null && !config.BLOCKED_REGIONS.isEmpty()) {

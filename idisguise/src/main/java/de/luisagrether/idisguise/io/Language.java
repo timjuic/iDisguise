@@ -17,62 +17,62 @@ public class Language {
 
     @LastUpdated(60001)
 	public String CONSOLE_USE_COMMAND = ChatColor.RED + "This command is for players only.";
-    @LastUpdated(60001)
-	public String CURRENTLY_DISGUISED_AS_PLAYER = ChatColor.GOLD + "You are currently disguised as player: %targetSkin%";
-	@LastUpdated(60001)
-	public String ODISGUISE_CURRENTLY_DISGUISED_AS_PLAYER = ChatColor.GOLD + "%player% is currently disguised as player: %targetSkin%";
-    @LastUpdated(60001)
-	public String CURRENTLY_DISGUISED_AS_ENTITY = ChatColor.GOLD + "You are currently disguised as: %entityType%";
-	@LastUpdated(60001)
-	public String ODISGUISE_CURRENTLY_DISGUISED_AS_ENTITY = ChatColor.GOLD + "%player% is currently disguised as: %entityType%";
-    @LastUpdated(60001)
-	public String CURRENTLY_NOT_DISGUISED = ChatColor.GOLD + "You are not disguised.";
-	@LastUpdated(60001)
-	public String ODISGUISE_CURRENTLY_NOT_DISGUISED = ChatColor.GOLD + "%player% is not disguised.";
-    @LastUpdated(60001)
-	public String DISGUISE_TYPE_NOT_SUPPORTED = ChatColor.RED + "Currently not supported!";
-    @LastUpdated(60102)
-	public String DISGUISE_TYPE_NOT_FOUND = ChatColor.RED + "Disguise type not found: " + ChatColor.WHITE + "%entityType%";
-	@LastUpdated(60001)
-	public String DISGUISE_NO_PERMISSION = ChatColor.RED + "You don't have permission.";
-	@LastUpdated(60001)
-	public String DISGUISE_EVENT_CANCELLED = ChatColor.RED + "Another plugin prevents you from disguising.";
-	@LastUpdated(60001)
-	public String ODISGUISE_EVENT_CANCELLED = ChatColor.RED + "Another plugin prevents %player% from disguising.";
-    @LastUpdated(60001)
-	public String PLAYER_DISGUISE_ACCOUNT_NAME_MISSING = ChatColor.RED + "Please feed me an account name as well.";
-    @LastUpdated(60001)
-	public String PLAYER_DISGUISE_ACCOUNT_NAME_INVALID = ChatColor.RED + "This account name is invalid.";
-	@LastUpdated(60002)
-	public String PLAYER_DISGUISE_ACCOUNT_NAME_BLACKLISTED = ChatColor.RED + "This account name is blacklisted.";
-    @LastUpdated(60001)
-	public String DISGUISED_SUCCESSFULLY = ChatColor.GOLD + "Disguised successfully!";
-    @LastUpdated(60001)
-	public String DISGUISE_ERROR = ChatColor.RED + "Something went wrong with the disguise.";
-    @LastUpdated(60001)
-	public String DISGUISE_STATEMENT_ERROR = ChatColor.RED + "Something went wrong with the additional statement: %statement%";
-    @LastUpdated(60001)
-	public String DISGUISE_STATEMENT_FORBIDDEN = ChatColor.RED + "This statement is forbidden: %statement%";
-	@LastUpdated(60001)
-	public String DISGUISE_STATEMENT_UNKNOWN = ChatColor.RED + "This statement is unknown or uses invalid syntax: %statement%";
-    @LastUpdated(60001)
-	public String UNDISGUISED_SUCCESSFULLY = ChatColor.GOLD + "Undisguised successfully!";
-    @LastUpdated(60001)
-	public String UNDISGUISE_NOT_DISGUISED = ChatColor.RED + "You are not disguised.";
-	@LastUpdated(60001)
-	public String UNDISGUISE_OTHER_NOT_DISGUISED = ChatColor.RED + "%player% is not disguised.";
-	@LastUpdated(60001)
-	public String UNDISGUISE_EVENT_CANCELLED = ChatColor.RED + "Another plugin prevents you from undisguising.";
-	@LastUpdated(60001)
-	public String UNDISGUISE_OTHER_EVENT_CANCELLED = ChatColor.RED + "Another plugin prevents %player% from undisguising.";
-	@LastUpdated(60001)
-	public String ODISGUISE_NO_PLAYERNAME_GIVEN = ChatColor.RED + "Please feed me the name of an online player.";
-	@LastUpdated(60001)
-	public String ODISGUISE_PLAYER_NOT_FOUND = ChatColor.RED + "Can't find player: %player%";
-	@LastUpdated(60001)
-	public String ODISGUISE_NOTIFICATION = ChatColor.GOLD + "You were disguised by %sender%.";
-	@LastUpdated(60001)
-	public String UNDISGUISE_NOTIFICATION = ChatColor.GOLD + "You were undisguised by %sender%.";
+	@LastUpdated(60106)
+	public String CURRENTLY_DISGUISED_AS_PLAYER = c("%prefix%&7You are disguised as &e%targetSkin%&7.");
+	@LastUpdated(60106)
+	public String ODISGUISE_CURRENTLY_DISGUISED_AS_PLAYER = c("%prefix%&e%player% &7is disguised as &e%targetSkin%&7.");
+	@LastUpdated(60106)
+	public String CURRENTLY_DISGUISED_AS_ENTITY = c("%prefix%&7You are disguised as &e%entityType%&7.");
+	@LastUpdated(60106)
+	public String ODISGUISE_CURRENTLY_DISGUISED_AS_ENTITY = c("%prefix%&e%player% &7is disguised as &e%entityType%&7.");
+	@LastUpdated(60106)
+	public String CURRENTLY_NOT_DISGUISED = c("%prefix%&7You are not disguised.");
+	@LastUpdated(60106)
+	public String ODISGUISE_CURRENTLY_NOT_DISGUISED = c("%prefix%&e%player% &7is not disguised.");
+	@LastUpdated(60106)
+	public String DISGUISE_TYPE_NOT_SUPPORTED = c("%prefix%&cThis disguise isn't available.");
+	@LastUpdated(60106)
+	public String DISGUISE_TYPE_NOT_FOUND = c("%prefix%&cDisguise type not found: &e%entityType%");
+	@LastUpdated(60106)
+	public String DISGUISE_NO_PERMISSION = c("%prefix%&cYou don't have permission.");
+	@LastUpdated(60106)
+	public String DISGUISE_EVENT_CANCELLED = c("%prefix%&cAnother plugin prevents you from disguising.");
+	@LastUpdated(60106)
+	public String ODISGUISE_EVENT_CANCELLED = c("%prefix%&cAnother plugin prevents &e%player% &cfrom disguising.");
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_ACCOUNT_NAME_MISSING = c("%prefix%&cPlease give a name: &e/disguise <name>");
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_ACCOUNT_NAME_INVALID = c("%prefix%&cThat isn't a valid Minecraft name.");
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_ACCOUNT_NAME_BLACKLISTED = c("%prefix%&cThat name can't be used.");
+	@LastUpdated(60106)
+	public String DISGUISED_SUCCESSFULLY = c("%prefix%&7You are now disguised.");
+	@LastUpdated(60106)
+	public String DISGUISE_ERROR = c("%prefix%&cSomething went wrong with the disguise.");
+	@LastUpdated(60106)
+	public String DISGUISE_STATEMENT_ERROR = c("%prefix%&cSomething went wrong with &e%statement%&c.");
+	@LastUpdated(60106)
+	public String DISGUISE_STATEMENT_FORBIDDEN = c("%prefix%&cThis option isn't allowed: &e%statement%");
+	@LastUpdated(60106)
+	public String DISGUISE_STATEMENT_UNKNOWN = c("%prefix%&cUnknown option: &e%statement%");
+	@LastUpdated(60106)
+	public String UNDISGUISED_SUCCESSFULLY = c("%prefix%&7You are no longer disguised.");
+	@LastUpdated(60106)
+	public String UNDISGUISE_NOT_DISGUISED = c("%prefix%&cYou are not disguised.");
+	@LastUpdated(60106)
+	public String UNDISGUISE_OTHER_NOT_DISGUISED = c("%prefix%&e%player% &cis not disguised.");
+	@LastUpdated(60106)
+	public String UNDISGUISE_EVENT_CANCELLED = c("%prefix%&cAnother plugin prevents you from undisguising.");
+	@LastUpdated(60106)
+	public String UNDISGUISE_OTHER_EVENT_CANCELLED = c("%prefix%&cAnother plugin prevents &e%player% &cfrom undisguising.");
+	@LastUpdated(60106)
+	public String ODISGUISE_NO_PLAYERNAME_GIVEN = c("%prefix%&cPlease give the name of an online player.");
+	@LastUpdated(60106)
+	public String ODISGUISE_PLAYER_NOT_FOUND = c("%prefix%&cPlayer not found: &e%player%");
+	@LastUpdated(60106)
+	public String ODISGUISE_NOTIFICATION = c("%prefix%&7You were disguised by &e%sender%&7.");
+	@LastUpdated(60106)
+	public String UNDISGUISE_NOTIFICATION = c("%prefix%&7You were undisguised by &e%sender%&7.");
 
 	@LastUpdated(60100)
 	public String HELP_PAGE_TITLE = ChatColor.DARK_GREEN + "===== " + ChatColor.BOLD + "%title%" + ChatColor.RESET + ChatColor.DARK_GREEN + " Help Page %number% =====";
@@ -135,15 +135,24 @@ public class Language {
 	public String UPDATE_DOWNLOAD_FAILED = ChatColor.RED + "[iDisguise] Download failed.";
 	@LastUpdated(60001)
 	public String UPDATE_OPTION = ChatColor.GOLD + "[iDisguise] You can enable automatic updates in the config file.";
-	public String MOB_SOUND_PLAYED = ChatColor.GOLD + "♪ Played %entityType% sound";
-	public String DISGUISE_ON_COOLDOWN = ChatColor.RED + "Please wait %seconds%s before disguising again.";
-	public String ENDERPEARL_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't throw ender pearls while disguised.";
-	public String BLOCK_PLACE_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't place blocks while disguised.";
-	public String BLOCK_BREAK_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't break blocks while disguised.";
-	public String DISGUISE_BLOCKED_IN_REGION = ChatColor.RED + "You can't disguise in this area.";
-	public String ODISGUISE_BLOCKED_IN_REGION = ChatColor.RED + "%player% is in an area where disguises aren't allowed.";
-	public String DISGUISE_REVEAL = ChatColor.GRAY + "This " + ChatColor.GOLD + "%entityType%" + ChatColor.GRAY + " is " + ChatColor.GOLD + "%player%" + ChatColor.GRAY + ".";
-	public String UNDISGUISED_IN_BLOCKED_REGION = ChatColor.RED + "You were undisguised because disguises aren't allowed in this area.";
+	@LastUpdated(60106)
+	public String MOB_SOUND_PLAYED = c("%prefix%&7Played the &e%entityType% &7sound.");
+	@LastUpdated(60106)
+	public String DISGUISE_ON_COOLDOWN = c("%prefix%&cPlease wait &e%seconds%s &cbefore disguising again.");
+	@LastUpdated(60106)
+	public String ENDERPEARL_BLOCKED_WHILE_DISGUISED = c("%prefix%&cYou can't throw ender pearls while disguised.");
+	@LastUpdated(60106)
+	public String BLOCK_PLACE_BLOCKED_WHILE_DISGUISED = c("%prefix%&cYou can't place blocks while disguised.");
+	@LastUpdated(60106)
+	public String BLOCK_BREAK_BLOCKED_WHILE_DISGUISED = c("%prefix%&cYou can't break blocks while disguised.");
+	@LastUpdated(60106)
+	public String DISGUISE_BLOCKED_IN_REGION = c("%prefix%&cYou can't disguise in this area.");
+	@LastUpdated(60106)
+	public String ODISGUISE_BLOCKED_IN_REGION = c("%prefix%&e%player% &cis in an area where disguises aren't allowed.");
+	@LastUpdated(60106)
+	public String DISGUISE_REVEAL = c("%prefix%&7This &e%entityType% &7is &e%player%&7.");
+	@LastUpdated(60106)
+	public String UNDISGUISED_IN_BLOCKED_REGION = c("%prefix%&cYou were undisguised because disguises aren't allowed in this area.");
 
 	@LastUpdated(60100)
 	public String TITLE_PLAYERS = "Disguises";
@@ -165,21 +174,21 @@ public class Language {
 	public String LIST_PLAYER_TYPE = ChatColor.LIGHT_PURPLE.toString() + ChatColor.BOLD + "PLAYER";
 	@LastUpdated(60100)
 	public String LIST_LEGEND = ChatColor.WHITE + "white = available, " + ChatColor.GRAY + ChatColor.STRIKETHROUGH + "grey" + ChatColor.RESET + ChatColor.WHITE + " = no permission.";
-	@LastUpdated(60100)
-	public String PLAYER_DISGUISED = ChatColor.GOLD + "You are now disguised as " + ChatColor.YELLOW + "%name%" + ChatColor.GOLD + " (rank: " + ChatColor.YELLOW + "%rank%" + ChatColor.GOLD + ").";
-	@LastUpdated(60102)
-	public String PLAYER_DISGUISE_RANK_UNKNOWN = ChatColor.RED + "Unknown rank: " + ChatColor.WHITE + "%rank%" + ChatColor.RED + ". Ranks you can use: " + ChatColor.WHITE + "%ranks%";
-	@LastUpdated(60102)
-	public String PLAYER_DISGUISE_RANK_NO_PERMISSION = ChatColor.RED + "You can't use the rank " + ChatColor.WHITE + "%rank%" + ChatColor.RED + ".";
-	@LastUpdated(60102)
-	public String PLAYER_DISGUISE_NAME_ONLINE = ChatColor.WHITE + "%name%" + ChatColor.RED + " is online, you can't disguise as them.";
-	@LastUpdated(60102)
-	public String PLAYER_DISGUISE_NAME_PLAYED_BEFORE = ChatColor.WHITE + "%name%" + ChatColor.RED + " has played on this server, you can't disguise as them.";
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISED = c("%prefix%&7You are now disguised as &e%name% &7(rank: &e%rank%&7).");
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_RANK_UNKNOWN = c("%prefix%&cUnknown rank: &e%rank%&c. Ranks you can use: &e%ranks%");
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_RANK_NO_PERMISSION = c("%prefix%&cYou can't use the rank &e%rank%&c.");
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_NAME_ONLINE = c("%prefix%&e%name% &cis online, you can't disguise as them.");
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_NAME_PLAYED_BEFORE = c("%prefix%&e%name% &chas played on this server, you can't disguise as them.");
 	@LastUpdated(60100)
 	public String HELP_DISGUISE_RANDOM = ChatColor.GOLD.toString() + ChatColor.BOLD + "Random player disguise: " + ChatColor.ITALIC + "/disguise random\\\\"
 	                                   + ChatColor.GOLD + "A real player's name and skin with a random rank.";
-	@LastUpdated(60100)
-	public String RANDOM_NOT_READY = ChatColor.RED + "No random names are ready yet. Try again in a few seconds.";
+	@LastUpdated(60106)
+	public String RANDOM_NOT_READY = c("%prefix%&cNo random names are ready yet. Try again in a few seconds.");
 	@LastUpdated(60100)
 	public String RANK_MENU_TITLE = ChatColor.DARK_GRAY + "Rank for " + ChatColor.GOLD + "%name%";
 	@LastUpdated(60101)
@@ -233,26 +242,26 @@ public class Language {
 	public String HELP_CMD_WHOIS = "Who is or was behind a disguise name";
 	@LastUpdated(60101)
 	public String HELP_CMD_HISTORY = "Every disguise a player has used";
-	@LastUpdated(60101)
-	public String PLAYER_DISGUISE_NAME_UNAVAILABLE = ChatColor.RED + "You can't use that name right now.";
-	@LastUpdated(60101)
-	public String UNDISGUISED_NO_ACCESS = ChatColor.RED + "Your player disguise was removed because you no longer have access to it.";
-	@LastUpdated(60101)
-	public String REVEAL_PLAYERS_ON = ChatColor.GREEN + "You now see disguised players as who they really are (only on your screen).";
-	@LastUpdated(60101)
-	public String REVEAL_PLAYERS_OFF = ChatColor.GOLD + "You see player disguises again.";
-	@LastUpdated(60101)
-	public String REVEAL_MOBS_ON = ChatColor.GREEN + "You now see the real player's name above every disguise mob (only on your screen).";
-	@LastUpdated(60101)
-	public String REVEAL_MOBS_OFF = ChatColor.GOLD + "Disguise mobs no longer show the real player's name.";
-	@LastUpdated(60101)
-	public String REVEAL_USAGE = ChatColor.RED + "Use /disguise reveal players or /disguise reveal mobs";
-	@LastUpdated(60101)
-	public String WHOIS_USAGE = ChatColor.RED + "Use /disguise whois <name>";
-	@LastUpdated(60101)
-	public String HISTORY_USAGE = ChatColor.RED + "Use /disguise history <player>";
-	@LastUpdated(60101)
-	public String WHOIS_HEADER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguise name " + ChatColor.YELLOW + "%name%" + ChatColor.GOLD + ":";
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_NAME_UNAVAILABLE = c("%prefix%&cYou can't use that name right now.");
+	@LastUpdated(60106)
+	public String UNDISGUISED_NO_ACCESS = c("%prefix%&cYour player disguise was removed because you no longer have access to it.");
+	@LastUpdated(60106)
+	public String REVEAL_PLAYERS_ON = c("%prefix%&aYou now see disguised players as who they really are &7(only on your screen)&a.");
+	@LastUpdated(60106)
+	public String REVEAL_PLAYERS_OFF = c("%prefix%&7You see player disguises again.");
+	@LastUpdated(60106)
+	public String REVEAL_MOBS_ON = c("%prefix%&aYou now see the real player's name above every disguise mob &7(only on your screen)&a.");
+	@LastUpdated(60106)
+	public String REVEAL_MOBS_OFF = c("%prefix%&7Disguise mobs no longer show the real player's name.");
+	@LastUpdated(60106)
+	public String REVEAL_USAGE = c("%prefix%&cUse &e/disguise reveal players &cor &e/disguise reveal mobs");
+	@LastUpdated(60106)
+	public String WHOIS_USAGE = c("%prefix%&cUse &e/disguise whois <name>");
+	@LastUpdated(60106)
+	public String HISTORY_USAGE = c("%prefix%&cUse &e/disguise history <player>");
+	@LastUpdated(60106)
+	public String WHOIS_HEADER = c("%prefix%&7Disguise name &e%name%&7:");
 	@LastUpdated(60101)
 	public String WHOIS_NOW = ChatColor.GRAY + " Now: " + ChatColor.WHITE + "%player% " + ChatColor.GRAY + "(%state%)";
 	@LastUpdated(60101)
@@ -261,8 +270,8 @@ public class Language {
 	public String WHOIS_OFFLINE = "offline, still disguised";
 	@LastUpdated(60101)
 	public String WHOIS_NONE = ChatColor.GRAY + " Nobody has used this name.";
-	@LastUpdated(60101)
-	public String HISTORY_HEADER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguises of " + ChatColor.YELLOW + "%player%" + ChatColor.GOLD + ":";
+	@LastUpdated(60106)
+	public String HISTORY_HEADER = c("%prefix%&7Disguises of &e%player%&7:");
 	@LastUpdated(60101)
 	public String HISTORY_NONE = ChatColor.GRAY + " No disguises found.";
 	@LastUpdated(60101)
@@ -272,16 +281,39 @@ public class Language {
 	public String LOG_STILL_ON = "still on";
 	@LastUpdated(60100)
 	public String HELP_CLICK = ChatColor.GRAY + "Click to type this command";
-	@LastUpdated(60102)
-	public String PLAYER_DISGUISE_RANK_OWNER_ONLINE = ChatColor.WHITE + "%name%" + ChatColor.RED + " is online, so you can only use their real rank: " + ChatColor.WHITE + "/disguise %name%";
-	@LastUpdated(60102)
-	public String PLAYER_DISGUISE_NAME_TAKEN = ChatColor.RED + "Someone is already disguised as " + ChatColor.WHITE + "%name%" + ChatColor.RED + ".";
-	@LastUpdated(60102)
-	public String UNDISGUISED_REAL_PLAYER_JOINED = ChatColor.RED + "You were undisguised because " + ChatColor.WHITE + "%name%" + ChatColor.RED + " joined the server.";
-	@LastUpdated(60100)
-	public String UNDISGUISED_IN_COMBAT = ChatColor.RED + "You were undisguised because you entered combat.";
-	@LastUpdated(60105)
-	public String COMMAND_BLOCKED_WHILE_DISGUISED = ChatColor.RED + "You can't use " + ChatColor.WHITE + "%command%" + ChatColor.RED + " while disguised as a player.";
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_RANK_OWNER_ONLINE = c("%prefix%&e%name% &cis online, so you can only use their real rank: &e/disguise %name%");
+	@LastUpdated(60106)
+	public String PLAYER_DISGUISE_NAME_TAKEN = c("%prefix%&cSomeone is already disguised as &e%name%&c.");
+	@LastUpdated(60106)
+	public String UNDISGUISED_REAL_PLAYER_JOINED = c("%prefix%&cYou were undisguised because &e%name% &cjoined the server.");
+	@LastUpdated(60106)
+	public String UNDISGUISED_IN_COMBAT = c("%prefix%&cYou were undisguised because you entered combat.");
+	@LastUpdated(60106)
+	public String COMMAND_BLOCKED_WHILE_DISGUISED = c("%prefix%&cYou can't use &e%command% &cwhile disguised as a player.");
+
+	/** Put in front of chat messages as %prefix%. */
+	@LastUpdated(60106)
+	public String PREFIX = c("&6&lDisguises &8\u00bb ");
+
+	private static String c(String text) {
+		return ChatColor.translateAlternateColorCodes('&', text);
+	}
+
+	/** Fills in %prefix% (after saveData, so language.yml keeps the placeholder). */
+	public void applyPrefix() {
+		try {
+			for(Field field : getClass().getDeclaredFields()) {
+				if(field.getType().equals(String.class) && !java.lang.reflect.Modifier.isStatic(field.getModifiers())
+						&& !field.getName().equals("PREFIX")) {
+					String value = (String)field.get(this);
+					if(value != null && value.contains("%prefix%")) field.set(this, value.replace("%prefix%", PREFIX));
+				}
+			}
+		} catch(IllegalAccessException e) {
+			plugin.getLogger().log(Level.WARNING, "Could not apply the message prefix", e);
+		}
+	}
 
 	private iDisguise plugin;
 	
