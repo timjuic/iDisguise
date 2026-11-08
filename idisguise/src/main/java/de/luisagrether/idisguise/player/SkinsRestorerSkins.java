@@ -16,7 +16,8 @@ final class SkinsRestorerSkins {
 	static String[] find(UUID uuid, String name) throws Exception {
 		Class<?> provider = Class.forName("net.skinsrestorer.api.SkinsRestorerProvider");
 		Object api = provider.getMethod("get").invoke(null);
-		Object storage = api.getClass().getMethod("getPlayerStorage").invoke(api);
+		// Methods are looked up on the API interfaces: the implementation classes aren't public.
+		Object storage = Class.forName("net.skinsrestorer.api.SkinsRestorer").getMethod("getPlayerStorage").invoke(api);
 		Method getSkin = Class.forName("net.skinsrestorer.api.storage.PlayerStorage").getMethod("getSkinForPlayer", UUID.class, String.class);
 		Optional<?> property = (Optional<?>)getSkin.invoke(storage, uuid, name);
 		if(property == null || !property.isPresent()) return null;

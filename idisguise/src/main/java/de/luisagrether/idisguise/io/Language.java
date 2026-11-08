@@ -176,6 +176,8 @@ public class Language {
 	@LastUpdated(60100)
 	public String PLAYER_DISGUISE_NAME_PLAYED_BEFORE = ChatColor.RED + "%name% has played on this server, you can't disguise as them.";
 	@LastUpdated(60100)
+	public String PLAYER_DISGUISE_RANK_OWNER_ONLINE = ChatColor.RED + "%name% is online, so you can only use their real rank: /disguise %name%";
+	@LastUpdated(60100)
 	public String PLAYER_DISGUISE_NAME_TAKEN = ChatColor.RED + "Someone is already disguised as %name%.";
 	@LastUpdated(60100)
 	public String UNDISGUISED_REAL_PLAYER_JOINED = ChatColor.RED + "You were undisguised because %name% joined the server.";

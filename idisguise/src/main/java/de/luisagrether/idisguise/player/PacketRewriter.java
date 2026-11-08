@@ -22,6 +22,7 @@ import com.comphenix.protocol.wrappers.PlayerInfoData;
 import com.comphenix.protocol.wrappers.WrappedChatComponent;
 import com.comphenix.protocol.wrappers.WrappedGameProfile;
 import com.comphenix.protocol.wrappers.WrappedSignedProperty;
+import com.google.common.collect.Multimap;
 
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.chat.ComponentSerializer;
@@ -83,7 +84,7 @@ final class PacketRewriter extends PacketAdapter {
 				checkSpawn(event);
 			}
 		} catch(RuntimeException e) {
-			manager.debug("Packet rewrite failed for " + event.getPacketType(), e);
+			manager.packetError(event.getPacketType().name(), e);
 		}
 	}
 
@@ -108,7 +109,10 @@ final class PacketRewriter extends PacketAdapter {
 			changed = true;
 			boolean self = viewer.equals(disguise.getUniqueId());
 			if(action == PlayerInfoAction.ADD_PLAYER) {
-				result.add(new PlayerInfoData(fakeProfile(disguise), entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
+				WrappedGameProfile fake = fakeProfile(disguise);
+				manager.debugOnce(disguise, "Sending " + disguise.getRealName() + " as " + disguise.getFakeName() + " to " + event.getPlayer().getName()
+						+ (fake.getProperties().containsKey("textures") ? " with the disguise skin" : " WITHOUT a skin (none was found)"));
+				result.add(new PlayerInfoData(fake, entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
 				disguise.getRemovedFor().remove(viewer);
 				if(disguise.isHiddenFromTab() && !self) {
 					manager.scheduleTabRemoval(disguise, event.getPlayer());
@@ -135,7 +139,18 @@ final class PacketRewriter extends PacketAdapter {
 	static WrappedGameProfile fakeProfile(PlayerDisguise disguise) {
 		WrappedGameProfile profile = new WrappedGameProfile(disguise.getUniqueId(), disguise.getFakeName());
 		if(disguise.hasSkin()) {
-			profile.getProperties().put("textures", new WrappedSignedProperty("textures", disguise.getSkinValue(), disguise.getSkinSignature()));
+			// Straight into the server's own profile object (not through ProtocolLib's converted view),
+			// so the skin is part of the profile the client receives.
+			Object property = WrappedSignedProperty.fromValues("textures", disguise.getSkinValue(), disguise.getSkinSignature()).getHandle();
+			try {
+				Object handle = profile.getHandle();
+				@SuppressWarnings("unchecked")
+				Multimap<String, Object> properties = (Multimap<String, Object>)handle.getClass().getMethod("getProperties").invoke(handle);
+				properties.removeAll("textures");
+				properties.put("textures", property);
+			} catch(ReflectiveOperationException e) {
+				profile.getProperties().put("textures", WrappedSignedProperty.fromHandle(property));
+			}
 		}
 		return profile;
 	}
@@ -152,7 +167,12 @@ final class PacketRewriter extends PacketAdapter {
 		@SuppressWarnings("rawtypes")
 		Collection names = packet.getSpecificModifier(Collection.class).readSafely(0);
 		if(names == null || names.isEmpty()) return;
-		Collection<PlayerDisguise> disguises = manager.allOnline();
+		// Never for a name whose real player is online: the 1.8 client picks the nametag by name,
+		// so moving that name would change the real player's nametag too.
+		List<PlayerDisguise> disguises = new ArrayList<>();
+		for(PlayerDisguise disguise : manager.allOnline()) {
+			if(!disguise.isHiddenFromTab()) disguises.add(disguise);
+		}
 		if(disguises.isEmpty()) return;
 		List<String> result = new ArrayList<>(names.size());
 		boolean changed = false;

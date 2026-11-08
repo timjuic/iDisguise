@@ -192,6 +192,31 @@ public final class PlayerDisguiseManager implements Listener {
 		if(plugin.debugMode()) plugin.getLogger().log(Level.WARNING, message, error);
 	}
 
+	private void debug(String message) {
+		if(plugin.debugMode()) plugin.getLogger().info("[player disguise] " + message);
+	}
+
+	private final Set<PlayerDisguise> debuggedSends = Collections.newSetFromMap(new java.util.WeakHashMap<>());
+	private final Set<String> reportedPacketErrors = ConcurrentHashMap.newKeySet();
+
+	/** One debug line per disguise (the first time it is sent to someone). */
+	void debugOnce(PlayerDisguise disguise, String message) {
+		if(!plugin.debugMode()) return;
+		synchronized(debuggedSends) {
+			if(!debuggedSends.add(disguise)) return;
+		}
+		debug(message);
+	}
+
+	/** A packet couldn't be rewritten: always told once per packet type, details with debug-mode. */
+	void packetError(String packet, RuntimeException error) {
+		if(reportedPacketErrors.add(packet)) {
+			plugin.getLogger().warning("Player disguise: could not change a " + packet + " packet (" + error
+					+ "). Turn on debug-mode in config.yml for details.");
+		}
+		debug("Packet rewrite failed for " + packet, error);
+	}
+
 	private Language language() {
 		return plugin.getLanguage();
 	}
@@ -265,6 +290,12 @@ public final class PlayerDisguiseManager implements Listener {
 			finish(done, false);
 			return;
 		}
+		// Both would carry the same name, and 1.8 clients pick the nametag rank by name: only the real rank works.
+		if(owner != null && owner != target && rankInput != null) {
+			send(sender, language.PLAYER_DISGUISE_RANK_OWNER_ONLINE.replace("%name%", owner.getName()));
+			finish(done, false);
+			return;
+		}
 		// Without LuckPerms, check the server's own player list (on this thread: it isn't thread-safe).
 		boolean joinedWithoutLuckPerms = luckPerms == null && !anyName && hasPlayedBefore(name, target);
 
@@ -292,6 +323,7 @@ public final class PlayerDisguiseManager implements Listener {
 				return;
 			}
 			SkinResolver.Skin skin = skins.resolve(name, knownUuid, settings.randomSkins);
+			debug("Skin for " + name + ": " + skin.source);
 			String finalRank = rank;
 			Bukkit.getScheduler().runTask(plugin, () -> apply(sender, target, name, finalRank, skin, done));
 		});
@@ -350,7 +382,10 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		markOnline(target, disguise);
 		Player owner = Bukkit.getPlayerExact(name);
-		disguise.setHiddenFromTab(owner != null && owner != target);
+		if(owner != null && owner != target) {
+			disguise.setHiddenFromTab(true);
+			disguise.setOwnerRank(realRankOf(owner));
+		}
 		disguises.put(target.getUniqueId(), disguise);
 		rebuildSnapshots();
 		save();
@@ -358,7 +393,7 @@ public final class PlayerDisguiseManager implements Listener {
 		applyLook(target, disguise);
 		refresh(target);
 
-		String shownRank = rank != null ? rank : settings.defaultRank;
+		String shownRank = effectiveRank(disguise);
 		send(sender, language.PLAYER_DISGUISED.replace("%name%", name).replace("%rank%", shownRank == null ? "-" : shownRank));
 		finish(done, true);
 	}
@@ -398,8 +433,15 @@ public final class PlayerDisguiseManager implements Listener {
 		replacing = Collections.unmodifiableList(newReplacing);
 	}
 
-	private String rankOrDefault(PlayerDisguise disguise) {
+	/** The rank others see: the real player's rank while they are online, else the chosen or default rank. */
+	private String effectiveRank(PlayerDisguise disguise) {
+		if(disguise.isHiddenFromTab() && disguise.getOwnerRank() != null) return disguise.getOwnerRank();
 		return disguise.getRank() != null ? disguise.getRank() : settings.defaultRank;
+	}
+
+	private String realRankOf(Player player) {
+		String group = luckPerms != null ? luckPerms.primaryGroup(player) : null;
+		return group != null ? group.toLowerCase(Locale.ENGLISH) : settings.defaultRank;
 	}
 
 	/** Display name (EssentialsX chat) and TAB rank. */
@@ -408,13 +450,20 @@ public final class PlayerDisguiseManager implements Listener {
 			disguise.setPreviousDisplayName(player.getDisplayName());
 		}
 		player.setDisplayName(disguise.getFakeName());
-		if(tab != null) tab.apply(player, rankOrDefault(disguise), disguise.getFakeName());
+		String rank = effectiveRank(disguise);
+		if(tab != null) tab.apply(player, rank, disguise.getFakeName());
+		PlayerDisguiseSettings.Profile profile = disguise.getProfile();
+		if(luckPerms != null && profile != null && profile.fakeRankInChat) {
+			String prefix = rank == null ? null : luckPerms.groupPrefix(rank);
+			luckPerms.setFakePrefix(player, prefix == null ? "" : prefix);
+		}
 	}
 
 	private void resetLook(Player player, PlayerDisguise disguise) {
 		String previous = disguise.getPreviousDisplayName();
 		player.setDisplayName(previous != null ? previous : player.getName());
 		if(tab != null) tab.apply(player, null, null);
+		if(luckPerms != null) luckPerms.setFakePrefix(player, null);
 	}
 
 	/**
@@ -472,10 +521,17 @@ public final class PlayerDisguiseManager implements Listener {
 	/** Shows the staff member in tab again once the real player has left. */
 	private void unhide(PlayerDisguise disguise) {
 		disguise.setHiddenFromTab(false);
+		disguise.setOwnerRank(null);
 		Player player = Bukkit.getPlayer(disguise.getUniqueId());
 		Set<UUID> viewers = new HashSet<>(disguise.getRemovedFor());
 		disguise.getRemovedFor().clear();
 		if(player == null) return;
+		// Back to the chosen rank, and back into the nametag team under the fake name: reset the TAB
+		// group first so TAB sends the team again (the real player's team left with them).
+		if(tab != null) tab.apply(player, null, disguise.getFakeName());
+		Bukkit.getScheduler().runTaskLater(plugin, () -> {
+			if(player.isOnline() && disguises.get(player.getUniqueId()) == disguise) applyLook(player, disguise);
+		}, 2L);
 		for(UUID uuid : viewers) {
 			Player viewer = Bukkit.getPlayer(uuid);
 			if(viewer == null || !viewer.canSee(player)) continue;
@@ -484,8 +540,10 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 	}
 
-	private void hide(PlayerDisguise disguise, Player player) {
+	private void hide(PlayerDisguise disguise, Player player, Player owner) {
 		disguise.setHiddenFromTab(true);
+		disguise.setOwnerRank(realRankOf(owner));
+		applyLook(player, disguise);
 		for(Player viewer : Bukkit.getOnlinePlayers()) {
 			if(viewer == player) continue;
 			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,
@@ -550,7 +608,7 @@ public final class PlayerDisguiseManager implements Listener {
 			Player disguised = Bukkit.getPlayer(disguise.getUniqueId());
 			if(disguised == null) continue;
 			if(disguise.isStaff()) {
-				hide(disguise, disguised);
+				hide(disguise, disguised, joined);
 			} else {
 				Bukkit.getScheduler().runTask(plugin, () -> {
 					if(undisguise(disguised)) {
@@ -568,6 +626,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(owner != null && owner != joined) {
 			if(disguise.isStaff()) {
 				disguise.setHiddenFromTab(true);
+				disguise.setOwnerRank(realRankOf(owner));
 			} else {
 				disguises.remove(joined.getUniqueId());
 				save();
@@ -614,20 +673,20 @@ public final class PlayerDisguiseManager implements Listener {
 			player.setDisplayName(disguise.getFakeName());
 		}
 		String format = event.getFormat();
-		if(profile.fakeRankInChat && luckPerms != null) {
-			String fakeGroup = rankOrDefault(disguise);
-			String realPrefix = color(luckPerms.prefix(player));
-			String fakePrefix = color(luckPerms.groupPrefix(fakeGroup));
-			if(!realPrefix.isEmpty()) {
-				int index = format.indexOf(realPrefix);
-				if(index >= 0) format = format.substring(0, index) + fakePrefix + format.substring(index + realPrefix.length());
-			}
-			String fakeColor = chatColors.forGroup(fakeGroup);
+		String before = format;
+		if(profile.fakeRankInChat) {
+			// The prefix comes from the temporary LuckPerms prefix (see applyLook). The message colour
+			// of the fake rank also goes in front of the message, so it wins whatever EssentialsX
+			// put before it.
+			String fakeColor = chatColors.forGroup(effectiveRank(disguise));
 			int message = format.indexOf("%2$s");
 			if(fakeColor != null && message >= 0) {
 				int start = message;
 				while(start >= 2 && format.charAt(start - 2) == ChatColor.COLOR_CHAR) start -= 2;
 				format = format.substring(0, start) + fakeColor + format.substring(message);
+			}
+			if(fakeColor != null && !fakeColor.isEmpty()) {
+				event.setMessage(fakeColor + event.getMessage());
 			}
 		}
 		if(profile.hideChatTag && placeholderApi) {
@@ -642,6 +701,7 @@ public final class PlayerDisguiseManager implements Listener {
 		} catch(RuntimeException e) {
 			debug("Could not change the chat format", e);
 		}
+		debug("Chat format of " + player.getName() + ": " + before.replace(ChatColor.COLOR_CHAR, '&') + "  ->  " + format.replace(ChatColor.COLOR_CHAR, '&'));
 	}
 
 	private static String color(String text) {

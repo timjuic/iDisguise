@@ -33,6 +33,9 @@ public final class PlayerDisguise {
 	// Set while the player is online: staff or player settings from player-disguise.yml.
 	private volatile PlayerDisguiseSettings.Profile profile;
 	private volatile boolean staff;
+	// Real rank of the player whose name this is, while that player is online (then both must
+	// look the same: 1.8 clients pick the nametag rank by name).
+	private volatile String ownerRank;
 
 	public PlayerDisguise(UUID uuid, String realName, String fakeName, String rank, String skinValue, String skinSignature) {
 		this.uuid = uuid;
@@ -67,6 +70,9 @@ public final class PlayerDisguise {
 		this.profile = profile;
 		this.staff = staff;
 	}
+	String getOwnerRank() { return ownerRank; }
+	void setOwnerRank(String ownerRank) { this.ownerRank = ownerRank; }
+
 	void setOffline() {
 		this.profile = null;
 		this.hiddenFromTab = false;

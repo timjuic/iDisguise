@@ -32,6 +32,8 @@ final class SkinResolver {
 	static final class Skin {
 		final String value;
 		final String signature;
+		// Where the skin came from, for the debug line in the console.
+		String source = "none";
 
 		Skin(String value, String signature) {
 			this.value = value;
@@ -52,27 +54,45 @@ final class SkinResolver {
 
 	/** knownUuid: the player's UUID when they have played here before, else null. Never returns null. */
 	Skin resolve(String name, UUID knownUuid, List<String> randomSkins) {
-		Skin skin = ofName(name, knownUuid);
+		StringBuilder notes = new StringBuilder();
+		Skin skin = ofName(name, knownUuid, notes);
 		if(skin != null) return skin;
 		List<String> shuffled = new ArrayList<>(randomSkins);
 		Collections.shuffle(shuffled);
 		for(String randomName : shuffled) {
-			skin = ofName(randomName, null);
-			if(skin != null) return skin;
+			skin = ofName(randomName, null, notes);
+			if(skin != null) {
+				Skin random = new Skin(skin.value, skin.signature);
+				random.source = "random skin " + randomName + " (" + skin.source + ")";
+				return random;
+			}
 		}
-		return NONE;
+		Skin none = new Skin(null, null);
+		none.source = "none found" + notes;
+		return none;
 	}
 
-	private Skin ofName(String name, UUID knownUuid) {
+	private Skin ofName(String name, UUID knownUuid, StringBuilder notes) {
 		if(skinsRestorer) {
 			try {
 				Skin skin = fromSkinsRestorer(name, knownUuid);
-				if(skin != null) return skin;
+				if(skin != null) {
+					skin.source = "SkinsRestorer";
+					return skin;
+				}
 			} catch(Throwable t) {
+				Throwable cause = t.getCause() != null ? t.getCause() : t;
+				notes.append("; SkinsRestorer failed for ").append(name).append(": ").append(cause);
 				logger.log(Level.FINE, "SkinsRestorer lookup failed for " + name, t);
 			}
 		}
-		return fromMojang(name);
+		Skin skin = fromMojang(name);
+		if(skin != null) {
+			Skin mojang = new Skin(skin.value, skin.signature);
+			mojang.source = "Mojang";
+			return mojang;
+		}
+		return null;
 	}
 
 	private Skin fromSkinsRestorer(String name, UUID knownUuid) throws Exception {
