@@ -114,7 +114,7 @@ final class TabHook {
 	 * Makes TAB remove and re-create the player's nametag team for everyone. After a rank switch TAB
 	 * sometimes left the old team (old rank above the head) on other players' screens.
 	 */
-	private void rebuildNameTag(Player player) {
+	void rebuildNameTag(Player player) {
 		Bukkit.getScheduler().runTaskLater(plugin, () -> {
 			if(!player.isOnline()) return;
 			try {

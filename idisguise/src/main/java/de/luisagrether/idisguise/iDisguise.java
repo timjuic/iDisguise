@@ -780,9 +780,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			} else if(args[0].equalsIgnoreCase("random") && playerDisguises.isAvailable()) {
 				if(!playerDisguises.canUseRandom(sender)) {
 					sender.sendMessage(language.DISGUISE_NO_PERMISSION);
-				} else {
+				} else if(!self || playerDisguises.checkCooldown(target)) {
 					Player finalTarget = target;
 					playerDisguises.disguiseRandom(sender, target, (success) -> {
+						if(success && self) playerDisguises.startCooldown(finalTarget);
 						if(success && !self) {
 							finalTarget.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
 						}
@@ -996,7 +997,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			sender.sendMessage(language.DISGUISE_NO_PERMISSION);
 			return;
 		}
+		if(self && !playerDisguises.checkCooldown(target)) return;
 		playerDisguises.disguiseCommand(sender, target, name, rank, self, (success) -> {
+			if(success && self) playerDisguises.startCooldown(target);
 			if(success && !self) {
 				target.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
 			}

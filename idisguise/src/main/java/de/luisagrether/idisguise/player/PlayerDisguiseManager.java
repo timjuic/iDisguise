@@ -96,6 +96,8 @@ public final class PlayerDisguiseManager implements Listener {
 	private TabLook tabLook;
 	// disguised player -> viewer -> tab line last sent by the keeper
 	private final Map<UUID, Map<UUID, String>> tabLines = new ConcurrentHashMap<>();
+	// player -> when they last put on a player disguise themselves (cooldown)
+	private final Map<UUID, Long> lastDisguised = new ConcurrentHashMap<>();
 	// viewer -> disguised player -> how TAB would show the real player (staff with reveal on)
 	private final Map<UUID, Map<UUID, TabLook.Look>> revealLooks = new ConcurrentHashMap<>();
 	// viewer -> TAB team name -> the disguised player in it, and TAB's last settings for the team
@@ -288,6 +290,25 @@ public final class PlayerDisguiseManager implements Listener {
 		return has(player, PERM_STAFF);
 	}
 
+	/**
+	 * True when the player may put on a player disguise now; otherwise says how long to wait.
+	 * Staff and admins never wait.
+	 */
+	public boolean checkCooldown(Player player) {
+		if(settings == null || settings.cooldownSeconds <= 0 || isStaff(player) || has(player, PERM_ADMIN)) return true;
+		Long last = lastDisguised.get(player.getUniqueId());
+		if(last == null) return true;
+		long left = settings.cooldownSeconds * 1000L - (System.currentTimeMillis() - last);
+		if(left <= 0) return true;
+		send(player, language().DISGUISE_ON_COOLDOWN.replace("%seconds%", String.valueOf((left + 999) / 1000L)));
+		return false;
+	}
+
+	/** The player just put on a player disguise themselves: the cooldown starts. */
+	public void startCooldown(Player player) {
+		lastDisguised.put(player.getUniqueId(), System.currentTimeMillis());
+	}
+
 	/** Fake ranks this sender may use (tab completion). */
 	public List<String> usableRanks(CommandSender sender) {
 		List<String> result = new ArrayList<>();
@@ -412,16 +433,45 @@ public final class PlayerDisguiseManager implements Listener {
 			finish(done, false);
 			return;
 		}
+		pickRandom(sender, target, done, 5);
+	}
+
+	/** Takes a name from the pool and checks again that nobody with it has played here (a pool name can be older than that). */
+	private void pickRandom(CommandSender sender, Player target, Consumer<Boolean> done, int triesLeft) {
 		String name = randomNames.take(candidate -> {
 			if(plugin.isPlayerNameBlacklisted(candidate) || nameProblem(sender, target, candidate) != null) return false;
 			if(Bukkit.getPlayerExact(candidate) != null) return false;
 			return luckPerms != null || !hasPlayedBefore(candidate, target);
 		});
-		if(name == null) {
+		if(name == null || triesLeft <= 0) {
 			send(sender, language().RANDOM_NOT_READY);
 			finish(done, false);
 			return;
 		}
+		if(luckPerms == null) {
+			disguiseRandomAs(sender, target, name, done);
+			return;
+		}
+		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+			boolean known;
+			try {
+				known = luckPerms.lookupUniqueId(name).get(10, TimeUnit.SECONDS) != null;
+			} catch(Exception e) {
+				known = true; // unsure: don't use it
+			}
+			boolean finalKnown = known;
+			Bukkit.getScheduler().runTask(plugin, () -> {
+				if(!target.isOnline()) return;
+				if(finalKnown) {
+					pickRandom(sender, target, done, triesLeft - 1);
+				} else {
+					disguiseRandomAs(sender, target, name, done);
+				}
+			});
+		});
+	}
+
+	private void disguiseRandomAs(CommandSender sender, Player target, String name, Consumer<Boolean> done) {
 		// Every rank the player may use has the same chance, "no rank" counts as one of them.
 		List<String> choices = new ArrayList<>(usableRanks(sender));
 		choices.add(NO_RANK);
@@ -752,6 +802,14 @@ public final class PlayerDisguiseManager implements Listener {
 		player.setDisplayName(previous != null ? previous : player.getName());
 		// Right away, so the refresh after it already carries the real rank.
 		if(tab != null) tab.apply(player, null, null);
+		// Disguised as a player who is online: TAB sometimes drops that player's own nametag team for
+		// others when the disguise ends (their rank above the head was gone). Rebuild it.
+		Player owner = Bukkit.getPlayerExact(disguise.getFakeName());
+		if(tab != null && owner != null && owner != player) {
+			Bukkit.getScheduler().runTaskLater(plugin, () -> {
+				if(owner.isOnline()) tab.rebuildNameTag(owner);
+			}, 20L);
+		}
 	}
 
 	/**
@@ -799,7 +857,14 @@ public final class PlayerDisguiseManager implements Listener {
 			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,
 					new WrappedGameProfile(disguise.getFakeUniqueId(), disguise.getFakeName())));
 			disguise.getRemovedFor().add(viewer.getUniqueId());
-		}, 40L);
+		}, isNear(viewer, disguise) ? 60L : 1L);
+	}
+
+	/** Close enough that the viewer's game shows the player's body (it needs the tab entry for the skin). */
+	private boolean isNear(Player viewer, PlayerDisguise disguise) {
+		Player player = Bukkit.getPlayer(disguise.getUniqueId());
+		if(player == null || player.getWorld() != viewer.getWorld()) return false;
+		return player.getLocation().distanceSquared(viewer.getLocation()) < 80 * 80;
 	}
 
 	void sendTabAdd(Player viewer, PlayerDisguise disguise) {
@@ -1441,6 +1506,9 @@ public final class PlayerDisguiseManager implements Listener {
 		Player sender = event.getPlayer();
 		boolean staff = has(sender, PERM_REVEAL) || has(sender, PERM_ADMIN);
 		boolean changed = false;
+		// Staff: the first player name is the command's target and works as typed (/tp <real name>);
+		// a real name later on (message text) is marked like for everyone else, so it isn't swapped.
+		boolean staffTargetSeen = false;
 		for(int i = 1; i < parts.length; i++) {
 			boolean translated = false;
 			for(PlayerDisguise disguise : online) {
@@ -1453,13 +1521,20 @@ public final class PlayerDisguiseManager implements Listener {
 				translated = true;
 				break;
 			}
-			if(translated || staff) continue;
+			if(translated) {
+				staffTargetSeen = true;
+				continue;
+			}
 			// The real name (or the start of it, which many plugins accept) of a disguised player acts
 			// like an offline player for everyone else: otherwise "/msg <real name>" would reach the
 			// disguised player and tell who they are. An invisible marker INSIDE the name makes the lookup
 			// fail; it is removed from everything players see (NameReplacer.MARKER), and keeps the name swap
 			// from turning the reply ("Dann1e not found") into the fake name.
 			Player match = matchingPlayer(parts[i]);
+			if(staff && match != null && !staffTargetSeen) {
+				staffTargetSeen = true;
+				continue;
+			}
 			if(match != null && match != sender) {
 				PlayerDisguise disguise = disguises.get(match.getUniqueId());
 				if(disguise != null && disguise.getProfile() != null && disguise.getProfile().replaceNameInMessages) {
