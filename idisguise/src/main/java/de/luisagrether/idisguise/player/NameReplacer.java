@@ -21,6 +21,18 @@ final class NameReplacer {
 
 	private NameReplacer() {}
 
+	/**
+	 * Put inside a disguised player's real name when another player types it in a command, so the
+	 * command acts as if that player is offline. Removed again from everything sent to players, so it
+	 * is never seen (some clients would draw it as a box). Zero-width space + word joiner: a pair no
+	 * other plugin uses, so only this marker is ever removed.
+	 */
+	static final String MARKER = "​⁠";
+
+	static String mark(String name) {
+		return name.charAt(0) + MARKER + name.substring(1);
+	}
+
 	static Pattern wordPattern(String name) {
 		return Pattern.compile("(?:(?<=§[0-9a-fk-orA-FK-OR])|(?<![A-Za-z0-9_]))" + Pattern.quote(name) + "(?![A-Za-z0-9_])",
 				Pattern.CASE_INSENSITIVE);
@@ -29,6 +41,7 @@ final class NameReplacer {
 	/** Cheap check before doing any real work. */
 	static boolean mentionsAny(String text, Collection<PlayerDisguise> disguises) {
 		if(text == null || text.isEmpty()) return false;
+		if(text.contains(MARKER)) return true;
 		String lower = text.toLowerCase(Locale.ENGLISH);
 		for(PlayerDisguise disguise : disguises) {
 			if(lower.contains(disguise.getRealName().toLowerCase(Locale.ENGLISH))) return true;
@@ -42,7 +55,8 @@ final class NameReplacer {
 		for(PlayerDisguise disguise : disguises) {
 			result = disguise.getRealNamePattern().matcher(result).replaceAll(Matcher.quoteReplacement(disguise.getFakeName()));
 		}
-		return result;
+		// After the swap: a marked real name was typed by the player, it stays (and looks) as typed.
+		return result.replace(MARKER, "");
 	}
 
 	/**

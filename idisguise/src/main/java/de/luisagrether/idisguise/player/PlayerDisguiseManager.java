@@ -1366,14 +1366,14 @@ public final class PlayerDisguiseManager implements Listener {
 			if(translated || staff) continue;
 			// The real name (or the start of it, which many plugins accept) of a disguised player acts
 			// like an offline player for everyone else: otherwise "/msg <real name>" would reach the
-			// disguised player and tell who they are. A zero-width character INSIDE the name makes the
-			// lookup fail without changing how it looks (a colour code would change the colour), and keeps
-			// the name swap from turning the reply ("Dann1e not found") into the fake name.
+			// disguised player and tell who they are. An invisible marker INSIDE the name makes the lookup
+			// fail; it is removed from everything players see (NameReplacer.MARKER), and keeps the name swap
+			// from turning the reply ("Dann1e not found") into the fake name.
 			Player match = matchingPlayer(parts[i]);
 			if(match != null && match != sender) {
 				PlayerDisguise disguise = disguises.get(match.getUniqueId());
-				if(disguise != null && disguise.getProfile() != null) {
-					parts[i] = parts[i].charAt(0) + "​" + parts[i].substring(1);
+				if(disguise != null && disguise.getProfile() != null && disguise.getProfile().replaceNameInMessages) {
+					parts[i] = NameReplacer.mark(parts[i]);
 					changed = true;
 				}
 			}
