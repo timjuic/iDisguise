@@ -170,10 +170,10 @@ public class Language {
 	public String LIST_DISGUISED_STAFF = ChatColor.RED + " [Staff]";
 	@LastUpdated(60100)
 	public String LIST_YOUR_DISGUISES = ChatColor.GOLD.toString() + ChatColor.BOLD + "Your disguises:";
-	@LastUpdated(60100)
-	public String LIST_PLAYER_TYPE = ChatColor.LIGHT_PURPLE.toString() + ChatColor.BOLD + "PLAYER";
-	@LastUpdated(60100)
-	public String LIST_LEGEND = ChatColor.WHITE + "white = available, " + ChatColor.GRAY + ChatColor.STRIKETHROUGH + "grey" + ChatColor.RESET + ChatColor.WHITE + " = no permission.";
+	@LastUpdated(60112)
+	public String LIST_PLAYER_TYPE = c("&a&lPLAYER");
+	@LastUpdated(60112)
+	public String LIST_LEGEND = c("&fwhite &7= available, &c&mred&r &7= no permission.");
 	@LastUpdated(60106)
 	public String PLAYER_DISGUISED = c("%prefix%&7You are now disguised as &e%name% &7(rank: &e%rank%&7).");
 	@LastUpdated(60106)
@@ -218,8 +218,8 @@ public class Language {
 	public String HELP_CMD_PLAYER = "Disguise as a player";
 	@LastUpdated(60100)
 	public String HELP_CMD_RANDOM = "Random player disguise";
-	@LastUpdated(60100)
-	public String HELP_CMD_CHECK = "Show your current disguise";
+	@LastUpdated(60112)
+	public String HELP_CMD_CHECK = "Help and your active disguise";
 	@LastUpdated(60100)
 	public String HELP_CMD_UNDISGUISE = "Remove your disguise";
 	@LastUpdated(60101)
@@ -283,6 +283,15 @@ public class Language {
 	public String UNDISGUISED_IN_COMBAT = c("%prefix%&cYou were undisguised because you entered combat.");
 	@LastUpdated(60106)
 	public String COMMAND_BLOCKED_WHILE_DISGUISED = c("%prefix%&cYou can't use &e%command% &cwhile disguised as a player.");
+
+	@LastUpdated(60112)
+	public String STATUS_ACTIVE = c("&7Active disguise: %disguise%");
+	@LastUpdated(60112)
+	public String STATUS_NONE = c("&c&lNOT DISGUISED");
+	@LastUpdated(60112)
+	public String STATUS_MOB = c("&a&l%type%");
+	@LastUpdated(60112)
+	public String STATUS_PLAYER = c("&a&l%name% &7(%rank%)");
 
 	/** Put in front of chat messages as %prefix%. */
 	@LastUpdated(60106)

@@ -715,17 +715,20 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				}
 			}
 			if(args.length == 0) {
+				// /disguise alone: the help, with the active disguise at the bottom.
+				if(self) {
+					sendHelpPage(sender, 1);
+					sendStatus(target);
+				}
 				if(anyDisguise(target)) {
 					if(currentDisguise(target) == EntityType.PLAYER) {
-						String fakeName = playerDisguises.get(target.getUniqueId()).getFakeName();
-						playerDisguises.sendUnchanged(sender,
-							self ? 
-							language.CURRENTLY_DISGUISED_AS_PLAYER.replace("%targetSkin%", fakeName) :
-							language.ODISGUISE_CURRENTLY_DISGUISED_AS_PLAYER.replace("%player%", target.getName()).replace("%targetSkin%", fakeName)
-						);
+						if(!self) {
+							String fakeName = playerDisguises.get(target.getUniqueId()).getFakeName();
+							playerDisguises.sendUnchanged(sender,
+								language.ODISGUISE_CURRENTLY_DISGUISED_AS_PLAYER.replace("%player%", target.getName()).replace("%targetSkin%", fakeName));
+						}
 					} else {
 						if(self) {
-							sender.sendMessage(language.CURRENTLY_DISGUISED_AS_ENTITY.replace("%entityType%", currentDisguise(target).name()));
 							target.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, 100, 1, true, false));
 							Entity finalEntity = disguiseMap.get(target.getUniqueId());
 							Player finalTarget = target;
@@ -754,11 +757,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						}
 					}
 				} else {
-					sender.sendMessage(
-						self ? 
-						language.CURRENTLY_NOT_DISGUISED :
-						language.ODISGUISE_CURRENTLY_NOT_DISGUISED.replace("%player%", target.getName())
-					);
+					if(!self) sender.sendMessage(language.ODISGUISE_CURRENTLY_NOT_DISGUISED.replace("%player%", target.getName()));
 				}
 			} else if(StringUtil.equalsIgnoreCase(args[0], "help", "?")) {
 				int page = 1;
@@ -1026,7 +1025,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			lines.add(new String[] {"/undisguise", language.HELP_CMD_UNDISGUISE, "/undisguise"});
 		}
 		lines.add(new String[] {"/disguise list", playerDisguises.canListPlayers(sender) ? language.HELP_CMD_LIST : language.HELP_CMD_LIST_OWN, "/disguise list"});
-		if(mobs && !config.STATEMENT_WHITELIST.isEmpty()) lines.add(new String[] {"/disguise <mob> <option>", language.HELP_CMD_ALTER, "/disguise "});
+		if(admin && !config.STATEMENT_WHITELIST.isEmpty()) lines.add(new String[] {"/disguise <mob> <option>", language.HELP_CMD_ALTER, "/disguise "});
 
 		List<String[]> adminLines = new ArrayList<>();
 		if(admin || hasPermissionOthers(sender)) {
@@ -1068,6 +1067,21 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 	}
 
+	/** "Active disguise: NOT DISGUISED / ENDERMITE / Marko (gold)" at the bottom of the help. */
+	private void sendStatus(Player player) {
+		String state;
+		if(disguiseMap.containsKey(player.getUniqueId())) {
+			state = language.STATUS_MOB.replace("%type%", disguiseMap.get(player.getUniqueId()).getType().name());
+		} else if(playerDisguises.isDisguised(player)) {
+			String rank = playerDisguises.shownRank(player);
+			state = language.STATUS_PLAYER.replace("%name%", playerDisguises.get(player.getUniqueId()).getFakeName())
+					.replace("%rank%", rank == null ? "-" : rank);
+		} else {
+			state = language.STATUS_NONE;
+		}
+		player.sendMessage(language.STATUS_ACTIVE.replace("%disguise%", state));
+	}
+
 	/** True when the sender may disguise as at least one mob. */
 	private boolean hasAnyMobPermission(CommandSender sender) {
 		for(EntityType type : EntityType.values()) {
@@ -1091,22 +1105,21 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 
 		StringBuilder line = new StringBuilder();
 		boolean first = true;
-		if(playerType) {
-			boolean has = hasPermission(sender, EntityType.PLAYER);
-			if(has && useColors) {
-				// The best disguise, so it stands out.
-				line.append(language.LIST_PLAYER_TYPE).append(ChatColor.RESET);
-			} else {
-				appendType(line, "PLAYER", has, useColors, true);
-			}
-			first = false;
-		}
 		for(EntityType type : types) {
 			appendType(line, type.name(), hasPermission(sender, type), useColors, first);
 			first = false;
 		}
+		if(playerType) {
+			boolean has = hasPermission(sender, EntityType.PLAYER);
+			if(has && useColors) {
+				// The best disguise: last, so it stands out.
+				if(!first) line.append(ChatColor.WHITE + ", ");
+				line.append(language.LIST_PLAYER_TYPE).append(ChatColor.RESET);
+			} else {
+				appendType(line, "PLAYER", has, useColors, first);
+			}
+		}
 
-		playerDisguises.sendUnchanged(sender, language.LIST_TITLE.replace("%title%", title(sender)));
 		if(playerType) {
 			for(String entry : playerDisguises.listLines(sender)) {
 				playerDisguises.sendUnchanged(sender, entry);
@@ -1128,7 +1141,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(has) {
 			line.append(ChatColor.WHITE).append(name).append(ChatColor.RESET);
 		} else {
-			line.append(ChatColor.GRAY).append(ChatColor.STRIKETHROUGH).append(name).append(ChatColor.RESET);
+			line.append(ChatColor.RED).append(ChatColor.STRIKETHROUGH).append(name).append(ChatColor.RESET);
 		}
 	}
 

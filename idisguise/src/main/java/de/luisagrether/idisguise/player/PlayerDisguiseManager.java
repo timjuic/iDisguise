@@ -309,6 +309,12 @@ public final class PlayerDisguiseManager implements Listener {
 		return available && (has(sender, PERM_ADMIN) || has(sender, PERM_LIST_PLAYERS));
 	}
 
+	/** The rank others see on this disguised player (for the status line), or null. */
+	public String shownRank(Player player) {
+		PlayerDisguise disguise = disguises.get(player.getUniqueId());
+		return disguise == null ? null : effectiveRank(disguise);
+	}
+
 	public boolean canUseRandom(CommandSender sender) {
 		return available && has(sender, PERM_RANDOM);
 	}
