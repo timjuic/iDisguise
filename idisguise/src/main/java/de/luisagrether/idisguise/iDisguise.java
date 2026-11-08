@@ -102,6 +102,7 @@ import de.luisagrether.idisguise.api.PlayerUndisguiseEvent;
 import de.luisagrether.idisguise.io.Config;
 import de.luisagrether.idisguise.io.Language;
 import de.luisagrether.idisguise.io.UpdateCheck;
+import de.luisagrether.idisguise.player.PlayerDisguiseManager;
 import de.luisagrether.util.ObjectUtil;
 import de.luisagrether.util.StringUtil;
 
@@ -430,7 +431,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	private Metrics metrics;
 	private Map<EntityType, List<String>> tabCompletions = new HashMap<>();
 	private Map<UUID, Entity> disguiseMap = new HashMap<>();
-	private Map<UUID, String> playerDisguiseMap = new HashMap<>();
+	private PlayerDisguiseManager playerDisguises;
 	// Players who were disguised when they started a cross-world teleport. Re-disguise happens
 	// in PlayerChangedWorldEvent (after the teleport completes) so the new mob spawns in the
 	// destination world and the invisibility potion lands in the right context.
@@ -439,18 +440,15 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	// In-memory only -- intentionally not persisted to disk. A server restart should drop everyone
 	// back to undisguised, so we never serialize these.
 	private Map<UUID, EntityType> pendingRejoinMobDisguises = new HashMap<>();
-	private Map<UUID, String> pendingRejoinPlayerDisguises = new HashMap<>();
 	private Map<UUID, Long> lastDisguiseTimestamps = new HashMap<>();
 	private Map<UUID, Long> lastPearlBlockNotice = new HashMap<>();
 	private Map<UUID, Long> lastBlockPlaceNotice = new HashMap<>();
 	private Map<UUID, Long> lastBlockBreakNotice = new HashMap<>();
-	private Map<String, Object> profileDatabase = new HashMap<>();
 	// Set only while disguise0 spawns the disguise mob, so handleDisguiseSpawn can tell that spawn
 	// apart from anything else spawning during the call.
 	private EntityType spawningDisguiseType;
 	// null when WorldGuard 6 isn't installed; disguise.blocked-regions does nothing then.
 	private WorldGuardRegions worldGuardRegions;
-	private World dummyWorld;
 	
 	public iDisguise() { INSTANCE = this; }
 	
@@ -586,30 +584,13 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 		Bukkit.getPluginManager().registerEvents(this, this);
 
-		if(PLAYER_DISGUISE_AVAILABLE && PLAYER_DISGUISE_VIEWSELF && config.PLAYER_DISGUISE_VIEWSELF) {
-			dummyWorld = Bukkit.getWorld("iDisguiseDummyWorld");
-			if(dummyWorld == null) {
-				dummyWorld = Bukkit.createWorld(
-					WorldCreator.name("iDisguiseDummyWorld")
-					.type(WorldType.FLAT)
-					.generateStructures(false)
-				);
-				try {
-					World_setGameRule.invoke(dummyWorld, GameRule_doMobSpawning, GameRule_doMobSpawning_value);
-				} catch(InvocationTargetException|IllegalAccessException e) {
-				}
-				dummyWorld.getWorldBorder().setCenter(dummyWorld.getSpawnLocation());
-				dummyWorld.getWorldBorder().setSize(16.0);
+		try {
+			/* Remove the dummy world of the old player disguise if existent */
+			File worldDir = new File(Bukkit.getWorldContainer(), "iDisguiseDummyWorld");
+			if(worldDir.isDirectory() && Bukkit.getWorld("iDisguiseDummyWorld") == null) {
+				ObjectUtil.deleteDirectory(worldDir);
 			}
-		} else {
-			try {
-				/* Remove dummy world if existent */
-				File worldDir = new File(Bukkit.getWorldContainer(), "iDisguiseDummyWorld");
-				if(worldDir.isDirectory()) {
-					ObjectUtil.deleteDirectory(worldDir);
-				}
-			} catch(SecurityException e) {
-			}
+		} catch(SecurityException e) {
 		}
 		try {
 			/* Remove old dummy world if existent */
@@ -634,11 +615,14 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			}
 		}
 
+		playerDisguises = new PlayerDisguiseManager(this);
+		playerDisguises.enable();
+
 		Bukkit.getServicesManager().register(DisguiseAPI.class, this, this, ServicePriority.Normal);
 
 		/* Metrics start */
 		metrics = new Metrics(this);
-		metrics.addCustomChart(new Metrics.SingleLineChart("disguisedPlayers", () -> (disguiseMap.size() + playerDisguiseMap.size())));
+		metrics.addCustomChart(new Metrics.SingleLineChart("disguisedPlayers", () -> (disguiseMap.size() + playerDisguises.onlineCount())));
 		metrics.addCustomChart(new Metrics.SimplePie("storageType", () -> "unavailable"));
 		metrics.addCustomChart(new Metrics.SimplePie("updateChecking", () -> config.UPDATE_CHECK ? config.UPDATE_DOWNLOAD ? "check and download" : "check only" : "disabled"));
 		metrics.addCustomChart(new Metrics.SimplePie("realisticSoundEffects", () -> "enabled"));
@@ -656,17 +640,18 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	}
 	
 	public void onDisable() {
+		// Player disguises stay saved (they survive restarts); only mob disguises end here.
 		for(Player player : Bukkit.getOnlinePlayers()) {
-			if(isDisguised(player)) {
+			if(disguiseMap.containsKey(player.getUniqueId())) {
 				undisguise0(player);
 			}
 		}
+		if(playerDisguises != null) playerDisguises.disable();
 
 		for(Entity entity : disguiseMap.values()) {
 			entity.remove();
 		}
 		disguiseMap.clear();
-		playerDisguiseMap.clear();
 
 		getLogger().info("Disabled!");
 	}
@@ -731,10 +716,11 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			if(args.length == 0) {
 				if(isDisguised(target)) {
 					if(getDisguise(target) == EntityType.PLAYER) {
-						sender.sendMessage(
+						String fakeName = playerDisguises.get(target.getUniqueId()).getFakeName();
+						playerDisguises.sendUnchanged(sender,
 							self ? 
-							language.CURRENTLY_DISGUISED_AS_PLAYER.replace("%targetSkin%", playerDisguiseMap.get(target.getUniqueId())) :
-							language.ODISGUISE_CURRENTLY_DISGUISED_AS_PLAYER.replace("%player%", target.getName()).replace("%targetSkin%", playerDisguiseMap.get(target.getUniqueId()))
+							language.CURRENTLY_DISGUISED_AS_PLAYER.replace("%targetSkin%", fakeName) :
+							language.ODISGUISE_CURRENTLY_DISGUISED_AS_PLAYER.replace("%player%", target.getName()).replace("%targetSkin%", fakeName)
 						);
 					} else {
 						if(self) {
@@ -785,41 +771,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			} else if(args[0].equalsIgnoreCase("list")) {
 				sendDisguiseList(sender);
 			} else if(args[0].equalsIgnoreCase("player")) {
-				if(!PLAYER_DISGUISE_AVAILABLE || config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER")) {
-					sender.sendMessage(language.DISGUISE_TYPE_NOT_SUPPORTED);
-				} else if(sender instanceof Player && !hasPermission((Player)sender, EntityType.PLAYER)) {
-					sender.sendMessage(language.DISGUISE_NO_PERMISSION);
-				} else if(args.length == 1) {
+				if(args.length == 1) {
 					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_MISSING);
-				} else if(!ACCOUNTNAME.matcher(args[1]).matches()) {
-					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_INVALID);
-				} else if(config.PLAYER_DISGUISE_BLACKLIST.contains(args[1].toLowerCase(Locale.ENGLISH))) {
-					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_BLACKLISTED);
-				} else if(isDisguiseBlocked(target, target.getLocation())) {
-					sender.sendMessage(self ? language.DISGUISE_BLOCKED_IN_REGION : language.ODISGUISE_BLOCKED_IN_REGION.replace("%player%", target.getName()));
-				} else if(self && !checkDisguiseCooldown(target)) {
-					return true;
 				} else {
-					try {
-						Player finalTarget = target;
-						disguiseAsPlayer(target, args[1], (success) -> {
-							if(success) {
-								if(self) lastDisguiseTimestamps.put(finalTarget.getUniqueId(), System.currentTimeMillis());
-								sender.sendMessage(language.DISGUISED_SUCCESSFULLY);
-								if(!self) {
-									finalTarget.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
-								}
-							} else {
-								sender.sendMessage(language.DISGUISE_ERROR);
-							}
-						});
-					} catch(EventCancelledException e) {
-						sender.sendMessage(
-							self ?
-							language.DISGUISE_EVENT_CANCELLED :
-							language.ODISGUISE_EVENT_CANCELLED.replace("%player%", target.getName())
-						);
-					}
+					disguisePlayerCommand(sender, target, self, args[1], args.length > 2 ? args[2] : null);
 				}
 			} else {
 				try {
@@ -955,8 +910,13 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						}
 					}
 				} catch(IllegalArgumentException e) {
-					if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
-					sender.sendMessage(language.DISGUISE_TYPE_NOT_FOUND.replace("%entityType%", args[0]));
+					// Not a mob: /disguise <name> [rank]
+					if(ACCOUNTNAME.matcher(args[0]).matches() && playerDisguises.isAvailable()) {
+						disguisePlayerCommand(sender, target, self, args[0], args.length > 1 ? args[1] : null);
+					} else {
+						if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
+						sender.sendMessage(language.DISGUISE_TYPE_NOT_FOUND.replace("%entityType%", args[0]));
+					}
 				}
 			}
 		} else if(command.getName().equalsIgnoreCase("undisguise")) {
@@ -1009,17 +969,35 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		return true;
 	}
 
+	private void disguisePlayerCommand(CommandSender sender, Player target, boolean self, String name, String rank) {
+		if(!playerDisguises.isAvailable() || config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER")) {
+			sender.sendMessage(language.DISGUISE_TYPE_NOT_SUPPORTED);
+			return;
+		}
+		if(sender instanceof Player && !hasPermission((Player)sender, EntityType.PLAYER)) {
+			sender.sendMessage(language.DISGUISE_NO_PERMISSION);
+			return;
+		}
+		playerDisguises.disguise(sender, target, name, rank, (success) -> {
+			if(success && !self) {
+				target.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
+			}
+		});
+	}
+
+	/** Name of the plugin as players see it in titles: "Disguises", admins see the plugin name and version. */
+	private String title(CommandSender sender) {
+		return hasPermissionAdmin(sender) ? language.TITLE_ADMIN.replace("%version%", getDescription().getVersion()) : language.TITLE_PLAYERS;
+	}
+
 	private void sendHelpPage(CommandSender sender, int page) {
 		List<List<String>> helpPages = new ArrayList<>();
 		helpPages.add(new ArrayList<>());
 
 		if(sender instanceof Player) {
 			addHelpMessage(helpPages, language.HELP_DISGUISE_MOB);
-			if(hasPermission(sender, EntityType.PLAYER)) {
-				if(PLAYER_DISGUISE_VIEWSELF && config.PLAYER_DISGUISE_VIEWSELF)
-					addHelpMessage(helpPages, language.HELP_DISGUISE_PLAYER);
-				else
-					addHelpMessage(helpPages, language.HELP_DISGUISE_PLAYER_2);
+			if(hasPermission(sender, EntityType.PLAYER) && playerDisguises.isAvailable()) {
+				addHelpMessage(helpPages, language.HELP_DISGUISE_PLAYER);
 			}
 			addHelpMessage(helpPages, language.HELP_DISGUISE_CHECK);
 			addHelpMessage(helpPages, language.HELP_UNDISGUISE);
@@ -1040,7 +1018,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(page < 1) page = 1;
 		if(page > helpPages.size()) page = helpPages.size();
 
-		sender.sendMessage(language.HELP_PAGE_TITLE.replace("%number%", page + "/" + helpPages.size()));
+		sender.sendMessage(language.HELP_PAGE_TITLE.replace("%title%", title(sender)).replace("%number%", page + "/" + helpPages.size()));
 		for(String line : helpPages.get(page - 1)) {
 			sender.sendMessage(line);
 		}
@@ -1055,13 +1033,19 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 		types.sort(Comparator.comparing(Enum::name));
 
-		boolean playerType = PLAYER_DISGUISE_AVAILABLE && !config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER");
+		boolean playerType = playerDisguises.isAvailable() && !config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER");
 		boolean useColors = sender instanceof Player;
 
 		StringBuilder line = new StringBuilder();
 		boolean first = true;
 		if(playerType) {
-			appendType(line, "PLAYER", hasPermission(sender, EntityType.PLAYER), useColors, first);
+			boolean has = hasPermission(sender, EntityType.PLAYER);
+			if(has && useColors) {
+				// The best disguise, so it stands out.
+				line.append(language.LIST_PLAYER_TYPE).append(ChatColor.RESET);
+			} else {
+				appendType(line, "PLAYER", has, useColors, true);
+			}
 			first = false;
 		}
 		for(EntityType type : types) {
@@ -1069,12 +1053,16 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			first = false;
 		}
 
-		sender.sendMessage(ChatColor.DARK_GREEN + "===== " + ChatColor.BOLD + "iDisguise" + ChatColor.RESET
-				+ ChatColor.DARK_GREEN + " Disguises (" + types.size() + (playerType ? " + PLAYER" : "") + ") =====");
+		playerDisguises.sendUnchanged(sender, language.LIST_TITLE.replace("%title%", title(sender)));
+		if(playerType) {
+			for(String entry : playerDisguises.listLines(sender)) {
+				playerDisguises.sendUnchanged(sender, entry);
+			}
+		}
+		sender.sendMessage(language.LIST_YOUR_DISGUISES);
 		sender.sendMessage(line.toString());
 		if(useColors) {
-			sender.sendMessage(ChatColor.WHITE + "white = available, " + ChatColor.GRAY + ChatColor.STRIKETHROUGH
-					+ "grey" + ChatColor.RESET + ChatColor.WHITE + " = no permission.");
+			sender.sendMessage(language.LIST_LEGEND);
 		}
 	}
 
@@ -1130,7 +1118,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				completions.add("?");
 				completions.add("list");
 				for(EntityType type : EntityType.values()) {
-					if(type.equals(EntityType.PLAYER) && !PLAYER_DISGUISE_AVAILABLE) continue;
+					if(type.equals(EntityType.PLAYER) && !playerDisguises.isAvailable()) continue;
 					if(!config.DISGUISE_TYPE_BLACKLIST.contains(type.name()) && (!(sender instanceof Player) || hasPermission((Player)sender, type))) {
 						completions.add(type.name());
 					}
@@ -1149,6 +1137,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					if((!(sender instanceof Player) || hasPermission((Player)sender, type)) && tabCompletions.containsKey(type)) {
 						if(!type.equals(EntityType.PLAYER) || args.length < (self ? 3 : 4)) {
 							completions.addAll(tabCompletions.get(type));
+						} else if(args.length == (self ? 3 : 4)) {
+							completions.addAll(playerDisguises.usableRanks(sender));
 						}
 					}
 					for(int i = 0; i < completions.size(); i++) {
@@ -1158,6 +1148,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						}
 					}
 				} catch(IllegalArgumentException e) {
+					// /disguise <name> [rank]: suggest the ranks this player may fake
+					if(args.length == (self ? 2 : 3) && playerDisguises.isAvailable()) {
+						for(String rank : playerDisguises.usableRanks(sender)) {
+							if(StringUtil.startsWithIgnoreCase(rank, args[args.length - 1])) completions.add(rank);
+						}
+					}
 				}
 			}
 		} else if(command.getName().equalsIgnoreCase("undisguise")) {
@@ -1272,14 +1268,35 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(disguiseMap.containsKey(player.getUniqueId())) {
 			return disguiseMap.get(player.getUniqueId()).getType();
 		}
-		if(playerDisguiseMap.containsKey(player.getUniqueId())) {
+		if(playerDisguises != null && playerDisguises.isDisguised(player)) {
 			return EntityType.PLAYER;
 		}
 		return null;
 	}
 	
 	public synchronized boolean isDisguised(Player player) {
-		return disguiseMap.containsKey(player.getUniqueId()) || playerDisguiseMap.containsKey(player.getUniqueId());
+		return disguiseMap.containsKey(player.getUniqueId()) || (playerDisguises != null && playerDisguises.isDisguised(player));
+	}
+
+	/** Mob disguises only: the mob-specific rules (pearls, blocks, regions, death) skip player disguises. */
+	private synchronized boolean isMobDisguised(Player player) {
+		return disguiseMap.containsKey(player.getUniqueId());
+	}
+
+	/** Ends a mob disguise, if any (used before a player disguise starts). */
+	public synchronized void removeMobDisguise(Player player) {
+		if(disguiseMap.containsKey(player.getUniqueId())) undisguise0(player);
+	}
+
+	/** Permission check that follows commands.use-permission-nodes (off = operators only). */
+	public boolean hasNode(CommandSender sender, String node) {
+		if(!(sender instanceof Player)) return true;
+		if(!config.USE_PERMISSION_NODES) return sender.isOp();
+		return sender.hasPermission("iDisguise.*") || sender.hasPermission(node);
+	}
+
+	public boolean isPlayerNameBlacklisted(String name) {
+		return config.PLAYER_DISGUISE_BLACKLIST.contains(name.toLowerCase(Locale.ENGLISH));
 	}
 
 	public Entity disguise(Player player, EntityType type, boolean fireEvent) throws EventCancelledException {
@@ -1423,160 +1440,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	}
 
 	public void disguiseAsPlayer(Player player, String targetSkin, boolean fireEvent, @Nullable Consumer<Boolean> callback) throws EventCancelledException {
-		if(!PLAYER_DISGUISE_AVAILABLE || config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER")) throw new UnsupportedOperationException("Currently not supported!");
+		if(playerDisguises == null || !playerDisguises.isAvailable() || config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER")) throw new UnsupportedOperationException("Currently not supported!");
 		if(!ACCOUNTNAME.matcher(targetSkin).matches()) throw new IllegalArgumentException("This account name is invalid.");
-		if(config.PLAYER_DISGUISE_BLACKLIST.contains(targetSkin.toLowerCase(Locale.ENGLISH))) throw new IllegalArgumentException("This account name is blacklisted.");
-		
-		if(fireEvent) {
-			PlayerDisguiseAsPlayerEvent event = new PlayerDisguiseAsPlayerEvent(player, targetSkin);
-			Bukkit.getPluginManager().callEvent(event);
-			if(event.isCancelled()) {
-				throw new EventCancelledException();
-			}
-		}
-
-		disguiseAsPlayer0(player, targetSkin, callback);
-	}
-
-	private void disguiseAsPlayer0(Player player, String targetSkin, @Nullable Consumer<Boolean> callback) {
-		if(!PLAYER_DISGUISE_AVAILABLE || config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER")) throw new UnsupportedOperationException("Currently not supported!");
-		if(!ACCOUNTNAME.matcher(targetSkin).matches()) throw new IllegalArgumentException("This account name is invalid.");
-		if(config.PLAYER_DISGUISE_BLACKLIST.contains(targetSkin.toLowerCase(Locale.ENGLISH))) throw new IllegalArgumentException("This account name is blacklisted.");
-		
-		if(isDisguised(player)) undisguise0(player);
-
-		if(!profileDatabase.containsKey(targetSkin.toLowerCase(Locale.ENGLISH))) {
-			retrieveProfile(targetSkin, (success) -> {
-				if(success) {
-					disguiseAsPlayer0(player, targetSkin, callback);
-				} else {
-					callback.accept(false);
-				}
-			});
-			return;
-		}
-
-		synchronized(this) {
-			try {
-				Object targetProfile = CraftPlayer_getProfile.invoke(player);
-				Multimap sourceMap = (Multimap)GameProfile_getProperties.invoke(profileDatabase.get(targetSkin.toLowerCase(Locale.ENGLISH)));
-				Multimap targetMap = (Multimap)GameProfile_getProperties.invoke(targetProfile);
-				if(sourceMap.containsKey("textures")) {
-					if(PropertyMap_properties.get(targetMap).getClass().getSimpleName().contains("Immutable")) {
-						UNSAFE.putObject(targetMap, UNSAFE.objectFieldOffset(PropertyMap_properties), LinkedHashMultimap.create((Multimap)PropertyMap_properties.get(targetMap)));
-					}
-					if(targetMap.containsKey("textures")) {
-						targetMap.removeAll("textures");
-					}
-					targetMap.putAll("textures", sourceMap.get("textures"));
-				}
-				
-				playerDisguiseMap.put(player.getUniqueId(), targetSkin);
-				for(Player observer : Bukkit.getOnlinePlayers()) {
-					if(observer != player) {
-						observer.hidePlayer(player);
-					}
-				}
-				for(Player observer : Bukkit.getOnlinePlayers()) {
-					if(observer != player) {
-						observer.showPlayer(player);
-					}
-				}
-
-				if(PLAYER_DISGUISE_VIEWSELF && config.PLAYER_DISGUISE_VIEWSELF) {
-					Object entityPlayer = CraftPlayer_getHandle.invoke(player);
-					if(!LEGACY_PLAYER_DISGUISE_VIEWSELF) {
-						Object PacketRemovePlayerInfo = PacketRemovePlayerInfo_new.newInstance(Arrays.asList(player.getUniqueId()));
-						Object PacketUpdatePlayerInfo = PacketUpdatePlayerInfo_new.newInstance(UpdatePlayerInfo_ADD_PLAYER, entityPlayer);
-						Object playerConnection = EntityPlayer_playerConnection.get(entityPlayer);
-						PlayerConnection_sendPacket.invoke(playerConnection, PacketRemovePlayerInfo);
-						PlayerConnection_sendPacket.invoke(playerConnection, PacketUpdatePlayerInfo);
-					} else {
-						Object entityPlayerArray = Array.newInstance(EntityPlayer, 1);
-						Array.set(entityPlayerArray, 0, entityPlayer);
-						Object PacketRemovePlayerInfo = PacketUpdatePlayerInfo_new.newInstance(UpdatePlayerInfo_REMOVE_PLAYER, entityPlayerArray);
-						Object PacketUpdatePlayerInfo = PacketUpdatePlayerInfo_new.newInstance(UpdatePlayerInfo_ADD_PLAYER, entityPlayerArray);
-						Object playerConnection = EntityPlayer_playerConnection.get(entityPlayer);
-						PlayerConnection_sendPacket.invoke(playerConnection, PacketRemovePlayerInfo);
-						PlayerConnection_sendPacket.invoke(playerConnection, PacketUpdatePlayerInfo);
-					}
-
-					Location originalLocation = player.getLocation();
-					player.teleport(dummyWorld.getSpawnLocation());
-					player.teleport(originalLocation);
-				}
-
-				if(callback != null) Bukkit.getScheduler().runTask(iDisguise.this, () -> callback.accept(true));
-			} catch(IllegalAccessException|InvocationTargetException|IllegalStateException|InstantiationException e) {
-				if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
-				if(callback != null) Bukkit.getScheduler().runTask(iDisguise.this, () -> callback.accept(false));
-			}
-		}
-	}
-
-	private UUID retrieveProfileUID(String targetSkin) {
-		BufferedReader reader = null;
-		UUID uid = null;
-		try {
-			URL url = new URL("https://api.mojang.com/users/profiles/minecraft/" + targetSkin.toLowerCase(Locale.ENGLISH));
-			URLConnection connection = url.openConnection();
-			connection.addRequestProperty("User-Agent", getNameAndVersion().replace(' ', '/') + " (by LuisaGrether)");
-			connection.setDoOutput(true);
-			reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-			String response = "";
-			String line;
-			while((line = reader.readLine()) != null) {
-				response += line;
-			}
-			JSONObject jsonObject = (JSONObject)JSONValue.parse(response);
-			String id = (String)jsonObject.get("id");
-			if(!id.contains("-")) {
-				id = id.substring(0, 8) + "-" + id.substring(8, 12) + "-" + id.substring(12, 16) + "-" + id.substring(16, 20) + "-" + id.substring(20);
-			}
-			uid = UUID.fromString(id);
-		} catch(IOException e) {
-		} finally {
-			if(reader != null) {
-				try {
-					reader.close();
-				} catch(IOException e) {
-				}
-			}
-		}
-		return uid;
-	}
-
-	private void retrieveProfile(String targetSkin, @Nullable Consumer<Boolean> callback) {
-		Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-			UUID uid = retrieveProfileUID(targetSkin);
-			if(uid != null) {
-				if(!LEGACY_PROFILES) {
-					try {
-						Object sourceProfile = CraftPlayerProfile_new.newInstance(uid, targetSkin);
-						sourceProfile = ((CompletableFuture)PlayerProfile_update.invoke(sourceProfile)).get();
-						
-						profileDatabase.put(targetSkin.toLowerCase(Locale.ENGLISH), CraftPlayerProfile_buildGameProfile.invoke(sourceProfile));
-
-						if(callback != null) Bukkit.getScheduler().runTask(iDisguise.this, () -> callback.accept(true));
-					} catch(IllegalAccessException|InvocationTargetException|InstantiationException|ExecutionException|InterruptedException e) {
-						if(callback != null) Bukkit.getScheduler().runTask(iDisguise.this, () -> callback.accept(false));
-					}
-				} else {
-					try {
-						Object sourceProfile = GameProfile_new.newInstance(uid, targetSkin);
-						MinecraftSessionService_fillProfileProperties.invoke(MinecraftServer_getMinecraftSessionService.invoke(CraftServer_getServer.invoke(Bukkit.getServer())), sourceProfile, true);
-						
-						profileDatabase.put(targetSkin.toLowerCase(Locale.ENGLISH), sourceProfile);
-
-						if(callback != null) Bukkit.getScheduler().runTask(iDisguise.this, () -> callback.accept(true));
-					} catch(IllegalAccessException|InvocationTargetException|InstantiationException e) {
-						if(callback != null) Bukkit.getScheduler().runTask(iDisguise.this, () -> callback.accept(false));
-					}
-				}
-			} else {
-				if(callback != null) Bukkit.getScheduler().runTask(iDisguise.this, () -> callback.accept(false));
-			}
-		});
+		// The PlayerDisguiseAsPlayerEvent is fired by the player disguise itself, right before it starts.
+		playerDisguises.disguise(null, player, targetSkin, null, callback);
 	}
 	
 	public EntityType undisguise(Player player, boolean fireEvent) throws EventCancelledException {
@@ -1597,60 +1464,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(!isDisguised(player)) return null;
 		
 		if(getDisguise(player) == EntityType.PLAYER) {
-			try {
-				Object targetProfile = CraftPlayer_getProfile.invoke(player);
-				Multimap sourceMap = (Multimap)GameProfile_getProperties.invoke(profileDatabase.get(player.getName().toLowerCase(Locale.ENGLISH)));
-				Multimap targetMap = (Multimap)GameProfile_getProperties.invoke(targetProfile);
-				if(sourceMap.containsKey("textures")) {
-					if(PropertyMap_properties.get(targetMap).getClass().getSimpleName().contains("Immutable")) {
-						UNSAFE.putObject(targetMap, UNSAFE.objectFieldOffset(PropertyMap_properties), LinkedHashMultimap.create((Multimap)PropertyMap_properties.get(targetMap)));
-					}
-					if(targetMap.containsKey("textures")) {
-						targetMap.removeAll("textures");
-					}
-					targetMap.putAll("textures", sourceMap.get("textures"));
-				}
-				
-				playerDisguiseMap.remove(player.getUniqueId());
-				for(Player observer : Bukkit.getOnlinePlayers()) {
-					if(observer != player) {
-						observer.hidePlayer(player);
-					}
-				}
-				for(Player observer : Bukkit.getOnlinePlayers()) {
-					if(observer != player) {
-						observer.showPlayer(player);
-					}
-				}
-
-				if(PLAYER_DISGUISE_VIEWSELF && config.PLAYER_DISGUISE_VIEWSELF) {
-					Object entityPlayer = CraftPlayer_getHandle.invoke(player);
-					if(!LEGACY_PLAYER_DISGUISE_VIEWSELF) {
-						Object PacketRemovePlayerInfo = PacketRemovePlayerInfo_new.newInstance(Arrays.asList(player.getUniqueId()));
-						Object PacketUpdatePlayerInfo = PacketUpdatePlayerInfo_new.newInstance(UpdatePlayerInfo_ADD_PLAYER, entityPlayer);
-						Object playerConnection = EntityPlayer_playerConnection.get(entityPlayer);
-						PlayerConnection_sendPacket.invoke(playerConnection, PacketRemovePlayerInfo);
-						PlayerConnection_sendPacket.invoke(playerConnection, PacketUpdatePlayerInfo);
-					} else {
-						Object entityPlayerArray = Array.newInstance(EntityPlayer, 1);
-						Array.set(entityPlayerArray, 0, entityPlayer);
-						Object PacketRemovePlayerInfo = PacketUpdatePlayerInfo_new.newInstance(UpdatePlayerInfo_REMOVE_PLAYER, entityPlayerArray);
-						Object PacketUpdatePlayerInfo = PacketUpdatePlayerInfo_new.newInstance(UpdatePlayerInfo_ADD_PLAYER, entityPlayerArray);
-						Object playerConnection = EntityPlayer_playerConnection.get(entityPlayer);
-						PlayerConnection_sendPacket.invoke(playerConnection, PacketRemovePlayerInfo);
-						PlayerConnection_sendPacket.invoke(playerConnection, PacketUpdatePlayerInfo);
-					}
-
-					Location originalLocation = player.getLocation();
-					player.teleport(dummyWorld.getSpawnLocation());
-					player.teleport(originalLocation);
-				}
-				
-				return EntityType.PLAYER;
-			} catch(IllegalAccessException|InvocationTargetException|IllegalStateException|InstantiationException e) {
-				if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
-				return null;
-			}
+			playerDisguises.undisguise(player);
+			return EntityType.PLAYER;
 		} else {
 			Entity entity = disguiseMap.remove(player.getUniqueId());
 			entity.remove();
@@ -1717,9 +1532,6 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			}
 		}
 
-		String targetSkin = player.getName().toLowerCase(Locale.ENGLISH);
-		if(!profileDatabase.containsKey(targetSkin)) retrieveProfile(targetSkin, null);
-
 		if(config.UPDATE_CHECK && hasPermissionAdmin(player)) {
 			Bukkit.getScheduler().runTaskLaterAsynchronously(this, new UpdateCheck(this, player, config.UPDATE_DOWNLOAD), 20L);
 		}
@@ -1729,7 +1541,6 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		// teleport-on-join etc.) before we spawn the disguise mob at the wrong location.
 		UUID id = player.getUniqueId();
 		EntityType pendingMobType = pendingRejoinMobDisguises.remove(id);
-		String pendingSkin = pendingRejoinPlayerDisguises.remove(id);
 		if(pendingMobType != null) {
 			Bukkit.getScheduler().runTaskLater(this, () -> {
 				if(!player.isOnline() || isDisguised(player)) return;
@@ -1746,22 +1557,6 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 							"Failed to re-apply pending disguise for " + player.getName(), t);
 				}
 			}, 10L);
-		} else if(pendingSkin != null) {
-			Bukkit.getScheduler().runTaskLater(this, () -> {
-				if(!player.isOnline() || isDisguised(player)) return;
-				if(isDisguiseBlocked(player, player.getLocation())) {
-					player.sendMessage(language.UNDISGUISED_IN_BLOCKED_REGION);
-					return;
-				}
-				try {
-					disguiseAsPlayer(player, pendingSkin, false, null);
-					if(debugMode) getLogger().info("[persist-on-quit] re-applied player disguise '"
-							+ pendingSkin + "' for " + player.getName() + " on rejoin");
-				} catch(Throwable t) {
-					if(debugMode) getLogger().log(Level.WARNING,
-							"Failed to re-apply pending player disguise for " + player.getName(), t);
-				}
-			}, 10L);
 		}
 	}
 	
@@ -1775,22 +1570,19 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		lastPearlBlockNotice.remove(id);
 		lastBlockPlaceNotice.remove(id);
 		lastBlockBreakNotice.remove(id);
-		if(!isDisguised(player)) return;
+		// Player disguises stay on after quitting (they are saved); only mob disguises end here.
+		if(!isMobDisguised(player)) return;
 
 		if(config.PERSIST_DISGUISE_ON_QUIT) {
 			// Capture the disguise identity BEFORE undisguising, because undisguise0 wipes the maps.
 			// We tear down the mob/invisibility now (offline players don't need either) and replay
 			// the disguise on rejoin in handlePlayerJoin.
 			Entity mob = disguiseMap.get(id);
-			String skin = playerDisguiseMap.get(id);
 			if(mob != null) {
 				pendingRejoinMobDisguises.put(id, mob.getType());
-			} else if(skin != null) {
-				pendingRejoinPlayerDisguises.put(id, skin);
 			}
 			if(debugMode) getLogger().info("[persist-on-quit] storing pending rejoin disguise for "
-					+ player.getName() + " (mob=" + (mob == null ? "null" : mob.getType().name())
-					+ ", skin=" + skin + ")");
+					+ player.getName() + " (mob=" + (mob == null ? "null" : mob.getType().name()) + ")");
 		}
 
 		undisguise0(player);
@@ -1799,7 +1591,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	@EventHandler
 	public void handlePlayerDeath(PlayerDeathEvent event) {
 		Player player = event.getEntity();
-		if(isDisguised(player)) {
+		// A player disguise stays on through death.
+		if(isMobDisguised(player)) {
 			undisguise0(player);
 		}
 	}
@@ -1825,7 +1618,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		Location moveTo = event.getTo();
 		boolean changedBlock = moveFrom.getBlockX() != moveTo.getBlockX() || moveFrom.getBlockY() != moveTo.getBlockY()
 				|| moveFrom.getBlockZ() != moveTo.getBlockZ() || !moveFrom.getWorld().equals(moveTo.getWorld());
-		if(!event.isCancelled() && changedBlock && isDisguised(player) && isDisguiseBlocked(player, moveTo)) {
+		if(!event.isCancelled() && changedBlock && isMobDisguised(player) && isDisguiseBlocked(player, moveTo)) {
 			scheduleRegionUndisguise(player);
 		}
 		if(!event.isCancelled() && disguiseMap.containsKey(player.getUniqueId())) {
@@ -1854,7 +1647,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void handlePlayerTeleportRegion(PlayerTeleportEvent event) {
 		Player player = event.getPlayer();
-		if(isDisguised(player) && isDisguiseBlocked(player, event.getTo())) {
+		if(isMobDisguised(player) && isDisguiseBlocked(player, event.getTo())) {
 			scheduleRegionUndisguise(player);
 		}
 	}
@@ -2049,7 +1842,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		ProjectileSource source = event.getEntity().getShooter();
 		if(!(source instanceof Player)) return;
 		Player player = (Player)source;
-		if(!isDisguised(player)) return;
+		if(!isMobDisguised(player)) return;
 		event.setCancelled(true);
 		notifyPearlBlocked(player);
 		// The pearl item was already removed from the inventory before ProjectileLaunchEvent fired.
@@ -2072,7 +1865,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		ItemStack item = event.getItem();
 		if(item == null || item.getType() != Material.ENDER_PEARL) return;
 		Player player = event.getPlayer();
-		if(!isDisguised(player)) return;
+		if(!isMobDisguised(player)) return;
 		event.setCancelled(true);
 		notifyPearlBlocked(player);
 	}
@@ -2091,7 +1884,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	public void handleBlockPlaceBlock(BlockPlaceEvent event) {
 		if(!config.DISALLOW_BLOCK_PLACE_WHILE_DISGUISED) return;
 		Player player = event.getPlayer();
-		if(!isDisguised(player)) return;
+		if(!isMobDisguised(player)) return;
 		event.setCancelled(true);
 		notifyRateLimited(player, lastBlockPlaceNotice, language.BLOCK_PLACE_BLOCKED_WHILE_DISGUISED);
 	}
@@ -2100,7 +1893,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	public void handleBlockBreakBlock(BlockBreakEvent event) {
 		if(!config.DISALLOW_BLOCK_BREAK_WHILE_DISGUISED) return;
 		Player player = event.getPlayer();
-		if(!isDisguised(player)) return;
+		if(!isMobDisguised(player)) return;
 		event.setCancelled(true);
 		notifyRateLimited(player, lastBlockBreakNotice, language.BLOCK_BREAK_BLOCKED_WHILE_DISGUISED);
 	}
@@ -2217,7 +2010,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					Bukkit.getPlayer((UUID)event.getRightClicked().getMetadata("iDisguise").get(0).value())
 				));
 			}, 1L);
-		} else if(event.getRightClicked() instanceof Player && playerDisguiseMap.containsKey(((Player)event.getRightClicked()).getUniqueId())) {
+		} else if(event.getRightClicked() instanceof Player && playerDisguises.isDisguised((Player)event.getRightClicked())) {
 			Bukkit.getScheduler().runTaskLater(this, () -> {
 				Bukkit.getPluginManager().callEvent(new PlayerInteractDisguisedPlayerEvent(
 					event.getPlayer(),

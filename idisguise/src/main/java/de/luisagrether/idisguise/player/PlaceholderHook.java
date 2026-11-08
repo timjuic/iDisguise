@@ -1,0 +1,58 @@
+package de.luisagrether.idisguise.player;
+
+import org.bukkit.entity.Player;
+
+import me.clip.placeholderapi.PlaceholderAPI;
+import me.clip.placeholderapi.expansion.PlaceholderExpansion;
+
+/**
+ * PlaceholderAPI (only loaded when it is installed).
+ * %idisguise_name% = the name other players see (the fake name while disguised, else the real one).
+ * Use it instead of %player_name% where a disguised player's real name must not show,
+ * e.g. InteractiveChat's "/msg %player_name%" click action.
+ */
+final class PlaceholderHook extends PlaceholderExpansion {
+
+	private final PlayerDisguiseManager manager;
+
+	private PlaceholderHook(PlayerDisguiseManager manager) {
+		this.manager = manager;
+	}
+
+	static void register(PlayerDisguiseManager manager) {
+		new PlaceholderHook(manager).register();
+	}
+
+	/** The DeluxeTags tag as it appears in chat, or null. */
+	static String chatTag(Player player) {
+		String tag = PlaceholderAPI.setPlaceholders(player, "%deluxetags_tag%");
+		return tag == null || tag.contains("%deluxetags_tag%") ? null : tag;
+	}
+
+	@Override
+	public String getIdentifier() {
+		return "idisguise";
+	}
+
+	@Override
+	public String getAuthor() {
+		return "LuisaGrether";
+	}
+
+	@Override
+	public String getVersion() {
+		return "1";
+	}
+
+	@Override
+	public boolean persist() {
+		return true;
+	}
+
+	@Override
+	public String onPlaceholderRequest(Player player, String params) {
+		if("name".equalsIgnoreCase(params)) return manager.visibleName(player);
+		return null;
+	}
+
+}

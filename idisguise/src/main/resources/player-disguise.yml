@@ -1,0 +1,98 @@
+# Player disguises: /disguise <name> [rank]
+# Other players see you as <name>: skin, name above the head, tab list, chat and commands.
+# Needs ProtocolLib and only works on Minecraft 1.8.8. Mob disguises are not affected by this file.
+#
+# Permissions (with commands.use-permission-nodes: true in config.yml):
+#   iDisguise.disguise.PLAYER   use player disguises
+#   iDisguise.rank.<rank>       use that fake rank, e.g. iDisguise.rank.gold
+#   iDisguise.player.anyname    use names of players who are online or have played here before
+#   iDisguise.player.staff      get the "staff" settings below and stay hidden in /disguise list
+#   iDisguise.admin             see everyone in /disguise list (staff too) and the plugin version
+
+# Turn player disguises on or off.
+enabled: true
+
+# Ranks that can be faked: /disguise <name> <rank>
+# A rank looks exactly like your LuckPerms group (chat prefix) and TAB group (tab list and nametag) of the same name.
+ranks:
+- gold
+- emerald
+- diamond
+- obsidian
+- wither
+- blaze
+- herobrine
+- ludnica
+- ludnica+
+- trialmod
+- mod
+- srmod
+- admin
+- sradmin
+- vlasnik
+
+# Rank used when no rank is given (and none can be copied). Use the group of players without a rank.
+default-rank: default
+
+# Disguising as a player who has played here before, without giving a rank, copies that player's real rank.
+copy-real-rank: true
+
+# Skins used when the name has no skin of its own (not a player of this server and no Minecraft account).
+# One is picked at random. Use names of real Minecraft accounts.
+random-skins:
+- Notch
+- jeb_
+- Technoblade
+- Dream
+- Skeppy
+- BadBoyHalo
+- Sapnap
+- GeorgeNotFound
+- Ph1LzA
+- TommyInnit
+
+# EssentialsX config with the chat formats. A fake rank also chats in that rank's message colour (chat.group-formats).
+essentials-config: plugins/Essentials/config.yml
+
+# What a disguise hides. "staff" = players with iDisguise.player.staff, "players" = everyone else.
+profiles:
+
+  staff:
+
+    # Swap the real name for the fake one in chat messages, death messages, /f who and other plugins' texts.
+    replace-name-in-messages: true
+
+    # Commands typed with the fake name (/msg, /tpa, /pay, /f who ...) reach the disguised player.
+    commands-use-fake-name: true
+
+    # Chat shows the fake rank's prefix and message colour instead of the real ones.
+    fake-rank-in-chat: true
+
+    # Hide the DeluxeTags tag (%deluxetags_tag%) in chat.
+    hide-chat-tag: true
+
+    # Show this player in /disguise list (admins always see everyone).
+    show-in-list: false
+
+    # Remove the disguise when hitting or getting hit by a player.
+    remove-in-combat: false
+
+  players:
+
+    # Swap the real name for the fake one in chat messages, death messages, /f who and other plugins' texts.
+    replace-name-in-messages: true
+
+    # Commands typed with the fake name (/msg, /tpa, /pay, /f who ...) reach the disguised player.
+    commands-use-fake-name: true
+
+    # Chat shows the fake rank's prefix and message colour instead of the real ones.
+    fake-rank-in-chat: true
+
+    # Hide the DeluxeTags tag (%deluxetags_tag%) in chat.
+    hide-chat-tag: true
+
+    # Show this player in /disguise list (admins always see everyone).
+    show-in-list: true
+
+    # Remove the disguise when hitting or getting hit by a player.
+    remove-in-combat: false

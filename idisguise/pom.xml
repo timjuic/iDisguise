@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>de.luisagrether.idisguise</groupId>
   <artifactId>idisguise</artifactId>
-  <version>6.0.4</version>
+  <version>6.1.0</version>
   <name>iDisguise</name>
   <description>Recode of the famous iDisguse plugin!</description>
   
@@ -15,6 +15,10 @@
   	<repository>
   		<id>spigot-repo</id>
   		<url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
+  	</repository>
+	<repository>
+  		<id>placeholderapi-repo</id>
+  		<url>https://repo.extendedclip.com/releases/</url>
   	</repository>
 	<repository>
   		<id>codemc-repo</id>
@@ -47,6 +51,43 @@
 		<version>9.10.0</version>
 		<scope>compile</scope>
 	</dependency>
+	<dependency>
+  		<groupId>de.luisagrether.idisguise</groupId>
+  		<artifactId>idisguise-impl-v1_8_R3</artifactId>
+  		<version>6.0.1</version>
+  		<scope>compile</scope>
+  	</dependency>
+	<!-- Player disguise (1.8.8 only): all provided by the server's own plugins -->
+	<dependency>
+		<groupId>net.dmulloy2</groupId>
+		<artifactId>ProtocolLib</artifactId>
+		<version>5.4.0</version>
+		<scope>provided</scope>
+	</dependency>
+	<dependency>
+		<groupId>net.luckperms</groupId>
+		<artifactId>api</artifactId>
+		<version>5.4</version>
+		<scope>provided</scope>
+	</dependency>
+	<dependency>
+		<groupId>me.clip</groupId>
+		<artifactId>placeholderapi</artifactId>
+		<version>2.11.6</version>
+		<scope>provided</scope>
+	</dependency>
+  </dependencies>
+  
+
+  <!-- Default build: every Minecraft version (needs the Spigot jars of all of them).
+       "mvn package -P only-1.8" builds a jar for 1.8.8 only (needs just the 1.8.8 server jar). -->
+  <profiles>
+  	<profile>
+  		<id>all-versions</id>
+  		<activation>
+  			<activeByDefault>true</activeByDefault>
+  		</activation>
+  		<dependencies>
 	<dependency>
   		<groupId>de.luisagrether.idisguise</groupId>
   		<artifactId>idisguise-impl-v1_17_R1</artifactId>
@@ -127,12 +168,6 @@
   	</dependency>
 	<dependency>
   		<groupId>de.luisagrether.idisguise</groupId>
-  		<artifactId>idisguise-impl-v1_8_R3</artifactId>
-  		<version>6.0.1</version>
-  		<scope>compile</scope>
-  	</dependency>
-	<dependency>
-  		<groupId>de.luisagrether.idisguise</groupId>
   		<artifactId>idisguise-impl-v1_8_R2</artifactId>
   		<version>6.0.1</version>
   		<scope>compile</scope>
@@ -143,7 +178,12 @@
   		<version>6.0.1</version>
   		<scope>compile</scope>
   	</dependency>
-  </dependencies>
+  		</dependencies>
+  	</profile>
+  	<profile>
+  		<id>only-1.8</id>
+  	</profile>
+  </profiles>
   
   <build>
   	<resources>

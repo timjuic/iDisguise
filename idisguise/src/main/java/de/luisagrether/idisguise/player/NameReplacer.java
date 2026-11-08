@@ -1,0 +1,94 @@
+package de.luisagrether.idisguise.player;
+
+import java.util.Collection;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
+
+/**
+ * Swaps a disguised player's real name for the fake one in texts.
+ * Whole words only (so "Ana" never changes "Banana"), any capitalisation,
+ * and a colour code right before the name still counts as a word start ("§7Dany").
+ */
+final class NameReplacer {
+
+	private NameReplacer() {}
+
+	static Pattern wordPattern(String name) {
+		return Pattern.compile("(?:(?<=§[0-9a-fk-orA-FK-OR])|(?<![A-Za-z0-9_]))" + Pattern.quote(name) + "(?![A-Za-z0-9_])",
+				Pattern.CASE_INSENSITIVE);
+	}
+
+	/** Cheap check before doing any real work. */
+	static boolean mentionsAny(String text, Collection<PlayerDisguise> disguises) {
+		if(text == null || text.isEmpty()) return false;
+		String lower = text.toLowerCase(Locale.ENGLISH);
+		for(PlayerDisguise disguise : disguises) {
+			if(lower.contains(disguise.getRealName().toLowerCase(Locale.ENGLISH))) return true;
+		}
+		return false;
+	}
+
+	static String replace(String text, Collection<PlayerDisguise> disguises) {
+		if(!mentionsAny(text, disguises)) return text;
+		String result = text;
+		for(PlayerDisguise disguise : disguises) {
+			result = disguise.getRealNamePattern().matcher(result).replaceAll(Matcher.quoteReplacement(disguise.getFakeName()));
+		}
+		return result;
+	}
+
+	/**
+	 * Replaces names inside a chat component (JSON). Only text values are touched, never keys,
+	 * colours or translation keys, so the JSON stays valid even for a player called "text".
+	 * Returns null when nothing changed.
+	 */
+	@SuppressWarnings("deprecation")
+	static String replaceJson(String json, Collection<PlayerDisguise> disguises) {
+		if(!mentionsAny(json, disguises)) return null;
+		JsonElement root;
+		try {
+			root = new JsonParser().parse(json);
+		} catch(RuntimeException e) {
+			return null;
+		}
+		JsonElement replaced = walk(root, null, disguises);
+		String result = replaced.toString();
+		return result.equals(json) ? null : result;
+	}
+
+	private static JsonElement walk(JsonElement element, String key, Collection<PlayerDisguise> disguises) {
+		if(element == null || element.isJsonNull()) return element;
+		if(element.isJsonPrimitive()) {
+			JsonPrimitive primitive = element.getAsJsonPrimitive();
+			if(!primitive.isString() || isFixedKey(key)) return element;
+			String value = primitive.getAsString();
+			String replaced = replace(value, disguises);
+			return replaced.equals(value) ? element : new JsonPrimitive(replaced);
+		}
+		if(element.isJsonArray()) {
+			JsonArray result = new JsonArray();
+			for(JsonElement child : element.getAsJsonArray()) {
+				result.add(walk(child, key, disguises));
+			}
+			return result;
+		}
+		JsonObject result = new JsonObject();
+		for(Map.Entry<String, JsonElement> entry : element.getAsJsonObject().entrySet()) {
+			result.add(entry.getKey(), walk(entry.getValue(), entry.getKey(), disguises));
+		}
+		return result;
+	}
+
+	private static boolean isFixedKey(String key) {
+		return "color".equals(key) || "translate".equals(key) || "action".equals(key) || "font".equals(key);
+	}
+
+}
