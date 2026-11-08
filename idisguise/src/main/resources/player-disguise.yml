@@ -4,7 +4,11 @@
 #
 # Permissions (with commands.use-permission-nodes: true in config.yml):
 #   iDisguise.disguise.PLAYER   use player disguises
+#   iDisguise.random            /disguise random (a real Minecraft account's name and skin, random rank)
 #   iDisguise.rank.<rank>       use that fake rank, e.g. iDisguise.rank.gold
+#   iDisguise.rank.players      every rank in player-ranks
+#   iDisguise.rank.staff        every rank in staff-ranks
+#   iDisguise.rank.*            every rank
 #   iDisguise.player.anyname    use names of players who are online or have played here before
 #   iDisguise.player.staff      get the "staff" settings below and stay hidden in /disguise list
 #   iDisguise.admin             see everyone in /disguise list (staff too) and the plugin version
@@ -12,9 +16,9 @@
 # Turn player disguises on or off.
 enabled: true
 
-# Ranks that can be faked: /disguise <name> <rank>
+# Player ranks that can be faked: /disguise <name> <rank>, or picked in the menu after /disguise <name>.
 # A rank looks exactly like your LuckPerms group (chat prefix) and TAB group (tab list and nametag) of the same name.
-ranks:
+player-ranks:
 - gold
 - emerald
 - diamond
@@ -24,6 +28,9 @@ ranks:
 - herobrine
 - ludnica
 - ludnica+
+
+# Staff ranks that can be faked (iDisguise.rank.staff or iDisguise.rank.<rank>).
+staff-ranks:
 - trialmod
 - mod
 - srmod
@@ -36,6 +43,14 @@ default-rank: default
 
 # Disguising as a player who has played here before, without giving a rank, copies that player's real rank.
 copy-real-rank: true
+
+# Players without iDisguise.player.anyname can't use names of players who have played here before.
+# false = they can (names of players who are online are always blocked for them).
+block-known-names-for-players: true
+
+# /disguise random uses names of real Minecraft accounts (found through Mojang, never players of this server).
+# How many such names are kept ready, so the command is instant.
+random-name-pool: 40
 
 # Skins used when the name has no skin of its own (not a player of this server and no Minecraft account).
 # One is picked at random. Use names of real Minecraft accounts.

@@ -105,7 +105,7 @@ final class SkinResolver {
 
 	/** " (skin of <account>, signed)" - read from the skin data itself, for the debug line. */
 	@SuppressWarnings("deprecation")
-	private static String describe(Skin skin) {
+	static String describe(Skin skin) {
 		String owner = "?";
 		try {
 			String json = new String(java.util.Base64.getDecoder().decode(skin.value), StandardCharsets.UTF_8);

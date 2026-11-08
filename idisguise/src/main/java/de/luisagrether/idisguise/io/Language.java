@@ -176,6 +176,19 @@ public class Language {
 	@LastUpdated(60100)
 	public String PLAYER_DISGUISE_NAME_PLAYED_BEFORE = ChatColor.RED + "%name% has played on this server, you can't disguise as them.";
 	@LastUpdated(60100)
+	public String HELP_DISGUISE_RANDOM = ChatColor.GOLD.toString() + ChatColor.BOLD + "Random player disguise: " + ChatColor.ITALIC + "/disguise random\\\\"
+	                                   + ChatColor.GOLD + "A real player's name and skin with a random rank.";
+	@LastUpdated(60100)
+	public String RANDOM_NOT_READY = ChatColor.RED + "No random names are ready yet. Try again in a few seconds.";
+	@LastUpdated(60100)
+	public String MENU_TITLE = ChatColor.DARK_GRAY + "Rank for %name%";
+	@LastUpdated(60100)
+	public String MENU_RANK_LORE = ChatColor.GRAY + "Click to disguise as " + ChatColor.WHITE + "%name%";
+	@LastUpdated(60100)
+	public String MENU_NO_RANK = ChatColor.WHITE + "No rank";
+	@LastUpdated(60100)
+	public String MENU_REAL_RANK = ChatColor.YELLOW + "Real rank of %name% " + ChatColor.GRAY + "(%rank%)";
+	@LastUpdated(60100)
 	public String PLAYER_DISGUISE_RANK_OWNER_ONLINE = ChatColor.RED + "%name% is online, so you can only use their real rank: /disguise %name%";
 	@LastUpdated(60100)
 	public String PLAYER_DISGUISE_NAME_TAKEN = ChatColor.RED + "Someone is already disguised as %name%.";

@@ -56,6 +56,9 @@ public final class PlayerDisguiseManager implements Listener {
 	public static final String PERM_ANY_NAME = "iDisguise.player.anyname";
 	public static final String PERM_RANK = "iDisguise.rank.";
 	public static final String PERM_ADMIN = "iDisguise.admin";
+	public static final String PERM_RANDOM = "iDisguise.random";
+	/** rankInput meaning "explicitly no rank" (the default rank, never a copied one). */
+	public static final String NO_RANK = "\u0000no-rank";
 
 	private static final Set<String> OWN_COMMANDS = new HashSet<>(java.util.Arrays.asList(
 			"disguise", "d", "dis", "odisguise", "od", "undisguise", "ud", "undis", "idisguise"));
@@ -79,6 +82,7 @@ public final class PlayerDisguiseManager implements Listener {
 	private ChatColors chatColors;
 	private boolean placeholderApi;
 	private boolean skinsRestorer;
+	private RandomNames randomNames;
 
 	public PlayerDisguiseManager(iDisguise plugin) {
 		this.plugin = plugin;
@@ -121,6 +125,16 @@ public final class PlayerDisguiseManager implements Listener {
 		for(PlayerDisguise disguise : store.load()) {
 			disguises.put(disguise.getUniqueId(), disguise);
 		}
+		randomNames = new RandomNames(plugin, settings.randomNamePool, name -> {
+			if(luckPerms == null) return false;
+			try {
+				return luckPerms.lookupUniqueId(name).get(10, TimeUnit.SECONDS) != null;
+			} catch(Exception e) {
+				return true; // unsure: don't use it
+			}
+		});
+		randomNames.refill();
+		Bukkit.getPluginManager().registerEvents(new RankMenu.Clicks(plugin), plugin);
 		rewriter = new PacketRewriter(plugin, this);
 		rewriter.register();
 		Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -240,9 +254,102 @@ public final class PlayerDisguiseManager implements Listener {
 		List<String> result = new ArrayList<>();
 		if(settings == null) return result;
 		for(String rank : settings.ranks) {
-			if(has(sender, PERM_RANK + rank)) result.add(rank);
+			if(canUseRank(sender, rank)) result.add(rank);
 		}
 		return result;
+	}
+
+	/** iDisguise.rank.<rank>, or the group nodes iDisguise.rank.players / .staff / .* */
+	private boolean canUseRank(CommandSender sender, String rank) {
+		if(has(sender, PERM_RANK + rank) || has(sender, PERM_RANK + "*")) return true;
+		return settings.isStaffRank(rank) ? has(sender, PERM_RANK + "staff") : has(sender, PERM_RANK + "players");
+	}
+
+	/** With SkinsRestorer the disguise skin is put on the server profile, and packets keep that skin. */
+	boolean skinFromServerProfile() {
+		return skinsRestorer;
+	}
+
+	public boolean canUseRandom(CommandSender sender) {
+		return available && has(sender, PERM_RANDOM);
+	}
+
+	/**
+	 * /disguise <name> [rank] from a player for themselves: without a rank, a menu with the ranks
+	 * they may use opens (when there is more than one and the real player isn't online).
+	 */
+	public void disguiseCommand(CommandSender sender, Player target, String name, String rankInput, boolean self, Consumer<Boolean> done) {
+		Player owner = Bukkit.getPlayerExact(name);
+		boolean menu = available && rankInput == null && self && sender instanceof Player
+				&& (owner == null || owner == target) && usableRanks(sender).size() >= 2
+				&& iDisguise.ACCOUNTNAME.matcher(name).matches() && !"random".equalsIgnoreCase(name);
+		if(!menu) {
+			disguise(sender, target, name, rankInput, done);
+			return;
+		}
+		// Check the name first, so the menu only opens for a name that can be used.
+		String problem = nameProblem(target, name);
+		if(problem != null || plugin.isPlayerNameBlacklisted(name)) {
+			disguise(sender, target, name, rankInput, done);
+			return;
+		}
+		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+			String realRank = null;
+			try {
+				if(luckPerms != null && settings.copyRealRank && luckPerms.lookupUniqueId(name).get(10, TimeUnit.SECONDS) != null) {
+					String group = luckPerms.lookupPrimaryGroup(name).get(10, TimeUnit.SECONDS);
+					if(settings.isCopyableGroup(group)) realRank = group.toLowerCase(Locale.ENGLISH);
+				}
+			} catch(Exception e) {
+				debug("LuckPerms lookup failed for " + name, e);
+			}
+			String finalRealRank = realRank;
+			Bukkit.getScheduler().runTask(plugin, () -> {
+				if(target.isOnline()) openRankMenu(target, name, finalRealRank, done);
+			});
+		});
+	}
+
+	private void openRankMenu(Player player, String name, String realRank, Consumer<Boolean> done) {
+		Language language = language();
+		List<RankMenu.Option> options = new ArrayList<>();
+		if(realRank != null) {
+			String prefix = luckPerms == null ? null : luckPerms.groupPrefix(realRank);
+			options.add(new RankMenu.Option(null, prefix, color(prefix != null ? prefix : realRank),
+					language.MENU_REAL_RANK.replace("%name%", name).replace("%rank%", realRank)));
+		}
+		for(String rank : usableRanks(player)) {
+			String prefix = luckPerms == null ? null : luckPerms.groupPrefix(rank);
+			String title = prefix != null && !ChatColor.stripColor(color(prefix)).trim().isEmpty() ? color(prefix).trim() : ChatColor.WHITE + rank;
+			options.add(new RankMenu.Option(rank, prefix, title, language.MENU_RANK_LORE.replace("%name%", name).replace("%rank%", rank)));
+		}
+		options.add(new RankMenu.Option(NO_RANK, "&7", language.MENU_NO_RANK, language.MENU_RANK_LORE.replace("%name%", name).replace("%rank%", "-")));
+		new RankMenu(language.MENU_TITLE.replace("%name%", name), options,
+				choice -> disguise(player, player, name, choice, done)).open(player);
+	}
+
+	/** /disguise random: a real Minecraft account's name and skin, and a random rank the player may use. */
+	public void disguiseRandom(CommandSender sender, Player target, Consumer<Boolean> done) {
+		if(!available || randomNames == null) {
+			send(sender, language().DISGUISE_TYPE_NOT_SUPPORTED);
+			finish(done, false);
+			return;
+		}
+		String name = randomNames.take(candidate -> {
+			if(plugin.isPlayerNameBlacklisted(candidate) || nameProblem(target, candidate) != null) return false;
+			if(Bukkit.getPlayerExact(candidate) != null) return false;
+			return luckPerms != null || !hasPlayedBefore(candidate, target);
+		});
+		if(name == null) {
+			send(sender, language().RANDOM_NOT_READY);
+			finish(done, false);
+			return;
+		}
+		// Every rank the player may use has the same chance, "no rank" counts as one of them.
+		List<String> choices = new ArrayList<>(usableRanks(sender));
+		choices.add(NO_RANK);
+		String rank = choices.get(new java.util.Random().nextInt(choices.size()));
+		disguise(sender, target, name, rank, done);
 	}
 
 	// ---------------------------------------------------------------- disguise
@@ -258,7 +365,7 @@ public final class PlayerDisguiseManager implements Listener {
 			finish(done, false);
 			return;
 		}
-		if(!iDisguise.ACCOUNTNAME.matcher(name).matches()) {
+		if(!iDisguise.ACCOUNTNAME.matcher(name).matches() || "random".equalsIgnoreCase(name)) {
 			send(sender, language.PLAYER_DISGUISE_ACCOUNT_NAME_INVALID);
 			finish(done, false);
 			return;
@@ -269,6 +376,8 @@ public final class PlayerDisguiseManager implements Listener {
 			return;
 		}
 		String chosenRank = null;
+		boolean noRank = NO_RANK.equals(rankInput);
+		if(noRank) rankInput = null;
 		if(rankInput != null) {
 			chosenRank = settings.findRank(rankInput);
 			if(chosenRank == null) {
@@ -277,7 +386,7 @@ public final class PlayerDisguiseManager implements Listener {
 				finish(done, false);
 				return;
 			}
-			if(!has(sender, PERM_RANK + chosenRank)) {
+			if(!canUseRank(sender, chosenRank)) {
 				send(sender, language.PLAYER_DISGUISE_RANK_NO_PERMISSION.replace("%rank%", chosenRank));
 				finish(done, false);
 				return;
@@ -303,7 +412,8 @@ public final class PlayerDisguiseManager implements Listener {
 			return;
 		}
 		// Without LuckPerms, check the server's own player list (on this thread: it isn't thread-safe).
-		boolean joinedWithoutLuckPerms = luckPerms == null && !anyName && hasPlayedBefore(name, target);
+		boolean blockKnown = !anyName && settings.blockKnownNamesForPlayers;
+		boolean joinedWithoutLuckPerms = luckPerms == null && blockKnown && hasPlayedBefore(name, target);
 
 		String rankArgument = chosenRank;
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -312,7 +422,7 @@ public final class PlayerDisguiseManager implements Listener {
 			try {
 				if(luckPerms != null) {
 					knownUuid = luckPerms.lookupUniqueId(name).get(10, TimeUnit.SECONDS);
-					if(rank == null && settings.copyRealRank && knownUuid != null) {
+					if(rank == null && !noRank && settings.copyRealRank && knownUuid != null) {
 						String group = luckPerms.lookupPrimaryGroup(name).get(10, TimeUnit.SECONDS);
 						if(settings.isCopyableGroup(group)) rank = group.toLowerCase(Locale.ENGLISH);
 					}
@@ -321,7 +431,7 @@ public final class PlayerDisguiseManager implements Listener {
 				debug("LuckPerms lookup failed for " + name, e);
 			}
 			boolean joined = joinedWithoutLuckPerms || (knownUuid != null && !knownUuid.equals(target.getUniqueId()));
-			if(joined && !anyName) {
+			if(joined && blockKnown) {
 				Bukkit.getScheduler().runTask(plugin, () -> {
 					send(sender, language.PLAYER_DISGUISE_NAME_PLAYED_BEFORE.replace("%name%", name));
 					finish(done, false);
@@ -443,7 +553,16 @@ public final class PlayerDisguiseManager implements Listener {
 		if(!skinsRestorer || !disguise.hasSkin()) return;
 		try {
 			SkinsRestorerSkins.show(player, disguise.getSkinValue(), disguise.getSkinSignature());
-			debug("SkinsRestorer now shows the disguise skin on " + player.getName());
+			Bukkit.getScheduler().runTaskLater(plugin, () -> {
+				if(!player.isOnline()) return;
+				String owner = "none";
+				for(com.comphenix.protocol.wrappers.WrappedSignedProperty property
+						: WrappedGameProfile.fromPlayer(player).getProperties().get("textures")) {
+					SkinResolver.Skin skin = new SkinResolver.Skin(property.getValue(), property.getSignature());
+					owner = SkinResolver.describe(skin);
+				}
+				debug("After SkinsRestorer applied the disguise skin, " + player.getName() + "'s server profile has:" + owner);
+			}, 20L);
 		} catch(Throwable t) {
 			Throwable cause = t.getCause() != null ? t.getCause() : t;
 			plugin.getLogger().warning("SkinsRestorer could not show the disguise skin on " + player.getName() + ": " + cause);

@@ -109,7 +109,8 @@ final class PacketRewriter extends PacketAdapter {
 			changed = true;
 			boolean self = viewer.equals(disguise.getUniqueId());
 			if(action == PlayerInfoAction.ADD_PLAYER) {
-				WrappedGameProfile fake = fakeProfile(disguise);
+				WrappedGameProfile fake = manager.skinFromServerProfile()
+						? renamed(entry.getProfile(), disguise) : fakeProfile(disguise);
 				manager.debugOnce(disguise, "Sending " + disguise.getRealName() + " as " + disguise.getFakeName() + " to " + event.getPlayer().getName()
 						+ (fake.getProperties().containsKey("textures") ? " with the disguise skin" : " WITHOUT a skin (none was found)"));
 				result.add(new PlayerInfoData(fake, entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
@@ -134,6 +135,26 @@ final class PacketRewriter extends PacketAdapter {
 		PacketContainer copy = packet.shallowClone();
 		copy.getPlayerInfoDataLists().write(0, result);
 		event.setPacket(copy);
+	}
+
+	/**
+	 * Fake name, but the skin the server profile has right now. With SkinsRestorer that is the
+	 * disguise skin it applied (the way /skin does it, which every client accepts).
+	 */
+	private static WrappedGameProfile renamed(WrappedGameProfile original, PlayerDisguise disguise) {
+		WrappedGameProfile profile = new WrappedGameProfile(disguise.getUniqueId(), disguise.getFakeName());
+		try {
+			Object source = original.getHandle();
+			Object target = profile.getHandle();
+			@SuppressWarnings("unchecked")
+			Multimap<String, Object> from = (Multimap<String, Object>)source.getClass().getMethod("getProperties").invoke(source);
+			@SuppressWarnings("unchecked")
+			Multimap<String, Object> to = (Multimap<String, Object>)target.getClass().getMethod("getProperties").invoke(target);
+			to.putAll(from);
+		} catch(ReflectiveOperationException e) {
+			profile.getProperties().putAll(original.getProperties());
+		}
+		return profile;
 	}
 
 	static WrappedGameProfile fakeProfile(PlayerDisguise disguise) {

@@ -36,7 +36,12 @@ final class PlayerDisguiseSettings {
 	}
 
 	final boolean enabled;
+	// All fake ranks: player ranks first, then staff ranks.
 	final List<String> ranks;
+	final List<String> playerRanks;
+	final List<String> staffRanks;
+	final boolean blockKnownNamesForPlayers;
+	final int randomNamePool;
 	final String defaultRank;
 	final boolean copyRealRank;
 	final List<String> randomSkins;
@@ -49,6 +54,7 @@ final class PlayerDisguiseSettings {
 		if(!file.exists()) {
 			plugin.saveResource("player-disguise.yml", false);
 		}
+		addMissingKeys(plugin, file);
 		YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
 		try(InputStream defaults = plugin.getResource("player-disguise.yml")) {
 			if(defaults != null) {
@@ -59,11 +65,15 @@ final class PlayerDisguiseSettings {
 		}
 
 		enabled = config.getBoolean("enabled", true);
-		List<String> rankList = new ArrayList<>();
-		for(String rank : config.getStringList("ranks")) {
-			rankList.add(rank.toLowerCase(Locale.ENGLISH));
+		playerRanks = lowerCase(config.getStringList("player-ranks"));
+		staffRanks = lowerCase(config.getStringList("staff-ranks"));
+		List<String> all = new ArrayList<>(playerRanks);
+		for(String rank : staffRanks) {
+			if(!all.contains(rank)) all.add(rank);
 		}
-		ranks = Collections.unmodifiableList(rankList);
+		ranks = Collections.unmodifiableList(all);
+		blockKnownNamesForPlayers = config.getBoolean("block-known-names-for-players", true);
+		randomNamePool = Math.max(5, config.getInt("random-name-pool", 40));
 		String configuredDefault = config.getString("default-rank", "default");
 		defaultRank = configuredDefault == null || configuredDefault.isEmpty() ? null : configuredDefault.toLowerCase(Locale.ENGLISH);
 		copyRealRank = config.getBoolean("copy-real-rank", true);
@@ -71,6 +81,68 @@ final class PlayerDisguiseSettings {
 		essentialsConfig = config.getString("essentials-config", "plugins/Essentials/config.yml");
 		staff = new Profile(section(config, "profiles.staff"));
 		players = new Profile(section(config, "profiles.players"));
+	}
+
+	private static List<String> lowerCase(List<String> list) {
+		List<String> result = new ArrayList<>();
+		for(String entry : list) {
+			String lower = entry.toLowerCase(Locale.ENGLISH);
+			if(!result.contains(lower)) result.add(lower);
+		}
+		return Collections.unmodifiableList(result);
+	}
+
+	/**
+	 * New options of a newer version are appended to the server's file with their comments,
+	 * so the file never has to be deleted to get them. The server's own values stay untouched.
+	 */
+	private static void addMissingKeys(JavaPlugin plugin, File file) {
+		try(InputStream input = plugin.getResource("player-disguise.yml")) {
+			if(input == null) return;
+			String defaults = new String(readAll(input), StandardCharsets.UTF_8).replace("\r\n", "\n");
+			YamlConfiguration current = YamlConfiguration.loadConfiguration(file);
+			StringBuilder missing = new StringBuilder();
+			List<String> comments = new ArrayList<>();
+			String[] lines = defaults.split("\n", -1);
+			for(int i = 0; i < lines.length; i++) {
+				String line = lines[i];
+				if(line.startsWith("#")) {
+					comments.add(line);
+					continue;
+				}
+				if(line.trim().isEmpty() || line.startsWith(" ") || line.startsWith("-")) {
+					comments.clear();
+					continue;
+				}
+				String key = line.contains(":") ? line.substring(0, line.indexOf(':')).trim() : line.trim();
+				if(!current.contains(key)) {
+					missing.append("\n");
+					for(String comment : comments) missing.append(comment).append("\n");
+					missing.append(line).append("\n");
+					while(i + 1 < lines.length && (lines[i + 1].startsWith(" ") || lines[i + 1].startsWith("-"))) {
+						missing.append(lines[++i]).append("\n");
+					}
+				}
+				comments.clear();
+			}
+			if(missing.length() > 0) {
+				java.nio.file.Files.write(file.toPath(), missing.toString().getBytes(StandardCharsets.UTF_8), java.nio.file.StandardOpenOption.APPEND);
+			}
+		} catch(Exception e) {
+			plugin.getLogger().log(Level.WARNING, "Could not add new options to player-disguise.yml", e);
+		}
+	}
+
+	private static byte[] readAll(InputStream input) throws java.io.IOException {
+		java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+		byte[] buffer = new byte[4096];
+		int read;
+		while((read = input.read(buffer)) != -1) out.write(buffer, 0, read);
+		return out.toByteArray();
+	}
+
+	boolean isStaffRank(String rank) {
+		return rank != null && staffRanks.contains(rank.toLowerCase(Locale.ENGLISH));
 	}
 
 	private static ConfigurationSection section(YamlConfiguration config, String path) {

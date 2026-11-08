@@ -770,6 +770,17 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				sendHelpPage(sender, page);
 			} else if(args[0].equalsIgnoreCase("list")) {
 				sendDisguiseList(sender);
+			} else if(args[0].equalsIgnoreCase("random") && playerDisguises.isAvailable()) {
+				if(!playerDisguises.canUseRandom(sender)) {
+					sender.sendMessage(language.DISGUISE_NO_PERMISSION);
+				} else {
+					Player finalTarget = target;
+					playerDisguises.disguiseRandom(sender, target, (success) -> {
+						if(success && !self) {
+							finalTarget.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
+						}
+					});
+				}
 			} else if(args[0].equalsIgnoreCase("player")) {
 				if(args.length == 1) {
 					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_MISSING);
@@ -978,7 +989,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			sender.sendMessage(language.DISGUISE_NO_PERMISSION);
 			return;
 		}
-		playerDisguises.disguise(sender, target, name, rank, (success) -> {
+		playerDisguises.disguiseCommand(sender, target, name, rank, self, (success) -> {
 			if(success && !self) {
 				target.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
 			}
@@ -998,6 +1009,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			addHelpMessage(helpPages, language.HELP_DISGUISE_MOB);
 			if(hasPermission(sender, EntityType.PLAYER) && playerDisguises.isAvailable()) {
 				addHelpMessage(helpPages, language.HELP_DISGUISE_PLAYER);
+			}
+			if(playerDisguises.canUseRandom(sender)) {
+				addHelpMessage(helpPages, language.HELP_DISGUISE_RANDOM);
 			}
 			addHelpMessage(helpPages, language.HELP_DISGUISE_CHECK);
 			addHelpMessage(helpPages, language.HELP_UNDISGUISE);
@@ -1117,6 +1131,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			} else if(args.length < (self ? 2 : 3)) {
 				completions.add("?");
 				completions.add("list");
+				if(playerDisguises.canUseRandom(sender)) completions.add("random");
 				for(EntityType type : EntityType.values()) {
 					if(type.equals(EntityType.PLAYER) && !playerDisguises.isAvailable()) continue;
 					if(!config.DISGUISE_TYPE_BLACKLIST.contains(type.name()) && (!(sender instanceof Player) || hasPermission((Player)sender, type))) {
