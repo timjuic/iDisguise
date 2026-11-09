@@ -663,7 +663,8 @@ public final class PlayerDisguiseManager implements Listener {
 		PlayerDisguise previous = disguises.get(target.getUniqueId());
 		if(previous != null) {
 			disguises.remove(target.getUniqueId());
-			resetLook(target, previous);
+			// Straight from one disguise to the next: the real rank is never put back in between.
+			rebuildOwnerNameTag(target, previous);
 			removeDisguiseEntry(target, previous);
 			rebuildSnapshots();
 		}
@@ -753,15 +754,13 @@ public final class PlayerDisguiseManager implements Listener {
 	void repair(Player player) {
 		PlayerDisguise disguise = disguises.get(player.getUniqueId());
 		if(!player.isOnline() || disguise == null) return;
+		// The vanish plugin's packets go through iDisguise (the body and tab entry already show the
+		// disguise), so only a real-name tab entry that may have slipped past is removed. Sending the body
+		// again here left a second, ghost body on 1.8 clients.
 		for(Player viewer : Bukkit.getOnlinePlayers()) {
 			if(viewer == player || !viewer.canSee(player)) continue;
-			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,
-					new WrappedGameProfile(disguise.getFakeUniqueId(), disguise.getFakeName())));
 			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, null,
 					new WrappedGameProfile(player.getUniqueId(), player.getName())));
-			disguise.getRemovedFor().remove(viewer.getUniqueId());
-			viewer.hidePlayer(player);
-			viewer.showPlayer(player);
 		}
 	}
 
@@ -948,16 +947,10 @@ public final class PlayerDisguiseManager implements Listener {
 			disguise.setPreviousDisplayName(player.getDisplayName());
 		}
 		player.setDisplayName(disguise.getFakeName());
-		String rank = effectiveRank(disguise);
-		// A moment after the refresh (hide / show): TAB reacts to both, and doing them at the same time
-		// made it send the nametag team twice ("team already exists" on the client).
+		// Right away, before the refresh: others never see the new name with the old (or real) rank.
 		if(tab != null) {
-			Bukkit.getScheduler().runTaskLater(plugin, () -> {
-				if(player.isOnline() && disguises.get(player.getUniqueId()) == disguise) {
-					tab.apply(player, effectiveRank(disguise), disguise.getFakeName());
-					tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
-				}
-			}, 10L);
+			tab.apply(player, effectiveRank(disguise), disguise.getFakeName());
+			tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
 		}
 	}
 
@@ -969,8 +962,14 @@ public final class PlayerDisguiseManager implements Listener {
 			tab.apply(player, null, null);
 			tab.setTagSuffix(player, null);
 		}
-		// Disguised as a player who is online: TAB sometimes drops that player's own nametag team for
-		// others when the disguise ends (their rank above the head was gone). Rebuild it.
+		rebuildOwnerNameTag(player, disguise);
+	}
+
+	/**
+	 * Disguised as a player who is online: TAB sometimes drops that player's own nametag team for
+	 * others when the disguise ends (their rank above the head was gone). Rebuild it.
+	 */
+	private void rebuildOwnerNameTag(Player player, PlayerDisguise disguise) {
 		Player owner = Bukkit.getPlayerExact(disguise.getFakeName());
 		if(tab != null && owner != null && owner != player) {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> {
