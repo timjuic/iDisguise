@@ -108,6 +108,9 @@ public final class PlayerDisguiseManager implements Listener {
 	private final Map<UUID, Long> lastDisguised = new ConcurrentHashMap<>();
 	// viewer -> disguised player -> how TAB would show the real player (staff with reveal on)
 	private final Map<UUID, Map<UUID, TabLook.Look>> revealLooks = new ConcurrentHashMap<>();
+	// viewer (reveal on) -> disguised players who have an iDisguise nametag team on that viewer's screen
+	private final Map<UUID, Set<UUID>> revealTeams = new ConcurrentHashMap<>();
+	private int revealTick;
 
 	public PlayerDisguiseManager(iDisguise plugin) {
 		this.plugin = plugin;
@@ -393,6 +396,7 @@ public final class PlayerDisguiseManager implements Listener {
 			disguise(sender, target, name, rankInput, done);
 			return;
 		}
+		send(sender, language().PLAYER_DISGUISE_LOADING.replace("%name%", name));
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 			String realRank = null;
 			boolean known = false;
@@ -440,7 +444,14 @@ public final class PlayerDisguiseManager implements Listener {
 				RankMenu.lines(language.RANK_MENU_HEADER_LORE));
 		org.bukkit.inventory.ItemStack frame = RankMenu.item(settings.menuItem("frame"), " ", null);
 		new RankMenu(language.RANK_MENU_TITLE.replace("%name%", name), header, frame, playerEntries, staffEntries, real, cancel,
-				choice -> disguise(player, player, name, choice, done)).open(player);
+				choice -> {
+					// Two menus open at once can't get around the cooldown.
+					if(checkCooldown(player)) {
+						disguise(player, player, name, choice, done);
+					} else {
+						finish(done, false);
+					}
+				}).open(player);
 	}
 
 	/** A rank in the menu: named the way others will see you ("[Gold] Notch"). firstLine: optional extra lore line on top. */
@@ -707,6 +718,7 @@ public final class PlayerDisguiseManager implements Listener {
 		rebuildSnapshots();
 		save();
 		log.end(player.getName(), player.getUniqueId(), "player", disguise.getFakeName());
+		dropRevealTeams(player);
 		if(player.isOnline()) {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
@@ -1171,6 +1183,8 @@ public final class PlayerDisguiseManager implements Listener {
 		lastTabInput.remove(quit.getUniqueId());
 		revealPlayers.remove(quit.getUniqueId());
 		revealLooks.remove(quit.getUniqueId());
+		revealTeams.remove(quit.getUniqueId());
+		dropRevealTeams(quit);
 		tabLines.remove(quit.getUniqueId());
 		for(Map<UUID, String> lines : tabLines.values()) lines.remove(quit.getUniqueId());
 		for(PlayerDisguise disguise : disguises.values()) {
@@ -1369,7 +1383,12 @@ public final class PlayerDisguiseManager implements Listener {
 			// Disguised as someone online: follow their rank if it changed (chat shows it).
 			Player owner = disguise.isHiddenFromTab() ? Bukkit.getPlayerExact(disguise.getFakeName()) : null;
 			if(owner != null && owner != player) disguise.setOwnerRank(realRankOf(owner));
-			if(tab != null) tab.ensure(player, effectiveRank(disguise), disguise.getFakeName());
+			if(tab != null && tab.ensure(player, effectiveRank(disguise), disguise.getFakeName())) {
+				// TAB was reloaded: it also forgot the disguise name for the nametag (it reads it from the
+				// player's own tab entry) and the nametag faction.
+				resendOwnEntry(player);
+				tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
+			}
 		}
 	}
 
@@ -1414,6 +1433,7 @@ public final class PlayerDisguiseManager implements Listener {
 				updateRevealLooks();
 			} else {
 				revealLooks.remove(viewer.getUniqueId());
+				dropRevealTeamsOf(viewer);
 			}
 			for(PlayerDisguise disguise : online) {
 				Player disguised = Bukkit.getPlayer(disguise.getUniqueId());
@@ -1499,7 +1519,57 @@ public final class PlayerDisguiseManager implements Listener {
 				if(before != null && !before.tabLine.equals(look.tabLine)) {
 					sendRaw(viewer, PacketRewriter.displayName(target, look.tabLine));
 				}
+				Set<UUID> teams = revealTeams.computeIfAbsent(viewerId, id -> ConcurrentHashMap.newKeySet());
+				if(teams.add(target.getUniqueId())) {
+					sendRaw(viewer, revealTeam(target, look, 0));
+				} else if(!look.sameTag(before)) {
+					sendRaw(viewer, revealTeam(target, look, 2));
+				} else if(revealTick % 5 == 0) {
+					// TAB may have put the name back into its own team (e.g. after a rank change).
+					sendRaw(viewer, revealTeam(target, look, 3));
+				}
 			}
+		}
+		revealTick++;
+	}
+
+	/**
+	 * Reveal players: an iDisguise team only on that viewer's screen, with the real name in it and the
+	 * real rank and faction as nametag. Sent by iDisguise itself; TAB's packets are never touched.
+	 * mode 0 = create, 1 = remove, 2 = update, 3 = add the name.
+	 */
+	private static PacketContainer revealTeam(Player target, TabLook.Look look, int mode) {
+		PacketContainer packet = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.SCOREBOARD_TEAM);
+		String name = "idR" + target.getUniqueId().toString().replace("-", "").substring(0, 13);
+		packet.getStrings().write(0, name);
+		packet.getIntegers().write(1, mode);
+		if(mode == 0 || mode == 2) {
+			packet.getStrings().write(1, name);
+			packet.getStrings().write(2, cut(look.tagPrefix, 16));
+			packet.getStrings().write(3, cut(look.tagSuffix, 16));
+		}
+		if(mode == 0 || mode == 3) {
+			packet.getSpecificModifier(Collection.class).write(0, new ArrayList<>(Collections.singletonList(target.getName())));
+		}
+		return packet;
+	}
+
+	/** Removes the reveal nametag teams of a disguised player (disguise ended or they left). */
+	private void dropRevealTeams(Player target) {
+		for(Map.Entry<UUID, Set<UUID>> entry : revealTeams.entrySet()) {
+			if(!entry.getValue().remove(target.getUniqueId())) continue;
+			Player viewer = Bukkit.getPlayer(entry.getKey());
+			if(viewer != null) sendRaw(viewer, revealTeam(target, null, 1));
+		}
+	}
+
+	/** Reveal turned off: all reveal nametag teams go away for that viewer. */
+	private void dropRevealTeamsOf(Player viewer) {
+		Set<UUID> teams = revealTeams.remove(viewer.getUniqueId());
+		if(teams == null) return;
+		for(UUID id : teams) {
+			Player target = Bukkit.getPlayer(id);
+			if(target != null) sendRaw(viewer, revealTeam(target, null, 1));
 		}
 	}
 

@@ -67,21 +67,24 @@ final class TabHook {
 	}
 
 	/** Re-applies the disguise rank when TAB lost it (e.g. after /tab reload). */
-	void ensure(Player player, String group, String name) {
-		if(group == null || !player.isOnline()) return;
+	/** Puts the disguise rank back if TAB lost it. Returns true when it had to (e.g. after /tab reload). */
+	boolean ensure(Player player, String group, String name) {
+		if(group == null || !player.isOnline()) return false;
 		try {
 			Object tabPlayer = getPlayer.invoke(getInstance.invoke(null), player.getUniqueId());
 			if(tabPlayer == null || !(Boolean)isLoaded.invoke(tabPlayer)) {
 				notLoaded(player);
-				return;
+				return false;
 			}
 			// Missing (e.g. after /tab reload) or a different group: put the disguise rank back.
 			if(!(Boolean)hasTemporaryGroup.invoke(tabPlayer) || !group.equalsIgnoreCase(String.valueOf(getGroup.invoke(tabPlayer)))) {
 				apply(player, group, name);
+				return true;
 			}
 		} catch(Throwable t) {
 			// TAB is reloading: the next check tries again
 		}
+		return false;
 	}
 
 	/**
