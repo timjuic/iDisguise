@@ -506,19 +506,27 @@ public final class PlayerDisguiseManager implements Listener {
 				debug("LuckPerms lookup failed for " + name, e);
 			}
 			boolean refused = known && blockKnown;
-			// The skin now (not after the click): the menu's head shows it, and the disguise uses the very
-			// same one (a random skin would otherwise differ). Mojang answers are cached, so no extra lookups.
-			SkinResolver.Skin skin = refused ? null : skins.resolve(name, knownUuid, settings.randomSkins);
-			String finalRealRank = realRank;
+			Menu menu = new Menu(chooser, target, name, realRank, null, done);
+			// The menu opens right away (wither skull on top); the skin comes after it.
 			Bukkit.getScheduler().runTask(plugin, () -> {
 				if(!target.isOnline() || !chooser.isOnline()) return;
-				Menu menu = new Menu(chooser, target, name, finalRealRank, skin, done);
 				if(refused) {
 					disguise(sender, target, name, null, null, done);
 				} else if(ranks) {
 					openRankMenu(menu);
 				} else {
 					openTagMenu(menu, 0, true);
+				}
+			});
+			if(refused) return;
+			// The skin for the head, which the disguise then uses too (a random skin would otherwise differ).
+			// Mojang answers are cached. Clicked before it's here: the disguise looks it up itself.
+			SkinResolver.Skin skin = skins.resolve(name, knownUuid, settings.randomSkins);
+			Bukkit.getScheduler().runTask(plugin, () -> {
+				menu.skin = skin;
+				// Swapped in the open menu (rank or tag), nothing reopens.
+				if(menu.shown != null && chooser.isOnline() && chooser.getOpenInventory().getTopInventory().getHolder() == menu.shown) {
+					menu.shown.replace(DisguiseMenu.HEADER, menuHeader(menu));
 				}
 			});
 		});
@@ -530,7 +538,10 @@ public final class PlayerDisguiseManager implements Listener {
 		final Player target;
 		final String name;
 		final String realRank;
-		final SkinResolver.Skin skin;
+		// null until the lookup is done (main thread only).
+		SkinResolver.Skin skin;
+		// The menu open right now (rank or tag), for swapping the head in when the skin arrives.
+		DisguiseMenu shown;
 		final Consumer<Boolean> done;
 		// Picked so far: the tag (null = default, "" = none) and the invisibility switch.
 		String tag;
@@ -668,7 +679,7 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		String title = (chooser != target ? language.RANK_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.RANK_MENU_TITLE)
 				.replace("%name%", name);
-		new RankMenu(title, menuHeader(menu), menuFrame(), rankEntries, real, cancel, tagButton, invisButton(chooser, menu.invis),
+		menu.shown = new RankMenu(title, menuHeader(menu), menuFrame(), rankEntries, real, cancel, tagButton, invisButton(chooser, menu.invis),
 				(shown, choice) -> {
 					if(RankMenu.TAG.equals(choice)) {
 						openTagMenu(menu, 0, false);
@@ -681,7 +692,8 @@ public final class PlayerDisguiseManager implements Listener {
 						disguiseFromMenu(menu, choice, menu.tag, menu.invis);
 					}
 					return false;
-				}).open(chooser);
+				});
+		menu.shown.open(chooser);
 	}
 
 	/**
@@ -723,7 +735,7 @@ public final class PlayerDisguiseManager implements Listener {
 		org.bukkit.inventory.ItemStack next = shownPage < pages - 1 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_NEXT, pageLore) : null;
 		String title = (chooser != target ? language.TAG_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.TAG_MENU_TITLE)
 				.replace("%name%", name);
-		new TagMenu(title, menuHeader(menu), menuFrame(), entries, back, cancelItem(), previous, next, invisButton(chooser, menu.invis),
+		menu.shown = new TagMenu(title, menuHeader(menu), menuFrame(), entries, back, cancelItem(), previous, next, invisButton(chooser, menu.invis),
 				(shown, choice) -> {
 					if(TagMenu.PREVIOUS_ACTION.equals(choice)) {
 						openTagMenu(menu, shownPage - 1, tagOnly);
@@ -745,7 +757,8 @@ public final class PlayerDisguiseManager implements Listener {
 						}
 					}
 					return false;
-				}).open(chooser);
+				});
+		menu.shown.open(chooser);
 	}
 
 	/** A rank in the menu: named the way others will see you ("[Gold] Notch"). firstLine: optional extra lore line on top. */
