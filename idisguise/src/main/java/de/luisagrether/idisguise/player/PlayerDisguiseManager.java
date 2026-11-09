@@ -891,6 +891,7 @@ public final class PlayerDisguiseManager implements Listener {
 		applyLook(target, disguise);
 		removeRealEntry(target);
 		refresh(target);
+		resortLater(target, disguise);
 		log.start(target.getName(), target.getUniqueId(), "player", name, effectiveRank(disguise));
 		if(previous != null) log.end(target.getName(), target.getUniqueId(), "player", previous.getFakeName());
 
@@ -901,8 +902,10 @@ public final class PlayerDisguiseManager implements Listener {
 			tagPart = language.PLAYER_DISGUISED_TAG.replace("%tag%", picked != null && !picked.shown().trim().isEmpty()
 					? picked.label() : language.RANK_MENU_TAG_NONE);
 		}
-		send(sender, language.PLAYER_DISGUISED.replace("%name%", name).replace("%rank%", rankLook(effectiveRank(disguise), target))
-				.replace("%tag%", tagPart));
+		String disguisedText = sender != target
+				? language.PLAYER_DISGUISED_OTHER.replace("%player%", target.getName())
+				: language.PLAYER_DISGUISED;
+		send(sender, disguisedText.replace("%name%", name).replace("%rank%", rankLook(effectiveRank(disguise), target)).replace("%tag%", tagPart));
 		finish(done, true);
 	}
 
@@ -920,6 +923,7 @@ public final class PlayerDisguiseManager implements Listener {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
 			refresh(player);
+			resortLater(player, null);
 		}
 		return true;
 	}
@@ -1336,6 +1340,18 @@ public final class PlayerDisguiseManager implements Listener {
 				if(owner.isOnline()) tab.rebuildNameTag(owner);
 			}, 20L);
 		}
+	}
+
+	/**
+	 * Two seconds after a disguise, a switch or an undisguise: TAB rebuilds the player's nametag team once.
+	 * TAB changes the team's sorting name when the rank / name changes, but clients kept the old team, so
+	 * the player sat in tab where the old rank or name belonged. expected == null: undisguised.
+	 */
+	private void resortLater(Player player, PlayerDisguise expected) {
+		if(tab == null) return;
+		Bukkit.getScheduler().runTaskLater(plugin, () -> {
+			if(player.isOnline() && disguises.get(player.getUniqueId()) == expected) tab.rebuildNameTag(player);
+		}, 40L);
 	}
 
 	/**

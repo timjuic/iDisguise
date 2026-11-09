@@ -169,6 +169,12 @@ public class Language {
 	public String TAG_MENU_NEXT = ChatColor.YELLOW + "Next page";
 	@LastUpdated(60143)
 	public String PLAYER_DISGUISED = c("%prefix%&7You are now disguised as &e%name% &7(rank: %rank%&7%tag%&7).");
+	@LastUpdated(60154)
+	public String PLAYER_DISGUISED_OTHER = c("%prefix%&e%player% &7is now disguised as &e%name% &7(rank: %rank%&7%tag%&7).");
+	@LastUpdated(60154)
+	public String UNDISGUISED_OTHER = c("%prefix%&e%player% &7is no longer disguised.");
+	@LastUpdated(60154)
+	public String DISGUISED_OTHER = c("%prefix%&e%player% &7is now disguised.");
 	@LastUpdated(60143)
 	public String PLAYER_DISGUISED_TAG = c("&7, tag: %tag%");
 	@LastUpdated(60106)

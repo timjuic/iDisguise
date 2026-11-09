@@ -952,7 +952,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 									sender.sendMessage(language.DISGUISE_STATEMENT_FORBIDDEN.replace("%statement%", codeFrags[0]));
 								}
 							}
-							sender.sendMessage(language.DISGUISED_SUCCESSFULLY);
+							sender.sendMessage(self ? language.DISGUISED_SUCCESSFULLY : language.DISGUISED_OTHER.replace("%player%", target.getName()));
 							if(!self) {
 								target.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
 							}
@@ -1002,7 +1002,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			if(anyDisguise(target)) {
 				try {
 					undisguiseChecked(target, true);
-					sender.sendMessage(language.UNDISGUISED_SUCCESSFULLY);
+					sender.sendMessage(self ? language.UNDISGUISED_SUCCESSFULLY : language.UNDISGUISED_OTHER.replace("%player%", target.getName()));
 					if(!self) {
 						target.sendMessage(language.UNDISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
 					}
