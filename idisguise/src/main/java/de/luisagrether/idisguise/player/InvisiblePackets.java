@@ -61,7 +61,7 @@ final class InvisiblePackets extends PacketAdapter {
 		UUID owner = entityId == null ? null : manager.invisibility().ownerOf(entityId);
 		if(owner == null || event.getPlayer().getUniqueId().equals(owner)) return;
 		PacketContainer copy = event.getPacket().shallowClone();
-		copy.getItemModifier().write(0, null);
+		copy.getItemModifier().write(0, new org.bukkit.inventory.ItemStack(org.bukkit.Material.AIR));
 		event.setPacket(copy);
 	}
 

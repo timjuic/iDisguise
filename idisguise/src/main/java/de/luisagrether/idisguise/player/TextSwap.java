@@ -137,8 +137,12 @@ final class TextSwap {
 		if(!(name instanceof String)) return;
 		String replaced = NameReplacer.replace((String)name, disguises);
 		if(replaced.equals(name)) return;
-		WrappedDataWatcher copyWatcher = watcher.deepClone();
-		copyWatcher.setObject(2, replaced);
+		// A brand-new watcher with copied values: a clone shares its values with the real entity on 1.8,
+		// and changing it would rename the mob / armor stand on the server for real.
+		WrappedDataWatcher copyWatcher = new WrappedDataWatcher();
+		for(WrappedWatchableObject object : watcher.getWatchableObjects()) {
+			copyWatcher.setObject(object.getIndex(), object.getIndex() == 2 ? replaced : object.getValue());
+		}
 		PacketContainer copy = event.getPacket().shallowClone();
 		copy.getDataWatcherModifier().write(0, copyWatcher);
 		event.setPacket(copy);
