@@ -69,6 +69,7 @@ final class PlayerDisguiseStore {
 						section.getString("skin-value"), section.getString("skin-signature"));
 				disguise.setChatTag(section.getString("chat-tag"));
 				disguise.setChosenTag(section.getString("tag"));
+				disguise.setPlayerPermissions(section.getBoolean("player-permissions", false));
 				String owner = section.getString("owner-uuid");
 				if(owner != null) disguise.setOwnerUuid(UUID.fromString(owner));
 				result.add(disguise);
@@ -94,6 +95,7 @@ final class PlayerDisguiseStore {
 			yaml.set(key + ".chat-tag", disguise.getChatTag());
 			if(disguise.getOwnerUuid() != null) yaml.set(key + ".owner-uuid", disguise.getOwnerUuid().toString());
 			if(disguise.getChosenTag() != null) yaml.set(key + ".tag", disguise.getChosenTag());
+			if(disguise.hasPlayerPermissions()) yaml.set(key + ".player-permissions", true);
 		}
 		String content = "# Active player disguises. Don't edit this file while the server is running.\n" + yaml.saveToString();
 		writer.execute(() -> write(content));

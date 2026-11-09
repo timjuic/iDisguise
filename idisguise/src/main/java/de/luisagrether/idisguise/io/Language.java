@@ -213,6 +213,22 @@ public class Language {
 			+ ChatColor.GRAY + "It stays on until " + ChatColor.YELLOW + "/disguise invis" + ChatColor.GRAY + ".\n"
 			+ ChatColor.GRAY + "OFF: invisibility stays as it is now.\n\n"
 			+ ChatColor.YELLOW + "\u00bb Click to switch";
+	@LastUpdated(60162)
+	public String RANK_MENU_PERMS_ON = ChatColor.GRAY + "Player permissions: " + ChatColor.GREEN + ChatColor.BOLD + "ON";
+	@LastUpdated(60162)
+	public String RANK_MENU_PERMS_OFF = ChatColor.GRAY + "Player permissions: " + ChatColor.RED + ChatColor.BOLD + "OFF";
+	@LastUpdated(60162)
+	public String RANK_MENU_PERMS_LORE = ChatColor.GRAY + "ON: while disguised you play like a normal\n"
+			+ ChatColor.GRAY + "player, so nobody can tell you're staff:\n"
+			+ ChatColor.DARK_GRAY + " - " + ChatColor.GRAY + "you drop items and XP when you die\n"
+			+ ChatColor.DARK_GRAY + " - " + ChatColor.GRAY + "you get combat tagged\n"
+			+ ChatColor.DARK_GRAY + " - " + ChatColor.GRAY + "teleports wait and have cooldowns\n"
+			+ ChatColor.DARK_GRAY + " - " + ChatColor.GRAY + "you show up in /near\n"
+			+ ChatColor.DARK_GRAY + " - " + ChatColor.GRAY + "no colours or links in chat\n"
+			+ ChatColor.DARK_GRAY + " - " + ChatColor.GRAY + "no building in protected areas\n"
+			+ ChatColor.GRAY + "All back when you undisguise.\n"
+			+ ChatColor.GRAY + "OFF: you keep your staff permissions.\n\n"
+			+ ChatColor.YELLOW + "\u00bb Click to switch";
 	@LastUpdated(60158)
 	public String RANK_MENU_HEADER_INVIS = ChatColor.AQUA + "Invisible after disguising";
 	@LastUpdated(60101)

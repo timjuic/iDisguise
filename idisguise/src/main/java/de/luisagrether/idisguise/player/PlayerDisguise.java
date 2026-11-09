@@ -44,6 +44,8 @@ public final class PlayerDisguise {
 	private volatile String chatTag;
 	// DeluxeTags tag picked for the disguise (identifier, "" = no tag), or null = the default above.
 	private volatile String chosenTag;
+	// "Player permissions" on: staff extras are taken away while disguised.
+	private volatile boolean playerPermissions;
 	// The real player with this name (has played here), or null for a made-up name.
 	private volatile UUID ownerUuid;
 
@@ -86,6 +88,8 @@ public final class PlayerDisguise {
 	public String getChatTag() { return chatTag; }
 	String getChosenTag() { return chosenTag; }
 	void setChosenTag(String chosenTag) { this.chosenTag = chosenTag; }
+	boolean hasPlayerPermissions() { return playerPermissions; }
+	void setPlayerPermissions(boolean playerPermissions) { this.playerPermissions = playerPermissions; }
 	UUID getOwnerUuid() { return ownerUuid; }
 	void setOwnerUuid(UUID ownerUuid) { this.ownerUuid = ownerUuid; }
 	void setChatTag(String chatTag) { this.chatTag = chatTag; }

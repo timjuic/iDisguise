@@ -57,6 +57,7 @@ final class PlayerDisguiseSettings {
 	final String defaultRank;
 	final boolean copyRealRank;
 	final List<String> randomSkins;
+	final List<String> playerPermissions;
 	final String essentialsConfig;
 	final Profile staff;
 	final Profile players;
@@ -115,6 +116,11 @@ final class PlayerDisguiseSettings {
 		defaultRank = configuredDefault == null || configuredDefault.isEmpty() ? null : configuredDefault.toLowerCase(Locale.ENGLISH);
 		copyRealRank = config.getBoolean("copy-real-rank", true);
 		randomSkins = Collections.unmodifiableList(new ArrayList<>(config.getStringList("random-skins")));
+		List<String> denied = new ArrayList<>();
+		for(String node : config.getStringList("player-permissions")) {
+			if(node != null && !node.trim().isEmpty()) denied.add(node.trim().toLowerCase(Locale.ENGLISH));
+		}
+		playerPermissions = Collections.unmodifiableList(denied);
 		essentialsConfig = config.getString("essentials-config", "plugins/Essentials/config.yml");
 		staff = new Profile(section(config, "profiles.staff"));
 		players = new Profile(section(config, "profiles.players"));
@@ -203,6 +209,7 @@ final class PlayerDisguiseSettings {
 		NEW_MENU_ITEMS.put("back", "ARROW");
 		NEW_MENU_ITEMS.put("page", "PAPER");
 		NEW_MENU_ITEMS.put("invis", "EYE_OF_ENDER");
+		NEW_MENU_ITEMS.put("player-permissions", "IRON_CHESTPLATE");
 	}
 
 	boolean isStaffRank(String rank) {

@@ -11,6 +11,7 @@ import org.bukkit.entity.Player;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.model.group.Group;
 import net.luckperms.api.model.user.User;
+import net.luckperms.api.node.types.PermissionNode;
 
 /** LuckPerms: who has played here, real ranks and rank prefixes. Only loaded when LuckPerms is installed. */
 final class LuckPermsHook {
@@ -57,6 +58,23 @@ final class LuckPermsHook {
 	String prefix(Player player) {
 		User user = api.getUserManager().getUser(player.getUniqueId());
 		return user == null ? null : user.getCachedData().getMetaData().getPrefix();
+	}
+
+	/**
+	 * Takes these permissions away for now: LuckPerms "transient" nodes set to false, which are never saved
+	 * and are gone after a logout or restart, so a player can't be left without them.
+	 */
+	void denyForNow(Player player, java.util.Collection<String> nodes) {
+		User user = api.getUserManager().getUser(player.getUniqueId());
+		if(user == null) return;
+		for(String node : nodes) user.transientData().add(PermissionNode.builder(node).value(false).build());
+	}
+
+	/** Gives back what denyForNow took away. */
+	void undeny(Player player, java.util.Collection<String> nodes) {
+		User user = api.getUserManager().getUser(player.getUniqueId());
+		if(user == null) return;
+		for(String node : nodes) user.transientData().remove(PermissionNode.builder(node).value(false).build());
 	}
 
 	String groupPrefix(String groupName) {

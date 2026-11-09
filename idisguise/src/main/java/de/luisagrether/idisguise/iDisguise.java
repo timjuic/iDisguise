@@ -1102,7 +1102,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		{"iDisguise.invis", "fake invisibility: /disguise invis, -i (only ESP cheats see you)"},
 		{"iDisguise.tags.all", "pick any DeluxeTags tag for a disguise (staff: always all)"},
 		{"iDisguise.player.anyname", "names of real players (online or played here before)"},
-		{"iDisguise.player.staff", "staff settings, hidden in /disguise list, no cooldown"},
+		{"iDisguise.player.staff", "staff settings, hidden in /disguise list, no cooldown, Player permissions button"},
 		{"#Staff tools"},
 		{"iDisguise.listplayers", "see who is disguised as whom in /disguise list"},
 		{"iDisguise.reveal", "/disguise reveal players: see through player disguises"},

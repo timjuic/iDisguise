@@ -11,7 +11,7 @@
 #   iDisguise.tags.all          pick any DeluxeTags tag for a disguise (staff can always pick any)
 #   iDisguise.invis             fake invisibility: /disguise invis, /disguise <name> -i (only ESP / tracer cheats see you)
 #   iDisguise.player.anyname    use names of players who are online or have played here before
-#   iDisguise.player.staff      get the "staff" settings below and stay hidden in /disguise list
+#   iDisguise.player.staff      get the "staff" settings below, stay hidden in /disguise list, Player permissions button
 #   iDisguise.listplayers       see who is disguised as whom in /disguise list (staff stay hidden)
 #   iDisguise.reveal            /disguise reveal players: see through player disguises (only on your screen)
 #   iDisguise.whois             /disguise whois <name> and /disguise history <player> (disguise-log.txt)
@@ -73,6 +73,8 @@ menu-items:
   page: PAPER
   # Invisibility button in the rank / tag menu (only for players with iDisguise.invis).
   invis: EYE_OF_ENDER
+  # "Player permissions" button in the rank / tag menu (only for staff: iDisguise.player.staff).
+  player-permissions: IRON_CHESTPLATE
 
 # Rank used when no rank is given (and none can be copied). Use the group of players without a rank.
 default-rank: default
@@ -223,3 +225,29 @@ profiles:
 
     # Remove the disguise when hitting or getting hit by a player.
     remove-in-combat: false
+
+# Staff (iDisguise.player.staff) with the "Player permissions" button ON (in the disguise menu, ON by
+# default) lose these permissions while disguised, so nothing gives them away. Needs LuckPerms. Nothing is
+# saved: they come back when you undisguise, log out or the server restarts. "x.*" also takes away
+# every x.<something> the player has. Permissions of plugins you don't have do nothing.
+player-permissions:
+- essentials.keepinv
+- essentials.keepxp
+- essentials.teleport.timer.bypass
+- essentials.teleport.cooldown.bypass
+- essentials.teleport.cooldown.bypass.*
+- essentials.commandcooldowns.bypass
+- essentials.near.exclude
+- essentials.chat.color
+- essentials.chat.format
+- essentials.chat.magic
+- essentials.chat.url
+- combatlogx.bypass
+- combatlogx.bypass.*
+- factions.fly.auto
+- worldguard.region.bypass.*
+- silkspawners.destroydrop.*
+- staff.freezechat.bypass
+- staff.slowmode.bypass
+- roidstaff.chatmoderation.bypass
+- woodcutting.pvpzone.instant

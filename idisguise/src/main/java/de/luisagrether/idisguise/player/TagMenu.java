@@ -17,10 +17,11 @@ final class TagMenu extends DisguiseMenu {
 
 	/** back: "back to ranks" (null when only tags can be picked). previous / next / invis may be null. */
 	TagMenu(String title, ItemStack header, ItemStack frame, List<RankMenu.Entry> tags, ItemStack back, ItemStack cancel,
-			ItemStack previous, ItemStack next, ItemStack invis, Choice choice) {
+			ItemStack previous, ItemStack next, ItemStack invis, ItemStack perms, Choice choice) {
 		super(title, header, frame, choice);
 		for(int i = 0; i < tags.size() && i < PER_PAGE; i++) put(FIRST + i, tags.get(i));
 		put(INVIS, invis, RankMenu.INVIS_ACTION);
+		put(PLAYER_PERMS, perms, RankMenu.PERMS_ACTION);
 		put(PREVIOUS, previous, PREVIOUS_ACTION);
 		put(CANCEL, cancel, RankMenu.CANCEL_ACTION);
 		put(NEXT, next, NEXT_ACTION);

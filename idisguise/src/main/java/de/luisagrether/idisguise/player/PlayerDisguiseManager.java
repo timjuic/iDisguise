@@ -151,6 +151,7 @@ public final class PlayerDisguiseManager implements Listener {
 		for(Player player : Bukkit.getOnlinePlayers()) {
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
 			if(disguise != null && tab != null) tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
+			if(disguise != null && disguise.hasPlayerPermissions()) takePermissions(player);
 		}
 		return true;
 	}
@@ -258,6 +259,7 @@ public final class PlayerDisguiseManager implements Listener {
 			log.close();
 		}
 		if(!available) return;
+		for(Player player : Bukkit.getOnlinePlayers()) givePermissionsBack(player);
 		checkTask.cancel();
 		revealTask.cancel();
 		for(Player player : Bukkit.getOnlinePlayers()) {
@@ -546,6 +548,8 @@ public final class PlayerDisguiseManager implements Listener {
 		// Picked so far: the tag (null = default, "" = none) and the invisibility switch.
 		String tag;
 		boolean invis;
+		// "Player permissions": staff extras off while disguised (ON by default).
+		boolean playerPerms = true;
 
 		Menu(Player chooser, Player target, String name, String realRank, SkinResolver.Skin skin, Consumer<Boolean> done) {
 			this.chooser = chooser;
@@ -565,7 +569,9 @@ public final class PlayerDisguiseManager implements Listener {
 		Player chooser = menu.chooser;
 		Player target = menu.target;
 		if(chooser != target || checkCooldown(chooser)) {
+			boolean button = permsButton(chooser, menu.playerPerms) != null;
 			disguise(chooser, target, menu.name, rank, tag, menu.skin, success -> {
+				if(success && button) setPlayerPermissions(target, menu.playerPerms);
 				if(success && invis && target.isOnline()) setInvisible(chooser, target, true);
 				finish(menu.done, success);
 			});
@@ -642,6 +648,19 @@ public final class PlayerDisguiseManager implements Listener {
 		return RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL, RankMenu.lines(language.RANK_MENU_CANCEL_LORE));
 	}
 
+	/** The "player permissions" button, or null when this player isn't staff (or there's no LuckPerms). */
+	private org.bukkit.inventory.ItemStack permsButton(Player chooser, boolean on) {
+		if(luckPerms == null || settings.playerPermissions.isEmpty() || !has(chooser, PERM_STAFF)) return null;
+		Language language = language();
+		return RankMenu.item(settings.menuItem("player-permissions"), on ? language.RANK_MENU_PERMS_ON : language.RANK_MENU_PERMS_OFF,
+				RankMenu.lines(language.RANK_MENU_PERMS_LORE));
+	}
+
+	private void switchPerms(Menu menu, DisguiseMenu shown) {
+		menu.playerPerms = !menu.playerPerms;
+		shown.replace(DisguiseMenu.PLAYER_PERMS, permsButton(menu.chooser, menu.playerPerms));
+	}
+
 	/** The invisibility button was clicked: switched in the open menu, nothing reopens. */
 	private void switchInvis(Menu menu, DisguiseMenu shown) {
 		menu.invis = !menu.invis;
@@ -680,11 +699,15 @@ public final class PlayerDisguiseManager implements Listener {
 		String title = (chooser != target ? language.RANK_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.RANK_MENU_TITLE)
 				.replace("%name%", name);
 		menu.shown = new RankMenu(title, menuHeader(menu), menuFrame(), rankEntries, real, cancel, tagButton, invisButton(chooser, menu.invis),
+				permsButton(chooser, menu.playerPerms),
 				(shown, choice) -> {
 					if(RankMenu.TAG.equals(choice)) {
 						openTagMenu(menu, 0, false);
 					} else if(RankMenu.INVIS_ACTION.equals(choice)) {
 						switchInvis(menu, shown);
+						return true;
+					} else if(RankMenu.PERMS_ACTION.equals(choice)) {
+						switchPerms(menu, shown);
 						return true;
 					} else if(RankMenu.CANCEL_ACTION.equals(choice)) {
 						finish(menu.done, false);
@@ -736,6 +759,7 @@ public final class PlayerDisguiseManager implements Listener {
 		String title = (chooser != target ? language.TAG_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.TAG_MENU_TITLE)
 				.replace("%name%", name);
 		menu.shown = new TagMenu(title, menuHeader(menu), menuFrame(), entries, back, cancelItem(), previous, next, invisButton(chooser, menu.invis),
+				permsButton(chooser, menu.playerPerms),
 				(shown, choice) -> {
 					if(TagMenu.PREVIOUS_ACTION.equals(choice)) {
 						openTagMenu(menu, shownPage - 1, tagOnly);
@@ -743,6 +767,9 @@ public final class PlayerDisguiseManager implements Listener {
 						openTagMenu(menu, shownPage + 1, tagOnly);
 					} else if(RankMenu.INVIS_ACTION.equals(choice)) {
 						switchInvis(menu, shown);
+						return true;
+					} else if(RankMenu.PERMS_ACTION.equals(choice)) {
+						switchPerms(menu, shown);
 						return true;
 					} else if(TagMenu.BACK.equals(choice)) {
 						openRankMenu(menu);
@@ -998,6 +1025,7 @@ public final class PlayerDisguiseManager implements Listener {
 			rebuildSnapshots();
 		}
 		plugin.removeMobDisguise(target);
+		givePermissionsBack(target);
 
 		PlayerDisguise disguise = new PlayerDisguise(target.getUniqueId(), target.getName(), name, rank, skin.value, skin.signature);
 		disguise.setGivenByStaff(sender != target);
@@ -1032,9 +1060,12 @@ public final class PlayerDisguiseManager implements Listener {
 			disguise.setHiddenFromTab(true);
 			disguise.setOwnerRank(realRankOf(owner));
 		}
+		// Staff play like a normal player while disguised, unless the menu's button says otherwise.
+		disguise.setPlayerPermissions(luckPerms != null && has(target, PERM_STAFF));
 		disguises.put(target.getUniqueId(), disguise);
 		rebuildSnapshots();
 		save();
+		if(disguise.hasPlayerPermissions()) takePermissions(target);
 
 		applyLook(target, disguise);
 		removeRealEntry(target);
@@ -1056,10 +1087,66 @@ public final class PlayerDisguiseManager implements Listener {
 		finish(done, true);
 	}
 
+	// ---------------------------------------------------------------- player permissions
+
+	/** What was taken away from whom (exact nodes), to give exactly that back. */
+	private final Map<UUID, List<String>> takenPermissions = new ConcurrentHashMap<>();
+
+	/** The menu's "player permissions" button for a disguise that was just made. */
+	private void setPlayerPermissions(Player player, boolean on) {
+		PlayerDisguise disguise = disguises.get(player.getUniqueId());
+		if(disguise == null || disguise.hasPlayerPermissions() == on) return;
+		disguise.setPlayerPermissions(on);
+		save();
+		if(on) {
+			takePermissions(player);
+		} else {
+			givePermissionsBack(player);
+		}
+	}
+
+	/**
+	 * Takes the staff extras from player-permissions away for now (LuckPerms, never saved). "x.*" also takes
+	 * every x.<something> the player has: an exact permission would otherwise beat the "false" on x.*.
+	 */
+	private void takePermissions(Player player) {
+		if(luckPerms == null || !player.isOnline()) return;
+		givePermissionsBack(player);
+		java.util.Set<String> nodes = new java.util.LinkedHashSet<>(settings.playerPermissions);
+		for(String pattern : settings.playerPermissions) {
+			if(!pattern.endsWith(".*")) continue;
+			String start = pattern.substring(0, pattern.length() - 1);
+			for(org.bukkit.permissions.PermissionAttachmentInfo info : player.getEffectivePermissions()) {
+				String node = info.getPermission().toLowerCase(Locale.ENGLISH);
+				if(info.getValue() && node.startsWith(start)) nodes.add(node);
+			}
+		}
+		if(nodes.isEmpty()) return;
+		List<String> taken = new ArrayList<>(nodes);
+		try {
+			luckPerms.denyForNow(player, taken);
+			takenPermissions.put(player.getUniqueId(), taken);
+			debug("Player permissions for " + player.getName() + ": " + taken);
+		} catch(Throwable t) {
+			plugin.getLogger().warning("Could not take staff permissions from " + player.getName() + " while disguised: " + t);
+		}
+	}
+
+	private void givePermissionsBack(Player player) {
+		List<String> taken = takenPermissions.remove(player.getUniqueId());
+		if(taken == null || luckPerms == null) return;
+		try {
+			luckPerms.undeny(player, taken);
+		} catch(Throwable t) {
+			plugin.getLogger().warning("Could not give " + player.getName() + " their staff permissions back (a relog does): " + t);
+		}
+	}
+
 	/** Removes the player disguise. Returns false when the player had none. */
 	public boolean undisguise(Player player) {
 		PlayerDisguise disguise = disguises.remove(player.getUniqueId());
 		if(disguise == null) return false;
+		givePermissionsBack(player);
 		rebuildSnapshots();
 		save();
 		log.end(player.getName(), player.getUniqueId(), "player", disguise.getFakeName());
@@ -1725,7 +1812,10 @@ public final class PlayerDisguiseManager implements Listener {
 		if(disguises.get(joined.getUniqueId()) == disguise) {
 			// After EssentialsX and TAB have set the player up.
 			Bukkit.getScheduler().runTaskLater(plugin, () -> {
-				if(joined.isOnline() && disguises.get(joined.getUniqueId()) == disguise) applyLook(joined, disguise);
+				if(joined.isOnline() && disguises.get(joined.getUniqueId()) == disguise) {
+					applyLook(joined, disguise);
+					if(disguise.hasPlayerPermissions()) takePermissions(joined);
+				}
 			}, 5L);
 		}
 	}
@@ -1742,6 +1832,8 @@ public final class PlayerDisguiseManager implements Listener {
 			invisibility.offline(quit.getUniqueId());
 		}
 		lastTabInput.remove(quit.getUniqueId());
+		// LuckPerms forgets temporary permissions on logout; taken again on join while still disguised.
+		takenPermissions.remove(quit.getUniqueId());
 		revealPlayers.remove(quit.getUniqueId());
 		revealLooks.remove(quit.getUniqueId());
 		revealTeams.remove(quit.getUniqueId());

@@ -30,10 +30,12 @@ final class RankMenu extends DisguiseMenu {
 	static final String TAG = "\u0000tag";
 	/** The invisibility button (staff): switches "also turn invisible" on / off. */
 	static final String INVIS_ACTION = "\u0000invis";
+	/** The "player permissions" button (staff): staff extras off while disguised, on / off. */
+	static final String PERMS_ACTION = "\u0000player-permissions";
 
 	/** ranks: in menu order. realRank, tag, invis may be null. */
 	RankMenu(String title, ItemStack header, ItemStack frame, List<Entry> ranks, Entry realRank, Entry cancel, Entry tag,
-			ItemStack invis, Choice choice) {
+			ItemStack invis, ItemStack perms, Choice choice) {
 		super(title, header, frame, choice);
 		if(ranks.size() > PER_PAGE) {
 			org.bukkit.Bukkit.getLogger().warning("[iDisguise] The rank menu has more than " + PER_PAGE + " ranks; some are left out."
@@ -41,6 +43,7 @@ final class RankMenu extends DisguiseMenu {
 		}
 		for(int i = 0; i < ranks.size() && i < PER_PAGE; i++) put(FIRST + i, ranks.get(i));
 		put(INVIS, invis, INVIS_ACTION);
+		put(PLAYER_PERMS, perms, PERMS_ACTION);
 		put(REAL_RANK, realRank);
 		put(CANCEL, cancel);
 		put(SWITCH, tag);
