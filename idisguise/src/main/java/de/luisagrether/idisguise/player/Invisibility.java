@@ -25,8 +25,8 @@ import org.bukkit.entity.Player;
  */
 final class Invisibility {
 
-	/** Sounds and particles this close to an invisible player are theirs (footsteps, landing). */
-	static final double NEAR = 2.0;
+	/** Sounds and particles this close to an invisible player are theirs (footsteps, landing); others walking past stay audible. */
+	static final double NEAR = 1.0;
 
 	private final File file;
 	private final Logger logger;

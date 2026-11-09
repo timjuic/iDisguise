@@ -1007,10 +1007,10 @@ public final class PlayerDisguiseManager implements Listener {
 		invisibility.set(target.getUniqueId(), on);
 		if(on) {
 			invisibility.online(target);
-			log.start(target.getName(), target.getUniqueId(), "invisible", "-", null);
+			log.start(target.getName(), target.getUniqueId(), "invisible", "invisible", null);
 		} else {
 			invisibility.offline(target.getUniqueId());
-			log.end(target.getName(), target.getUniqueId(), "invisible", "-");
+			log.end(target.getName(), target.getUniqueId(), "invisible", "invisible");
 		}
 		updateListener();
 		if(tab != null) tab.setNameTagHidden(target, on);
@@ -1094,7 +1094,7 @@ public final class PlayerDisguiseManager implements Listener {
 			if(on) {
 				effect = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_EFFECT);
 				effect.getIntegers().write(0, player.getEntityId());
-				effect.getIntegers().write(1, 1000000);
+				effect.getIntegers().write(1, 32767); // shown as **:** (never counts down)
 				effect.getBytes().write(0, (byte)14);
 				effect.getBytes().write(1, (byte)0);
 				effect.getBytes().write(2, (byte)1);
