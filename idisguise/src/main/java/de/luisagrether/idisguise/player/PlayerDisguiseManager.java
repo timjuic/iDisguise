@@ -396,7 +396,6 @@ public final class PlayerDisguiseManager implements Listener {
 			disguise(sender, target, name, rankInput, done);
 			return;
 		}
-		send(sender, language().PLAYER_DISGUISE_LOADING.replace("%name%", name));
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 			String realRank = null;
 			boolean known = false;
