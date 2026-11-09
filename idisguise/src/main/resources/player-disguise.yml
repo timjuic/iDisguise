@@ -237,6 +237,7 @@ player-permissions:
 - essentials.teleport.cooldown.bypass
 - essentials.teleport.cooldown.bypass.*
 - essentials.commandcooldowns.bypass
+- essentials.commandcooldowns.bypass.*
 - essentials.near.exclude
 - essentials.chat.color
 - essentials.chat.format
@@ -251,3 +252,5 @@ player-permissions:
 - staff.slowmode.bypass
 - roidstaff.chatmoderation.bypass
 - woodcutting.pvpzone.instant
+# RoidStaff keeps a staff member's items on death: while disguised you are a normal player there.
+- roidstaff.staff
