@@ -122,6 +122,26 @@ public final class PlayerDisguiseManager implements Listener {
 
 	// ---------------------------------------------------------------- start / stop
 
+	/**
+	 * /disguise reload: player-disguise.yml again. Returns false when player disguises are not running
+	 * (turning them on or off needs a restart).
+	 */
+	public boolean reloadSettings() {
+		if(!available) return false;
+		PlayerDisguiseSettings fresh = new PlayerDisguiseSettings(plugin);
+		if(!fresh.enabled) return false;
+		settings = fresh;
+		factions = settings.realPlayerFaction ? FactionsHook.create(plugin.getLogger()) : null;
+		for(Player player : Bukkit.getOnlinePlayers()) {
+			PlayerDisguise disguise = disguises.get(player.getUniqueId());
+			if(disguise != null) markOnline(player, disguise);
+		}
+		rebuildSnapshots();
+		tabLines.clear();
+		ownerLooks.clear();
+		return true;
+	}
+
 	public void enable() {
 		// The log also records mob disguises, so it exists even when player disguises are off.
 		log = new DisguiseLog(plugin.getDataFolder(), plugin.getLogger());

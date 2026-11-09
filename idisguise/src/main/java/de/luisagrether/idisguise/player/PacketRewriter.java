@@ -278,10 +278,9 @@ final class PacketRewriter extends PacketAdapter {
 	}
 
 	private void rewriteTeam(PacketEvent event) {
-		// Sidebar lines are teams too: there only the visible text may change, never the entries
-		// (they are the lines' IDs; a changed ID breaks the whole sidebar on 1.8).
+		// Sidebar lines are teams too: never touched (their entries are the lines' IDs; a changed ID
+		// breaks the whole sidebar on 1.8). Names there: %idisguise_name% / %idisguise_swap_...% in TAB.
 		if(isSidebarTeam(event.getPacket())) {
-			TextSwap.rewriteTeamTexts(event, manager);
 			return;
 		}
 		PacketContainer packet = event.getPacket();

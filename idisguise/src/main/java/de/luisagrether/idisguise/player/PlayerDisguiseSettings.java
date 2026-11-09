@@ -52,7 +52,6 @@ final class PlayerDisguiseSettings {
 	final boolean swapInTitles;
 	final boolean swapInHolograms;
 	final boolean swapInSigns;
-	final boolean swapInScoreboard;
 	private final java.util.Map<String, String> menuItems = new java.util.HashMap<>();
 	final String defaultRank;
 	final boolean copyRealRank;
@@ -93,7 +92,6 @@ final class PlayerDisguiseSettings {
 		swapInTitles = config.getBoolean("name-swap.titles", true);
 		swapInHolograms = config.getBoolean("name-swap.holograms", true);
 		swapInSigns = config.getBoolean("name-swap.signs", false);
-		swapInScoreboard = config.getBoolean("name-swap.scoreboard", false);
 		for(String command : config.getStringList("blocked-while-disguised")) {
 			blockedCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
 		}

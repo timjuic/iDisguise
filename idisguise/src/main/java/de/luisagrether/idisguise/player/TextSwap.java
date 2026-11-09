@@ -56,13 +56,6 @@ final class TextSwap {
 		}
 	}
 
-	/** Sidebar lines are team prefix (index 2) and suffix (index 3), 16 characters each on 1.8. */
-	static void rewriteTeamTexts(PacketEvent event, PlayerDisguiseManager manager) {
-		Collection<PlayerDisguise> disguises = manager.replacingNames();
-		if(disguises.isEmpty() || !manager.settings().swapInScoreboard) return;
-		strings(event, new int[] {2, 3}, 16, disguises);
-	}
-
 	// ---------------------------------------------------------------- texts
 
 	private static void chatComponent(PacketEvent event, int index, Collection<PlayerDisguise> disguises) {

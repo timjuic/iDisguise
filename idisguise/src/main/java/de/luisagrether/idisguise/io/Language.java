@@ -188,6 +188,12 @@ public class Language {
 	public String PERMISSIONS_SECTION = ChatColor.YELLOW + "%section%";
 	@LastUpdated(60125)
 	public String PERMISSIONS_LINE = ChatColor.GOLD + "%node% " + ChatColor.DARK_GRAY + "- " + ChatColor.GRAY + "%description%";
+	@LastUpdated(60128)
+	public String HELP_CMD_RELOAD = "Reload config.yml, the language file and player-disguise.yml";
+	@LastUpdated(60128)
+	public String RELOADED = ChatColor.GREEN + "Reloaded config.yml, the language file and player-disguise.yml.";
+	@LastUpdated(60128)
+	public String RELOADED_RESTART = ChatColor.YELLOW + "Reloaded. Turning player disguises on or off needs a restart.";
 	@LastUpdated(60125)
 	public String PERMISSIONS_NODES_OFF = ChatColor.RED + "use-permission-nodes is false in config.yml: permissions are ignored, only operators can disguise.";
 	@LastUpdated(60106)

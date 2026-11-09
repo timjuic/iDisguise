@@ -773,6 +773,20 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				sendDisguiseList(sender);
 			} else if(args[0].equalsIgnoreCase("permissions") && hasPermissionAdmin(sender)) {
 				sendPermissions(sender);
+			} else if(args[0].equalsIgnoreCase("reload")) {
+				// A command word, never a disguise name.
+				if(!hasPermissionAdmin(sender)) {
+					sender.sendMessage(language.DISGUISE_NO_PERMISSION);
+				} else {
+					config.loadData();
+					config.saveData();
+					debugMode = new File(getDataFolder(), "debug").isFile() || config.DEBUG_MODE;
+					language.loadData();
+					language.saveData();
+					language.applyPrefix();
+					boolean player = playerDisguises.reloadSettings();
+					sender.sendMessage(player ? language.RELOADED : language.RELOADED_RESTART);
+				}
 			} else if(self && args[0].equalsIgnoreCase("reveal")) {
 				playerDisguises.revealCommand(sender, args);
 			} else if(self && args[0].equalsIgnoreCase("whois")) {
@@ -1046,6 +1060,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 		if(admin) {
 			adminLines.add(new String[] {"/disguise permissions", language.HELP_CMD_PERMISSIONS, "/disguise permissions"});
+			adminLines.add(new String[] {"/disguise reload", language.HELP_CMD_RELOAD, "/disguise reload"});
 		}
 
 		sender.sendMessage(language.HELP_TITLE.replace("%title%", title(sender)));
@@ -1070,7 +1085,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		{"iDisguise.reveal", "/disguise reveal players: see through player disguises"},
 		{"iDisguise.whois", "/disguise whois and /disguise history"},
 		{"iDisguise.see", "right-click a disguise mob to see who is inside"},
-		{"iDisguise.admin", "everyone in /disguise list, version, this list, no cooldown"},
+		{"iDisguise.admin", "everyone in /disguise list, version, this list, /disguise reload, no cooldown"},
 		{"#Mobs and others"},
 		{"iDisguise.disguise.<MOB>", "that mob, e.g. iDisguise.disguise.COW"},
 		{"iDisguise.disguise.*", "every mob AND player disguises"},

@@ -102,10 +102,7 @@ name-swap:
   # Text on signs. Off by default: signs are mostly written by players, and a sign with a disguised
   # player's real name would show the fake name and tell who it is.
   signs: false
-  # Sidebar scoreboard lines (e.g. a KOTH capper). Off by default: with some scoreboard setups the sidebar
-  # could disappear (e.g. after combat). 1.8 lines are made of 16-character pieces: a name split across two
-  # pieces can't be swapped, and a longer fake name is cut at the end of its piece.
-  scoreboard: false
+  # Sidebar lines are not swapped here: use %idisguise_name% and %idisguise_swap_<placeholder>% in TAB.
 
 # Commands a player can't use while player-disguised (mob disguises are not affected).
 blocked-while-disguised:
