@@ -899,7 +899,6 @@ public final class PlayerDisguiseManager implements Listener {
 		applyLook(target, disguise);
 		removeRealEntry(target);
 		refresh(target);
-		resortLater(target, disguise);
 		log.start(target.getName(), target.getUniqueId(), "player", name, effectiveRank(disguise));
 		if(previous != null) log.end(target.getName(), target.getUniqueId(), "player", previous.getFakeName());
 
@@ -931,7 +930,6 @@ public final class PlayerDisguiseManager implements Listener {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
 			refresh(player);
-			resortLater(player, null);
 		}
 		return true;
 	}
@@ -1321,9 +1319,19 @@ public final class PlayerDisguiseManager implements Listener {
 		player.setDisplayName(disguise.getFakeName());
 		// Right away, before the refresh: others never see the new name with the old (or real) rank.
 		if(tab != null) {
-			tab.apply(player, effectiveRank(disguise), disguise.getFakeName());
+			tab.apply(player, effectiveRank(disguise), disguise.getFakeName(), sortName(disguise));
 			tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
 		}
+	}
+
+	/**
+	 * The TAB team name the disguise sorts under in tab (fake rank, then fake name), in TAB's own format,
+	 * or null (disguised as someone online: no own tab entry; or TAB's sorting isn't GROUPS + A to Z).
+	 */
+	private String sortName(PlayerDisguise disguise) {
+		if(tabLook == null || disguise.isHiddenFromTab()) return null;
+		String rank = effectiveRank(disguise);
+		return tabLook.sortName(rank != null ? rank : settings.defaultRank, disguise.getFakeName());
 	}
 
 	private void resetLook(Player player, PlayerDisguise disguise) {
@@ -1348,18 +1356,6 @@ public final class PlayerDisguiseManager implements Listener {
 				if(owner.isOnline()) tab.rebuildNameTag(owner);
 			}, 20L);
 		}
-	}
-
-	/**
-	 * Two seconds after a disguise, a switch or an undisguise: TAB rebuilds the player's nametag team once.
-	 * TAB changes the team's sorting name when the rank / name changes, but clients kept the old team, so
-	 * the player sat in tab where the old rank or name belonged. expected == null: undisguised.
-	 */
-	private void resortLater(Player player, PlayerDisguise expected) {
-		if(tab == null) return;
-		Bukkit.getScheduler().runTaskLater(plugin, () -> {
-			if(player.isOnline() && disguises.get(player.getUniqueId()) == expected) tab.rebuildNameTag(player);
-		}, 40L);
 	}
 
 	/**
@@ -1813,7 +1809,7 @@ public final class PlayerDisguiseManager implements Listener {
 			// Disguised as someone online: follow their rank if it changed (chat shows it).
 			Player owner = disguise.isHiddenFromTab() ? Bukkit.getPlayerExact(disguise.getFakeName()) : null;
 			if(owner != null && owner != player) disguise.setOwnerRank(realRankOf(owner));
-			if(tab != null && tab.ensure(player, effectiveRank(disguise), disguise.getFakeName())) {
+			if(tab != null && tab.ensure(player, effectiveRank(disguise), disguise.getFakeName(), sortName(disguise))) {
 				// TAB was reloaded: it also forgot the disguise name for the nametag (it reads it from the
 				// player's own tab entry) and the nametag faction.
 				resendOwnEntry(player);

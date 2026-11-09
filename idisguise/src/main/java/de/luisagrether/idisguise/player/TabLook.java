@@ -38,13 +38,26 @@ final class TabLook {
 
 	private final YamlConfiguration groups;
 	private final Map<String, Map<String, String>> replacements = new HashMap<>();
+	// TAB sorting: the GROUPS list (in order) and whether names sort case-sensitively. Empty = can't copy it.
+	private final java.util.List<String> sortGroups = new java.util.ArrayList<>();
+	private boolean sortCaseSensitive = true;
 
 	TabLook() {
 		File groupsFile = new File(Bukkit.getWorldContainer(), "plugins/TAB/groups.yml");
 		groups = groupsFile.isFile() ? YamlConfiguration.loadConfiguration(groupsFile) : new YamlConfiguration();
 		File configFile = new File(Bukkit.getWorldContainer(), "plugins/TAB/config.yml");
 		if(configFile.isFile()) {
-			ConfigurationSection section = YamlConfiguration.loadConfiguration(configFile).getConfigurationSection("placeholder-output-replacements");
+			YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
+			// Only "GROUPS:... then PLACEHOLDER_A_TO_Z:<name>" is copied (TAB's team name = rank position
+			// as one character + the name); anything else keeps TAB's own sorting.
+			java.util.List<String> types = config.getStringList("scoreboard-teams.sorting-types");
+			if(types.size() == 2 && types.get(0).startsWith("GROUPS:") && types.get(1).startsWith("PLACEHOLDER_A_TO_Z:")) {
+				for(String group : types.get(0).substring("GROUPS:".length()).split(",")) {
+					if(!group.trim().isEmpty()) sortGroups.add(group.trim().toLowerCase(Locale.ENGLISH));
+				}
+			}
+			sortCaseSensitive = config.getBoolean("scoreboard-teams.case-sensitive-sorting", true);
+			ConfigurationSection section = config.getConfigurationSection("placeholder-output-replacements");
 			if(section != null) {
 				for(String placeholder : section.getKeys(false)) {
 					ConfigurationSection values = section.getConfigurationSection(placeholder);
@@ -55,6 +68,21 @@ final class TabLook {
 				}
 			}
 		}
+	}
+
+	/**
+	 * The team name TAB would give a player of this rank and name with "GROUPS + A to Z" sorting: the
+	 * rank's position in the list as a character ('0' - 1 + position, e.g. #8 = '7', #19 = 'B'; a rank
+	 * not in the list comes after all of them), the name, and a letter TAB adds to keep names unique
+	 * (16 characters at most). null when TAB sorts differently.
+	 */
+	String sortName(String group, String name) {
+		if(sortGroups.isEmpty() || group == null) return null;
+		int position = sortGroups.indexOf(group.toLowerCase(Locale.ENGLISH)) + 1;
+		if(position == 0) position = sortGroups.size() + 1;
+		String part = sortCaseSensitive ? name : name.toLowerCase(Locale.ENGLISH);
+		if(part.length() > 14) part = part.substring(0, 14);
+		return (char)('0' - 1 + position) + part + "A";
 	}
 
 	/** TAB nametag suffix of a group, raw (placeholders not filled). */
@@ -76,7 +104,11 @@ final class TabLook {
 		String world = target.getWorld().getName();
 		String name = property(group, world, "customtabname");
 		if(name.isEmpty()) name = target.getName();
-		String tabLine = fill(owner(property(group, world, "tabprefix") + name + property(group, world, "tabsuffix"), viewer, factions, owner), viewer, target);
+		String tabSuffix = property(group, world, "tabsuffix");
+		// Vanished (only players who may see vanished ones see this line): the [V] TAB shows for staff
+		// ranks, also when the (disguise) rank's suffix has none.
+		if(!tabSuffix.contains("premiumvanish") && isVanished(target)) tabSuffix += "%premiumvanish_vanishsuffix%";
+		String tabLine = fill(owner(property(group, world, "tabprefix") + name + tabSuffix, viewer, factions, owner), viewer, target);
 		return new Look(tabLine, fill(owner(property(group, world, "tagprefix"), viewer, factions, owner), viewer, target),
 				fill(owner(property(group, world, "tagsuffix"), viewer, factions, owner), viewer, target));
 	}
@@ -86,6 +118,13 @@ final class TabLook {
 		if(text.contains("%rel_factionsuuid_relation_color%")) text = text.replace("%rel_factionsuuid_relation_color%", factions.relationColor(viewer, owner));
 		if(text.contains("%factionsuuid_faction_name%")) text = text.replace("%factionsuuid_faction_name%", factions.factionName(owner));
 		return text;
+	}
+
+	private static boolean isVanished(Player player) {
+		for(org.bukkit.metadata.MetadataValue value : player.getMetadata("vanished")) {
+			if(value.asBoolean()) return true;
+		}
+		return false;
 	}
 
 	/** per-world group, then group, then _DEFAULT_ (TAB's order). */

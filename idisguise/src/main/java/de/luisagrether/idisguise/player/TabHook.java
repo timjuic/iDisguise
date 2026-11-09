@@ -27,6 +27,8 @@ final class TabHook {
 	private final Method pauseTeamHandling;
 	private final Method resumeTeamHandling;
 	private final Method setSuffix;
+	private final Method getSortingManager;
+	private final Method forceTeamName;
 	private final Method hideNameTag;
 	private final Method showNameTag;
 	// Players TAB hasn't loaded, already reported once (no console spam).
@@ -56,6 +58,16 @@ final class TabHook {
 			// older TAB: the nametag keeps the own faction
 		}
 		setSuffix = suffix;
+		Method sortingManager = null;
+		Method force = null;
+		try {
+			sortingManager = tabApi.getMethod("getSortingManager");
+			force = Class.forName("me.neznamy.tab.api.tablist.SortingManager").getMethod("forceTeamName", tabPlayer, String.class);
+		} catch(ReflectiveOperationException e) {
+			plugin.getLogger().warning("This TAB version can't force sorting: disguised players may sit in the wrong place in tab.");
+		}
+		getSortingManager = sortingManager;
+		forceTeamName = force;
 		Method hide = null;
 		Method show = null;
 		try {
@@ -80,7 +92,7 @@ final class TabHook {
 
 	/** Re-applies the disguise rank when TAB lost it (e.g. after /tab reload). */
 	/** Puts the disguise rank back if TAB lost it. Returns true when it had to (e.g. after /tab reload). */
-	boolean ensure(Player player, String group, String name) {
+	boolean ensure(Player player, String group, String name, String sortName) {
 		if(group == null || !player.isOnline()) return false;
 		try {
 			Object tabPlayer = getPlayer.invoke(getInstance.invoke(null), player.getUniqueId());
@@ -90,7 +102,7 @@ final class TabHook {
 			}
 			// Missing (e.g. after /tab reload) or a different group: put the disguise rank back.
 			if(!(Boolean)hasTemporaryGroup.invoke(tabPlayer) || !group.equalsIgnoreCase(String.valueOf(getGroup.invoke(tabPlayer)))) {
-				apply(player, group, name);
+				apply(player, group, name, sortName);
 				return true;
 			}
 		} catch(Throwable t) {
@@ -104,17 +116,22 @@ final class TabHook {
 	 * after they join, so this retries for a few seconds.
 	 */
 	void apply(Player player, String group, String name) {
-		apply(player, group, name, 0);
+		apply(player, group, name, null, 0);
 	}
 
-	private void apply(Player player, String group, String name, int attempt) {
+	/** sortName: TAB team name to sort under (forced), null = TAB's own sorting. */
+	void apply(Player player, String group, String name, String sortName) {
+		apply(player, group, name, sortName, 0);
+	}
+
+	private void apply(Player player, String group, String name, String sortName, int attempt) {
 		if(!player.isOnline()) return;
 		try {
 			Object api = getInstance.invoke(null);
 			Object tabPlayer = getPlayer.invoke(api, player.getUniqueId());
 			if(tabPlayer == null || !(Boolean)isLoaded.invoke(tabPlayer)) {
 				if(attempt < 20) {
-					Bukkit.getScheduler().runTaskLater(plugin, () -> apply(player, group, name, attempt + 1), 10L);
+					Bukkit.getScheduler().runTaskLater(plugin, () -> apply(player, group, name, sortName, attempt + 1), 10L);
 				} else {
 					notLoaded(player);
 				}
@@ -125,6 +142,12 @@ final class TabHook {
 			Object formatManager = getTabListFormatManager.invoke(api);
 			if(formatManager != null) {
 				setName.invoke(formatManager, tabPlayer, name);
+			}
+			// The sorting name, set by iDisguise: TAB built it from values up to a second old, and parts
+			// of TAB kept re-sending an older team, so disguised players sat where their old name / rank was.
+			if(getSortingManager != null) {
+				Object sorting = getSortingManager.invoke(api);
+				if(sorting != null) forceTeamName.invoke(sorting, tabPlayer, sortName);
 			}
 		} catch(Throwable t) {
 			Throwable cause = t.getCause() != null ? t.getCause() : t;
