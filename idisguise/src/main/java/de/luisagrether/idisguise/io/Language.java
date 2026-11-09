@@ -119,6 +119,34 @@ public class Language {
 	public String LIST_LEGEND = c("&agreen &7= available, &cred &7= no permission.");
 	@LastUpdated(60126)
 	public String PLAYER_DISGUISE_LOADING = c("%prefix%&7Loading disguise as &e%name%&7...");
+	@LastUpdated(60139)
+	public String PLAYER_DISGUISE_TAG_UNKNOWN = c("%prefix%&cThere is no tag &e%tag%&c. Tags: &e%tags%");
+	@LastUpdated(60139)
+	public String PLAYER_DISGUISE_TAG_NO_PERMISSION = c("%prefix%&cYou can't use the tag &e%tag%&c.");
+	@LastUpdated(60139)
+	public String RANK_MENU_TAG = ChatColor.YELLOW + "Tag: %tag%";
+	@LastUpdated(60139)
+	public String RANK_MENU_TAG_NONE = ChatColor.GRAY + "none";
+	@LastUpdated(60139)
+	public String RANK_MENU_TAG_LORE = ChatColor.GRAY + "The tag others see in chat.\n\n" + ChatColor.YELLOW + "\u00bb Click to pick a tag";
+	@LastUpdated(60139)
+	public String TAG_MENU_TITLE = ChatColor.DARK_GRAY + "Tag for " + ChatColor.GOLD + "%name%";
+	@LastUpdated(60139)
+	public String TAG_MENU_PICK = ChatColor.YELLOW + "\u00bb Click to pick";
+	@LastUpdated(60139)
+	public String TAG_MENU_SELECTED = ChatColor.GREEN + "\u00bb Selected";
+	@LastUpdated(60139)
+	public String TAG_MENU_NONE = ChatColor.WHITE + "No tag";
+	@LastUpdated(60139)
+	public String TAG_MENU_NONE_LORE = ChatColor.GRAY + "Show no tag in chat.";
+	@LastUpdated(60139)
+	public String TAG_MENU_BACK = ChatColor.RED + "Back";
+	@LastUpdated(60139)
+	public String TAG_MENU_BACK_LORE = ChatColor.GRAY + "Back to the ranks.";
+	@LastUpdated(60139)
+	public String TAG_MENU_PREVIOUS = ChatColor.YELLOW + "Previous page";
+	@LastUpdated(60139)
+	public String TAG_MENU_NEXT = ChatColor.YELLOW + "Next page";
 	@LastUpdated(60106)
 	public String PLAYER_DISGUISED =c("%prefix%&7You are now disguised as &e%name% &7(rank: &e%rank%&7).");
 	@LastUpdated(60106)

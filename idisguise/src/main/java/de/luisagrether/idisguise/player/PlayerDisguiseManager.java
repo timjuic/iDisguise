@@ -101,6 +101,9 @@ public final class PlayerDisguiseManager implements Listener {
 	private org.bukkit.scheduler.BukkitTask revealTask;
 	private TabLook tabLook;
 	private FactionsHook factions;
+	private DeluxeTagsHook deluxeTags;
+	public static final String PERM_TAGS_ALL = "iDisguise.tags.all";
+	private static final String NO_TAG = "none";
 	private static final Set<String> FACTION_COMMANDS = new HashSet<>(java.util.Arrays.asList("f", "faction", "factions"));
 	// disguised player -> viewer -> tab line last sent by the keeper
 	private final Map<UUID, Map<UUID, String>> tabLines = new ConcurrentHashMap<>();
@@ -189,6 +192,8 @@ public final class PlayerDisguiseManager implements Listener {
 		});
 		randomNames.refill();
 		Bukkit.getPluginManager().registerEvents(new RankMenu.Clicks(plugin), plugin);
+		Bukkit.getPluginManager().registerEvents(new TagMenu.Clicks(plugin), plugin);
+		deluxeTags = DeluxeTagsHook.create(plugin.getLogger());
 		hookVanishEvents();
 		tabLook = new TabLook();
 		factions = settings.realPlayerFaction ? FactionsHook.create(plugin.getLogger()) : null;
@@ -345,6 +350,51 @@ public final class PlayerDisguiseManager implements Listener {
 		lastDisguised.put(player.getUniqueId(), System.currentTimeMillis());
 	}
 
+	/** Staff, iDisguise.tags.all or the console: every tag; everyone else: tags they own in DeluxeTags. */
+	private boolean canUseTag(CommandSender sender, DeluxeTagsHook.Tag tag) {
+		if(!(sender instanceof Player) || has(sender, PERM_STAFF) || has(sender, PERM_TAGS_ALL)) return true;
+		return deluxeTags.owns((Player)sender, tag);
+	}
+
+	/** Tags this sender may give a disguise (tab completion, tag list). */
+	List<DeluxeTagsHook.Tag> usableTags(CommandSender sender) {
+		List<DeluxeTagsHook.Tag> result = new ArrayList<>();
+		if(deluxeTags == null) return result;
+		for(DeluxeTagsHook.Tag tag : deluxeTags.tags()) {
+			if(canUseTag(sender, tag)) result.add(tag);
+		}
+		return result;
+	}
+
+	/** Tag identifiers for tab completion ("none" first). */
+	public List<String> usableTagIds(CommandSender sender) {
+		List<String> result = new ArrayList<>();
+		if(deluxeTags == null) return result;
+		result.add(NO_TAG);
+		for(DeluxeTagsHook.Tag tag : usableTags(sender)) result.add(tag.id);
+		return result;
+	}
+
+	/**
+	 * Checks a typed tag. Returns the identifier to save ("" = no tag), or null after telling the
+	 * sender why it can't be used.
+	 */
+	private String checkTag(CommandSender sender, String input) {
+		Language language = language();
+		if(NO_TAG.equalsIgnoreCase(input)) return "";
+		DeluxeTagsHook.Tag tag = deluxeTags == null ? null : deluxeTags.find(input);
+		if(tag == null) {
+			List<String> ids = usableTagIds(sender);
+			send(sender, language.PLAYER_DISGUISE_TAG_UNKNOWN.replace("%tag%", input).replace("%tags%", ids.isEmpty() ? "-" : String.join(", ", ids)));
+			return null;
+		}
+		if(!canUseTag(sender, tag)) {
+			send(sender, language.PLAYER_DISGUISE_TAG_NO_PERMISSION.replace("%tag%", tag.id));
+			return null;
+		}
+		return tag.id;
+	}
+
 	/** Fake ranks this sender may use (tab completion). */
 	public List<String> usableRanks(CommandSender sender) {
 		List<String> result = new ArrayList<>();
@@ -384,13 +434,31 @@ public final class PlayerDisguiseManager implements Listener {
 	 * /disguise <name> [rank] from a player for themselves: without a rank, a menu with the ranks
 	 * they may use opens (when there is more than one and the real player isn't online).
 	 */
-	public void disguiseCommand(CommandSender sender, Player target, String name, String rankInput, boolean self, Consumer<Boolean> done) {
+	public void disguiseCommand(CommandSender sender, Player target, String name, String rankInput, String tagInput, boolean self, Consumer<Boolean> done) {
+		// "/disguise <name> <tag>": a tag given where the rank goes (not a rank, but a tag or "none").
+		if(tagInput == null && rankInput != null && settings != null && settings.findRank(rankInput) == null && deluxeTags != null
+				&& (NO_TAG.equalsIgnoreCase(rankInput) || deluxeTags.find(rankInput) != null)) {
+			tagInput = rankInput;
+			rankInput = null;
+		}
+		String tag = null;
+		if(tagInput != null) {
+			tag = checkTag(sender, tagInput);
+			if(tag == null) {
+				finish(done, false);
+				return;
+			}
+		}
+		disguiseCommand0(sender, target, name, rankInput, tag, self, done);
+	}
+
+	private void disguiseCommand0(CommandSender sender, Player target, String name, String rankInput, String tag, boolean self, Consumer<Boolean> done) {
 		Player owner = Bukkit.getPlayerExact(name);
 		boolean menu = available && rankInput == null && self && sender instanceof Player
 				&& (owner == null || owner == target) && !usableRanks(sender).isEmpty()
 				&& iDisguise.ACCOUNTNAME.matcher(name).matches() && !"random".equalsIgnoreCase(name);
 		if(!menu) {
-			disguise(sender, target, name, rankInput, done);
+			disguise(sender, target, name, rankInput, tag, done);
 			return;
 		}
 		// Check the name first: the menu only opens for a name that can be used.
@@ -399,7 +467,7 @@ public final class PlayerDisguiseManager implements Listener {
 		boolean blockKnown = !has(sender, PERM_ANY_NAME) && settings.blockKnownNamesForPlayers;
 		if(problem != null || plugin.isPlayerNameBlacklisted(name)
 				|| (luckPerms == null && blockKnown && hasPlayedBefore(name, target))) {
-			disguise(sender, target, name, rankInput, done);
+			disguise(sender, target, name, rankInput, tag, done);
 			return;
 		}
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -422,15 +490,15 @@ public final class PlayerDisguiseManager implements Listener {
 			Bukkit.getScheduler().runTask(plugin, () -> {
 				if(!target.isOnline()) return;
 				if(refused) {
-					disguise(sender, target, name, rankInput, done);
+					disguise(sender, target, name, rankInput, tag, done);
 				} else {
-					openRankMenu(target, name, finalRealRank, done);
+					openRankMenu(target, name, finalRealRank, tag, done);
 				}
 			});
 		});
 	}
 
-	private void openRankMenu(Player player, String name, String realRank, Consumer<Boolean> done) {
+	private void openRankMenu(Player player, String name, String realRank, String tag, Consumer<Boolean> done) {
 		Language language = language();
 		List<RankMenu.Entry> playerEntries = new ArrayList<>();
 		List<RankMenu.Entry> staffEntries = new ArrayList<>();
@@ -448,15 +516,66 @@ public final class PlayerDisguiseManager implements Listener {
 		org.bukkit.inventory.ItemStack header = RankMenu.item(settings.menuItem("header"), language.RANK_MENU_HEADER.replace("%name%", name),
 				RankMenu.lines(language.RANK_MENU_HEADER_LORE));
 		org.bukkit.inventory.ItemStack frame = RankMenu.item(settings.menuItem("frame"), " ", null);
-		new RankMenu(language.RANK_MENU_TITLE.replace("%name%", name), header, frame, playerEntries, staffEntries, real, cancel,
+		// The tag button: only with DeluxeTags and at least one tag this player may use.
+		RankMenu.Entry tagButton = null;
+		if(deluxeTags != null && !usableTags(player).isEmpty()) {
+			DeluxeTagsHook.Tag current = tag == null || tag.isEmpty() ? null : deluxeTags.find(tag);
+			String shown = current != null ? current.shown() : language.RANK_MENU_TAG_NONE;
+			tagButton = new RankMenu.Entry(RankMenu.TAG, RankMenu.item(settings.menuItem("tag"),
+					language.RANK_MENU_TAG.replace("%tag%", shown), RankMenu.lines(language.RANK_MENU_TAG_LORE)));
+		}
+		new RankMenu(language.RANK_MENU_TITLE.replace("%name%", name), header, frame, playerEntries, staffEntries, real, cancel, tagButton,
 				choice -> {
+					if(RankMenu.TAG.equals(choice)) {
+						openTagMenu(player, name, realRank, tag, 0, done);
+						return;
+					}
 					// Two menus open at once can't get around the cooldown.
 					if(checkCooldown(player)) {
-						disguise(player, player, name, choice, done);
+						disguise(player, player, name, choice, tag, done);
 					} else {
 						finish(done, false);
 					}
 				}).open(player);
+	}
+
+	/** The tag list (opened from the rank menu); a choice goes back to the rank menu with that tag. */
+	private void openTagMenu(Player player, String name, String realRank, String tag, int page, Consumer<Boolean> done) {
+		Language language = language();
+		List<DeluxeTagsHook.Tag> tags = usableTags(player);
+		int pages = Math.max(1, (tags.size() + TagMenu.PER_PAGE - 1) / TagMenu.PER_PAGE);
+		int shownPage = Math.max(0, Math.min(page, pages - 1));
+		List<RankMenu.Entry> entries = new ArrayList<>();
+		for(int i = shownPage * TagMenu.PER_PAGE; i < Math.min(tags.size(), (shownPage + 1) * TagMenu.PER_PAGE); i++) {
+			DeluxeTagsHook.Tag entry = tags.get(i);
+			List<String> lore = new ArrayList<>();
+			if(!entry.description.isEmpty()) {
+				lore.add(ChatColor.GRAY + ChatColor.translateAlternateColorCodes('&', entry.description));
+				lore.add("");
+			}
+			lore.add(entry.id.equalsIgnoreCase(tag) ? language.TAG_MENU_SELECTED : language.TAG_MENU_PICK);
+			String title = entry.shown().trim().isEmpty() ? ChatColor.WHITE + entry.id : entry.shown();
+			entries.add(new RankMenu.Entry(entry.id, RankMenu.item(settings.menuItem("tag-entry"), title, lore)));
+		}
+		List<String> noneLore = RankMenu.lines(language.TAG_MENU_NONE_LORE);
+		if(tag != null && tag.isEmpty()) noneLore.add(language.TAG_MENU_SELECTED);
+		org.bukkit.inventory.ItemStack none = RankMenu.item(settings.menuItem("no-tag"), language.TAG_MENU_NONE, noneLore);
+		org.bukkit.inventory.ItemStack back = RankMenu.item(settings.menuItem("back"), language.TAG_MENU_BACK, RankMenu.lines(language.TAG_MENU_BACK_LORE));
+		org.bukkit.inventory.ItemStack previous = shownPage > 0 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_PREVIOUS, null) : null;
+		org.bukkit.inventory.ItemStack next = shownPage < pages - 1 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_NEXT, null) : null;
+		new TagMenu(language.TAG_MENU_TITLE.replace("%name%", name), entries, none, back, previous, next, choice -> {
+			if(TagMenu.PREVIOUS.equals(choice)) {
+				openTagMenu(player, name, realRank, tag, shownPage - 1, done);
+			} else if(TagMenu.NEXT.equals(choice)) {
+				openTagMenu(player, name, realRank, tag, shownPage + 1, done);
+			} else if(TagMenu.BACK.equals(choice)) {
+				openRankMenu(player, name, realRank, tag, done);
+			} else if(TagMenu.NONE.equals(choice)) {
+				openRankMenu(player, name, realRank, "", done);
+			} else {
+				openRankMenu(player, name, realRank, choice, done);
+			}
+		}).open(player);
 	}
 
 	/** A rank in the menu: named the way others will see you ("[Gold] Notch"). firstLine: optional extra lore line on top. */
@@ -528,6 +647,11 @@ public final class PlayerDisguiseManager implements Listener {
 	 * then disguises. sender == null: no messages and no permission checks (developer API).
 	 */
 	public void disguise(CommandSender sender, Player target, String name, String rankInput, Consumer<Boolean> done) {
+		disguise(sender, target, name, rankInput, null, done);
+	}
+
+	/** tag: DeluxeTags identifier already checked ("" = no tag), or null = the default tag. */
+	public void disguise(CommandSender sender, Player target, String name, String rankInput, String tag, Consumer<Boolean> done) {
 		Language language = language();
 		if(!available) {
 			send(sender, language.DISGUISE_TYPE_NOT_SUPPORTED);
@@ -613,7 +737,7 @@ public final class PlayerDisguiseManager implements Listener {
 			debug("Skin for " + name + ": " + skin.source);
 			String finalRank = rank;
 			UUID finalUuid = knownUuid;
-			Bukkit.getScheduler().runTask(plugin, () -> apply(sender, target, name, finalRank, skin, finalUuid, done));
+			Bukkit.getScheduler().runTask(plugin, () -> apply(sender, target, name, finalRank, tag, skin, finalUuid, done));
 		});
 	}
 
@@ -639,7 +763,7 @@ public final class PlayerDisguiseManager implements Listener {
 		return false;
 	}
 
-	private void apply(CommandSender sender, Player target, String name, String rank, SkinResolver.Skin skin, UUID knownUuid, Consumer<Boolean> done) {
+	private void apply(CommandSender sender, Player target, String name, String rank, String chosenTag, SkinResolver.Skin skin, UUID knownUuid, Consumer<Boolean> done) {
 		Language language = language();
 		if(!target.isOnline()) {
 			finish(done, false);
@@ -672,6 +796,7 @@ public final class PlayerDisguiseManager implements Listener {
 
 		PlayerDisguise disguise = new PlayerDisguise(target.getUniqueId(), target.getName(), name, rank, skin.value, skin.signature);
 		disguise.setGivenByStaff(sender != target);
+		disguise.setChosenTag(chosenTag);
 		Player nameOwner = Bukkit.getPlayerExact(name);
 		if(nameOwner != null && nameOwner != target) {
 			disguise.setOwnerUuid(nameOwner.getUniqueId());
@@ -1285,11 +1410,14 @@ public final class PlayerDisguiseManager implements Listener {
 				event.setMessage(fakeColor + event.getMessage());
 			}
 		}
-		if(profile.hideChatTag) {
-			// Your own DeluxeTags tag is replaced by the tag of the player whose name you use
-			// (live while that player is online, none for a made-up name).
+		if(profile.hideChatTag || disguise.getChosenTag() != null) {
+			// Your own DeluxeTags tag is replaced by the tag picked for the disguise, else by the tag of
+			// the player whose name you use (live while that player is online, none for a made-up name).
 			String shownTag = disguise.getChatTag() == null ? "" : disguise.getChatTag();
-			if(placeholderApi) {
+			if(disguise.getChosenTag() != null) {
+				DeluxeTagsHook.Tag picked = deluxeTags == null || disguise.getChosenTag().isEmpty() ? null : deluxeTags.find(disguise.getChosenTag());
+				shownTag = picked == null ? "" : picked.shown();
+			} else if(placeholderApi) {
 				Player owner = Bukkit.getPlayerExact(disguise.getFakeName());
 				if(owner != null && owner != player) {
 					String ownerTag = PlaceholderHook.chatTag(owner);

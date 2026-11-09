@@ -44,6 +44,8 @@ final class RankMenu implements InventoryHolder {
 	}
 
 	static final String CANCEL = "\u0000cancel";
+	/** The tag button: opens the tag list. */
+	static final String TAG = "\u0000tag";
 
 	private final Inventory inventory;
 	private final Map<Integer, String> actions = new HashMap<>();
@@ -54,7 +56,7 @@ final class RankMenu implements InventoryHolder {
 	 * realRank (may be null), noRank, cancel: the bottom row.
 	 */
 	RankMenu(String title, ItemStack header, ItemStack frame, List<Entry> playerRanks, List<Entry> staffRanks,
-			Entry realRank, Entry cancel, Consumer<String> choose) {
+			Entry realRank, Entry cancel, Entry tag, Consumer<String> choose) {
 		this.choose = choose;
 		// Player ranks ("no rank" first), slot by slot from the left; then an empty row and the staff ranks.
 		// Too many for the 6 rows a menu can have: the empty row goes first.
@@ -91,6 +93,7 @@ final class RankMenu implements InventoryHolder {
 			if(place[0] < rows - 1) put(place[0] * 9 + place[1], all.get(place[2]));
 		}
 		int bottom = (rows - 1) * 9;
+		if(tag != null) put(bottom + 8, tag);
 		if(realRank != null) {
 			put(bottom + 3, realRank);
 			put(bottom + 5, cancel);

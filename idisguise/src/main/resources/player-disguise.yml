@@ -7,6 +7,7 @@
 #   iDisguise.random            /disguise random (a real Minecraft account's name and skin, random rank)
 #   iDisguise.rank.players      fake ranks: every rank in player-ranks
 #   iDisguise.rank.staff        fake ranks: every rank in staff-ranks
+#   iDisguise.tags.all          pick any DeluxeTags tag for a disguise (without it: only tags you own; staff: all)
 #   iDisguise.player.anyname    use names of players who are online or have played here before
 #   iDisguise.player.staff      get the "staff" settings below and stay hidden in /disguise list
 #   iDisguise.listplayers       see who is disguised as whom in /disguise list (staff stay hidden)
@@ -62,6 +63,12 @@ menu-items:
   cancel: BARRIER
   header: NAME_TAG
   frame: STAINED_GLASS_PANE:7
+  # Tag button in the rank menu, the tags in the tag list, "no tag", back, and the page arrows.
+  tag: NAME_TAG
+  tag-entry: NAME_TAG
+  no-tag: PAPER
+  back: BARRIER
+  page: ARROW
 
 # Rank used when no rank is given (and none can be copied). Use the group of players without a rank.
 default-rank: default

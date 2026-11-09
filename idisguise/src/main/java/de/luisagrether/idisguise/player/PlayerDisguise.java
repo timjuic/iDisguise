@@ -42,6 +42,8 @@ public final class PlayerDisguise {
 	private volatile boolean givenByStaff;
 	// DeluxeTags tag of the player whose name this is, shown in chat instead of the own tag.
 	private volatile String chatTag;
+	// DeluxeTags tag picked for the disguise (identifier, "" = no tag), or null = the default above.
+	private volatile String chosenTag;
 	// The real player with this name (has played here), or null for a made-up name.
 	private volatile UUID ownerUuid;
 
@@ -82,6 +84,8 @@ public final class PlayerDisguise {
 		this.staff = staff;
 	}
 	public String getChatTag() { return chatTag; }
+	String getChosenTag() { return chosenTag; }
+	void setChosenTag(String chosenTag) { this.chosenTag = chosenTag; }
 	UUID getOwnerUuid() { return ownerUuid; }
 	void setOwnerUuid(UUID ownerUuid) { this.ownerUuid = ownerUuid; }
 	void setChatTag(String chatTag) { this.chatTag = chatTag; }

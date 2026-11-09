@@ -184,7 +184,18 @@ final class PlayerDisguiseSettings {
 		if(item == null && key.toLowerCase(Locale.ENGLISH).endsWith("_temp")) {
 			item = menuItems.get(key.toLowerCase(Locale.ENGLISH).substring(0, key.length() - 5));
 		}
+		if(item == null) item = NEW_MENU_ITEMS.get(key.toLowerCase(Locale.ENGLISH));
 		return item != null ? item : "STAINED_CLAY:0";
+	}
+
+	// Menu items added after the first version: servers whose file doesn't list them yet get these.
+	private static final java.util.Map<String, String> NEW_MENU_ITEMS = new java.util.HashMap<>();
+	static {
+		NEW_MENU_ITEMS.put("tag", "NAME_TAG");
+		NEW_MENU_ITEMS.put("tag-entry", "NAME_TAG");
+		NEW_MENU_ITEMS.put("no-tag", "PAPER");
+		NEW_MENU_ITEMS.put("back", "BARRIER");
+		NEW_MENU_ITEMS.put("page", "ARROW");
 	}
 
 	boolean isStaffRank(String rank) {
