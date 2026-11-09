@@ -419,6 +419,27 @@ public final class PlayerDisguiseManager implements Listener {
 		return disguise == null ? null : effectiveRank(disguise);
 	}
 
+	/** The disguise rank as it looks in tab (colours and capitals), for the player's own messages. */
+	public String shownRankLook(Player player) {
+		PlayerDisguise disguise = disguises.get(player.getUniqueId());
+		return disguise == null ? "-" : rankLook(effectiveRank(disguise), player);
+	}
+
+	/**
+	 * A rank as players see it: its TAB tab prefix ("&5Obsidian"), without the trailing space and colour;
+	 * a rank whose prefix shows no text: its name in grey ("&7Default").
+	 */
+	private String rankLook(String rank, Player player) {
+		String group = rank != null ? rank : settings.defaultRank;
+		if(group == null) return "-";
+		String shown = tabLook == null ? "" : tabLook.tabPrefix(group, player);
+		shown = shown.replaceAll("(?:\\s|\u00a7.)+$", "");
+		if(ChatColor.stripColor(shown).trim().isEmpty()) {
+			return ChatColor.GRAY + group.substring(0, 1).toUpperCase(Locale.ENGLISH) + group.substring(1);
+		}
+		return shown;
+	}
+
 	public boolean canUseRandom(CommandSender sender) {
 		return available && has(sender, PERM_RANDOM);
 	}
@@ -853,8 +874,15 @@ public final class PlayerDisguiseManager implements Listener {
 		log.start(target.getName(), target.getUniqueId(), "player", name, effectiveRank(disguise));
 		if(previous != null) log.end(target.getName(), target.getUniqueId(), "player", previous.getFakeName());
 
-		String shownRank = effectiveRank(disguise);
-		send(sender, language.PLAYER_DISGUISED.replace("%name%", name).replace("%rank%", shownRank == null ? "-" : shownRank));
+		// The tag only for those who may pick tags (others never hear about tags).
+		String tagPart = "";
+		if(canUseTags(sender)) {
+			DeluxeTagsHook.Tag picked = chosenTag == null || chosenTag.isEmpty() ? null : deluxeTags.find(chosenTag);
+			tagPart = language.PLAYER_DISGUISED_TAG.replace("%tag%", picked != null && !picked.shown().trim().isEmpty()
+					? picked.shown() : language.RANK_MENU_TAG_NONE);
+		}
+		send(sender, language.PLAYER_DISGUISED.replace("%name%", name).replace("%rank%", rankLook(effectiveRank(disguise), target))
+				.replace("%tag%", tagPart));
 		finish(done, true);
 	}
 

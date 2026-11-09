@@ -1134,9 +1134,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(disguiseMap.containsKey(player.getUniqueId())) {
 			state = language.STATUS_MOB.replace("%type%", disguiseMap.get(player.getUniqueId()).getType().name());
 		} else if(playerDisguises.isDisguised(player)) {
-			String rank = playerDisguises.shownRank(player);
 			state = language.STATUS_PLAYER.replace("%name%", playerDisguises.get(player.getUniqueId()).getFakeName())
-					.replace("%rank%", rank == null ? "-" : rank);
+					.replace("%rank%", playerDisguises.shownRankLook(player));
 		} else {
 			state = language.STATUS_NONE;
 		}
