@@ -335,12 +335,11 @@ final class PacketRewriter extends PacketAdapter {
 		try {
 			WrappedDataWatcher watcher = event.getPacket().getDataWatcherModifier().readSafely(0);
 			if(watcher == null) return;
-			WrappedDataWatcher copy = watcher.deepClone();
-			for(int index : new int[] {0, 7, 9}) {
-				Object value = copy.getObject(index);
-				if(value == null) continue;
-				Object changed = invisibleValue(index, value, false);
-				if(changed != value) copy.setObject(index, changed);
+			// A brand-new watcher with copied values: a clone of the player's watcher shares its values on
+			// 1.8, and changing it would make the player invisible on the server for real.
+			WrappedDataWatcher copy = new WrappedDataWatcher();
+			for(WrappedWatchableObject object : watcher.getWatchableObjects()) {
+				copy.setObject(object.getIndex(), invisibleValue(object.getIndex(), object.getValue(), false));
 			}
 			PacketContainer packet = event.getPacket().shallowClone();
 			packet.getDataWatcherModifier().write(0, copy);

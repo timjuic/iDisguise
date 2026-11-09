@@ -1013,6 +1013,7 @@ public final class PlayerDisguiseManager implements Listener {
 			log.end(target.getName(), target.getUniqueId(), "invisible", "-");
 		}
 		updateListener();
+		if(tab != null) tab.setNameTagHidden(target, on);
 		// Everyone gets the new look right away, the player too (invisible in F5, effect icon).
 		for(Player viewer : Bukkit.getOnlinePlayers()) {
 			if(viewer != target) sendInvisibleState(target, viewer);
@@ -1483,7 +1484,10 @@ public final class PlayerDisguiseManager implements Listener {
 		if(invisibility != null && invisibility.isInvisible(joined.getUniqueId())) {
 			invisibility.online(joined);
 			updateListener();
-			Bukkit.getScheduler().runTaskLater(plugin, () -> sendOwnInvisibility(joined), 20L);
+			Bukkit.getScheduler().runTaskLater(plugin, () -> {
+				sendOwnInvisibility(joined);
+				if(tab != null && joined.isOnline() && isInvisible(joined)) tab.setNameTagHidden(joined, true);
+			}, 20L);
 		}
 		leaving.remove(joined.getUniqueId());
 		leavingUntil.remove(joined.getUniqueId());
@@ -1739,6 +1743,11 @@ public final class PlayerDisguiseManager implements Listener {
 	 * rank is put back into TAB if TAB lost it (e.g. after /tab reload).
 	 */
 	private void check() {
+		if(tab != null && invisibility != null && invisibility.anyOnline()) {
+			for(Player player : Bukkit.getOnlinePlayers()) {
+				if(isInvisible(player)) tab.setNameTagHidden(player, true);
+			}
+		}
 		for(PlayerDisguise disguise : new ArrayList<>(online)) {
 			Player player = Bukkit.getPlayer(disguise.getUniqueId());
 			if(player == null) continue;

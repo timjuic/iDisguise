@@ -119,10 +119,10 @@ public class Language {
 	public String LIST_LEGEND = c("&agreen &7= available, &cred &7= no permission.");
 	@LastUpdated(60126)
 	public String PLAYER_DISGUISE_LOADING = c("%prefix%&7Loading disguise as &e%name%&7...");
-	@LastUpdated(60147)
-	public String INVISIBLE_ON = c("%prefix%&7You are now &binvisible&7: only ESP / tracer cheats can see you.");
-	@LastUpdated(60147)
-	public String INVISIBLE_OFF = c("%prefix%&7You are &evisible&7 again.");
+	@LastUpdated(60148)
+	public String INVISIBLE_ON = c("%prefix%&7Invisibility &a&lON&7: only ESP / tracer cheats can see you.");
+	@LastUpdated(60148)
+	public String INVISIBLE_OFF = c("%prefix%&7Invisibility &c&lOFF&7: you are visible again.");
 	@LastUpdated(60147)
 	public String INVISIBLE_ON_OTHER = c("%prefix%&e%player% &7is now &binvisible&7.");
 	@LastUpdated(60147)

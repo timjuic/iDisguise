@@ -27,6 +27,8 @@ final class TabHook {
 	private final Method pauseTeamHandling;
 	private final Method resumeTeamHandling;
 	private final Method setSuffix;
+	private final Method hideNameTag;
+	private final Method showNameTag;
 	// Players TAB hasn't loaded, already reported once (no console spam).
 	private final java.util.Set<UUID> reported = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -54,6 +56,16 @@ final class TabHook {
 			// older TAB: the nametag keeps the own faction
 		}
 		setSuffix = suffix;
+		Method hide = null;
+		Method show = null;
+		try {
+			hide = nameTagManager.getMethod("hideNameTag", tabPlayer);
+			show = nameTagManager.getMethod("showNameTag", tabPlayer);
+		} catch(NoSuchMethodException e) {
+			plugin.getLogger().warning("This TAB version can't hide nametags: invisible players' nametags stay visible.");
+		}
+		hideNameTag = hide;
+		showNameTag = show;
 	}
 
 	static TabHook create(Plugin plugin) {
@@ -117,6 +129,20 @@ final class TabHook {
 		} catch(Throwable t) {
 			Throwable cause = t.getCause() != null ? t.getCause() : t;
 			plugin.getLogger().warning("Could not update TAB for " + player.getName() + ": " + cause);
+		}
+	}
+
+	/** Hides or shows the player's nametag for everyone (fake invisibility). */
+	void setNameTagHidden(Player player, boolean hidden) {
+		Method method = hidden ? hideNameTag : showNameTag;
+		if(method == null) return;
+		try {
+			Object api = getInstance.invoke(null);
+			Object manager = getNameTagManager.invoke(api);
+			Object tabPlayer = getPlayer.invoke(api, player.getUniqueId());
+			if(manager != null && tabPlayer != null) method.invoke(manager, tabPlayer);
+		} catch(Throwable t) {
+			plugin.getLogger().warning("Could not " + (hidden ? "hide" : "show") + " the nametag of " + player.getName() + ": " + t);
 		}
 	}
 
