@@ -1620,6 +1620,9 @@ public final class PlayerDisguiseManager implements Listener {
 				if(profile == null || !profile.commandsUseFakeName || !parts[i].equalsIgnoreCase(disguise.getFakeName())) continue;
 				// Shows the real player's faction, so /f who <name> means the real player too.
 				if(factionOwner(disguise) != null && FACTION_COMMANDS.contains(label)) continue;
+				// The name of a real account: only messages and teleport requests reach the disguise; /pay,
+				// /mail ... go to the real player (never money or items to the wrong person).
+				if(disguise.getOwnerUuid() != null && !settings.realPlayerCommands.contains(label)) continue;
 				// While the real player is online, the name means the real player.
 				if(Bukkit.getPlayerExact(disguise.getFakeName()) != null) continue;
 				parts[i] = disguise.getRealName();

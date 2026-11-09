@@ -132,6 +132,27 @@ commands-not-translated:
 - permission
 - permissions
 
+# Disguised as a REAL player (one who has played here): only these commands typed with that name reach
+# the disguised player. Every other command (/pay, /f, /mail ...) means the real account, so money and
+# items sent to that name always reach the real player.
+real-player-commands:
+- msg
+- tell
+- w
+- whisper
+- m
+- t
+- pm
+- emsg
+- etell
+- ewhisper
+- tpa
+- tpahere
+- etpa
+- etpahere
+- call
+- ecall
+
 # Skins used when the name has no skin of its own (not a player of this server and no Minecraft account).
 # One is picked at random. Use names of real Minecraft accounts.
 random-skins:
