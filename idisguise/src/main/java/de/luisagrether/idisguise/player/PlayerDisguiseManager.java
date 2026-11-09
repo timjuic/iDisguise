@@ -227,7 +227,13 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	public void disable() {
-		if(log != null) log.close();
+		if(log != null) {
+			// Given with /odisguise: not saved, so the stop ends them.
+			for(PlayerDisguise disguise : online) {
+				if(disguise.isGivenByStaff()) log.end(disguise.getRealName(), disguise.getUniqueId(), "player", disguise.getFakeName());
+			}
+			log.close();
+		}
 		if(!available) return;
 		checkTask.cancel();
 		revealTask.cancel();
@@ -717,7 +723,9 @@ public final class PlayerDisguiseManager implements Listener {
 		rebuildSnapshots();
 		save();
 		log.end(player.getName(), player.getUniqueId(), "player", disguise.getFakeName());
-		dropRevealTeams(player);
+		// Disguised as someone online, TAB never moved the name: after the reveal team is gone the name
+		// would have no nametag on that staff member's screen until TAB sends it again, so TAB does it now.
+		if(dropRevealTeams(player) && disguise.isHiddenFromTab() && tab != null) tab.rebuildNameTag(player);
 		if(player.isOnline()) {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
@@ -1554,12 +1562,15 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	/** Removes the reveal nametag teams of a disguised player (disguise ended or they left). */
-	private void dropRevealTeams(Player target) {
+	private boolean dropRevealTeams(Player target) {
+		boolean dropped = false;
 		for(Map.Entry<UUID, Set<UUID>> entry : revealTeams.entrySet()) {
 			if(!entry.getValue().remove(target.getUniqueId())) continue;
+			dropped = true;
 			Player viewer = Bukkit.getPlayer(entry.getKey());
 			if(viewer != null) sendRaw(viewer, revealTeam(target, null, 1));
 		}
+		return dropped;
 	}
 
 	/** Reveal turned off: all reveal nametag teams go away for that viewer. */

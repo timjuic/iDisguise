@@ -65,13 +65,27 @@ final class NameReplacer {
 
 	static String replace(String text, Collection<PlayerDisguise> disguises) {
 		if(!mentionsAny(text, disguises)) return text;
+		// Two steps, so a fake name that is someone else's real name isn't swapped a second time:
+		// first every real name becomes a token no name can match, then the tokens become fake names.
 		String result = text;
+		java.util.List<String> fakes = new java.util.ArrayList<>();
 		for(PlayerDisguise disguise : disguises) {
-			result = disguise.getRealNamePattern().matcher(result).replaceAll(Matcher.quoteReplacement(disguise.getFakeName()));
+			Matcher matcher = disguise.getRealNamePattern().matcher(result);
+			if(!matcher.find()) continue;
+			String token = TOKEN_START + fakes.size() + TOKEN_END;
+			fakes.add(disguise.getFakeName());
+			result = matcher.replaceAll(Matcher.quoteReplacement(token));
+		}
+		for(int i = 0; i < fakes.size(); i++) {
+			result = result.replace(TOKEN_START + i + TOKEN_END, fakes.get(i));
 		}
 		// After the swap: a marked real name was typed by the player, it stays (and looks) as typed.
 		return result.replace(MARKER, "");
 	}
+
+	// Private-use characters: never in names, never sent (every token is replaced right away).
+	private static final String TOKEN_START = "\uE000";
+	private static final String TOKEN_END = "\uE001";
 
 	/**
 	 * Replaces names inside a chat component (JSON). Only text values are touched, never keys,

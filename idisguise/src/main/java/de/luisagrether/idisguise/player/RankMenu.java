@@ -57,6 +57,10 @@ final class RankMenu implements InventoryHolder {
 			Entry realRank, Entry cancel, Consumer<String> choose) {
 		this.choose = choose;
 		// Player ranks ("no rank" first), slot by slot from the left; then an empty row and the staff ranks.
+		// Too many for the 6 rows a menu can have: the empty row goes first.
+		int playerRows = (playerRanks.size() + 8) / 9;
+		int staffRows = (staffRanks.size() + 8) / 9;
+		boolean gap = !staffRanks.isEmpty() && 1 + playerRows + 1 + staffRows + 1 <= 6;
 		List<int[]> layout = new ArrayList<>(); // {row, column, index in all}
 		List<Entry> all = new ArrayList<>();
 		int row = 1;
@@ -64,14 +68,18 @@ final class RankMenu implements InventoryHolder {
 			layout.add(new int[] {row + i / 9, i % 9, all.size()});
 			all.add(playerRanks.get(i));
 		}
-		row += (playerRanks.size() + 8) / 9;
+		row += playerRows;
 		if(!staffRanks.isEmpty()) {
-			row++; // the gap
+			if(gap) row++;
 			for(int i = 0; i < staffRanks.size(); i++) {
 				layout.add(new int[] {row + i / 9, i % 9, all.size()});
 				all.add(staffRanks.get(i));
 			}
-			row += (staffRanks.size() + 8) / 9;
+			row += staffRows;
+		}
+		if(row + 1 > 6) {
+			org.bukkit.Bukkit.getLogger().warning("[iDisguise] The rank menu has more ranks than fit in 6 rows; some are left out."
+					+ " They still work with /disguise <name> <rank>. Use fewer ranks in player-disguise.yml.");
 		}
 		int rows = Math.min(6, row + 1);
 		// 1.8 menu titles are at most 32 characters.
