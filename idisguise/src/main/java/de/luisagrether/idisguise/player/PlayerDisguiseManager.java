@@ -1016,7 +1016,9 @@ public final class PlayerDisguiseManager implements Listener {
 		if(tab != null) tab.setNameTagHidden(target, on);
 		// Everyone gets the new look right away, the player too (invisible in F5, effect icon).
 		for(Player viewer : Bukkit.getOnlinePlayers()) {
-			if(viewer != target) sendInvisibleState(target, viewer);
+			if(viewer == target || !viewer.canSee(target)) continue;
+			viewer.hidePlayer(target);
+			viewer.showPlayer(target);
 		}
 		sendOwnInvisibility(target);
 		sendInvisibleMessage(sender, target, on);
@@ -1039,11 +1041,7 @@ public final class PlayerDisguiseManager implements Listener {
 	void sendInvisibleState(Player target, Player viewer) {
 		if(!target.isOnline() || !viewer.isOnline() || target.getWorld() != viewer.getWorld()) return;
 		try {
-			PacketContainer metadata = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_METADATA);
-			metadata.getIntegers().write(0, target.getEntityId());
-			metadata.getWatchableCollectionModifier().write(0,
-					com.comphenix.protocol.wrappers.WrappedDataWatcher.getEntityWatcher(target).getWatchableObjects());
-			sendFiltered(viewer, metadata);
+			sendFiltered(viewer, lookPacket(target));
 			org.bukkit.inventory.ItemStack[] armor = target.getInventory().getArmorContents();
 			org.bukkit.inventory.ItemStack[] items = {target.getItemInHand(), armor[0], armor[1], armor[2], armor[3]};
 			for(int slot = 0; slot < items.length; slot++) {
@@ -1056,6 +1054,24 @@ public final class PlayerDisguiseManager implements Listener {
 		} catch(RuntimeException e) {
 			debug("Could not send the look of " + target.getName() + " to " + viewer.getName(), e);
 		}
+	}
+
+	/**
+	 * A metadata packet with only the values invisibility changes (flags, potion colour, arrows), copied
+	 * as new objects from the player's real values. Goes through the rewriter, which makes it invisible
+	 * or not for each viewer.
+	 */
+	private static PacketContainer lookPacket(Player player) {
+		com.comphenix.protocol.wrappers.WrappedDataWatcher real = com.comphenix.protocol.wrappers.WrappedDataWatcher.getEntityWatcher(player);
+		List<com.comphenix.protocol.wrappers.WrappedWatchableObject> values = new ArrayList<>();
+		for(int index : new int[] {0, 7, 9}) {
+			Object value = real.getObject(index);
+			if(value != null) values.add(new com.comphenix.protocol.wrappers.WrappedWatchableObject(index, value));
+		}
+		PacketContainer metadata = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_METADATA);
+		metadata.getIntegers().write(0, player.getEntityId());
+		metadata.getWatchableCollectionModifier().write(0, values);
+		return metadata;
 	}
 
 	/** Right after the body was sent to a viewer (one tick later, when the client has it). */
@@ -1089,11 +1105,7 @@ public final class PlayerDisguiseManager implements Listener {
 			}
 			// A real invisibility potion the player may have: leave its icon alone.
 			if(on || !player.hasPotionEffect(org.bukkit.potion.PotionEffectType.INVISIBILITY)) sendRaw(player, effect);
-			PacketContainer metadata = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_METADATA);
-			metadata.getIntegers().write(0, player.getEntityId());
-			metadata.getWatchableCollectionModifier().write(0,
-					com.comphenix.protocol.wrappers.WrappedDataWatcher.getEntityWatcher(player).getWatchableObjects());
-			sendFiltered(player, metadata);
+			sendFiltered(player, lookPacket(player));
 		} catch(RuntimeException e) {
 			debug("Could not send the invisibility of " + player.getName() + " to themselves", e);
 		}
