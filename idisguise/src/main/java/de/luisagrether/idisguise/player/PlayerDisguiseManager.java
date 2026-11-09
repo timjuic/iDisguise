@@ -207,8 +207,7 @@ public final class PlayerDisguiseManager implements Listener {
 			}
 		});
 		randomNames.refill();
-		Bukkit.getPluginManager().registerEvents(new RankMenu.Clicks(plugin), plugin);
-		Bukkit.getPluginManager().registerEvents(new TagMenu.Clicks(plugin), plugin);
+		Bukkit.getPluginManager().registerEvents(new DisguiseMenu.Clicks(plugin), plugin);
 		deluxeTags = DeluxeTagsHook.create(plugin.getLogger());
 		hookVanishEvents();
 		tabLook = new TabLook();
@@ -517,9 +516,9 @@ public final class PlayerDisguiseManager implements Listener {
 				if(refused) {
 					disguise(sender, target, name, null, null, done);
 				} else if(ranks) {
-					openRankMenu(menu, null, false);
+					openRankMenu(menu);
 				} else {
-					openTagMenu(menu, null, false, 0, true);
+					openTagMenu(menu, 0, true);
 				}
 			});
 		});
@@ -533,6 +532,9 @@ public final class PlayerDisguiseManager implements Listener {
 		final String realRank;
 		final SkinResolver.Skin skin;
 		final Consumer<Boolean> done;
+		// Picked so far: the tag (null = default, "" = none) and the invisibility switch.
+		String tag;
+		boolean invis;
 
 		Menu(Player chooser, Player target, String name, String realRank, SkinResolver.Skin skin, Consumer<Boolean> done) {
 			this.chooser = chooser;
@@ -605,57 +607,80 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 	}
 
-	private void openRankMenu(Menu menu, String tag, boolean invis) {
+	/** The head on top of both menus: the disguise's skin, the name, and what's picked so far. */
+	private org.bukkit.inventory.ItemStack menuHeader(Menu menu) {
+		Language language = language();
+		boolean other = menu.chooser != menu.target;
+		List<String> lore = RankMenu.lines(language.RANK_MENU_HEADER_LORE);
+		// For another player (/odisguise): the menu says so.
+		if(other) lore.add(0, language.RANK_MENU_FOR.replace("%player%", menu.target.getName()));
+		String shownTag = tagPreview(menu.tag);
+		if(!shownTag.isEmpty()) lore.add(language.RANK_MENU_TAG.replace("%tag%", shownTag.trim()));
+		if(menu.invis) lore.add(language.RANK_MENU_HEADER_INVIS);
+		return headerItem(menu.skin,
+				(other ? language.RANK_MENU_HEADER_OTHER.replace("%player%", menu.target.getName()) : language.RANK_MENU_HEADER)
+						.replace("%name%", menu.name), lore);
+	}
+
+	private org.bukkit.inventory.ItemStack menuFrame() {
+		return RankMenu.item(settings.menuItem("frame"), " ", null);
+	}
+
+	private org.bukkit.inventory.ItemStack cancelItem() {
+		Language language = language();
+		return RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL, RankMenu.lines(language.RANK_MENU_CANCEL_LORE));
+	}
+
+	/** The invisibility button was clicked: switched in the open menu, nothing reopens. */
+	private void switchInvis(Menu menu, DisguiseMenu shown) {
+		menu.invis = !menu.invis;
+		shown.replace(DisguiseMenu.INVIS, invisButton(menu.chooser, menu.invis));
+		shown.replace(DisguiseMenu.HEADER, menuHeader(menu));
+	}
+
+	private void openRankMenu(Menu menu) {
 		Player chooser = menu.chooser;
 		Player target = menu.target;
 		String name = menu.name;
-		String realRank = menu.realRank;
-		String shownTag = tagPreview(tag);
+		String shownTag = tagPreview(menu.tag);
 		Language language = language();
-		List<RankMenu.Entry> playerEntries = new ArrayList<>();
-		List<RankMenu.Entry> staffEntries = new ArrayList<>();
-		// "No rank" first, like the lowest rank.
-		playerEntries.add(new RankMenu.Entry(NO_RANK, RankMenu.item(settings.menuItem("no-rank"), ChatColor.WHITE + name + shownTag,
+		// "No rank" first, then the ranks in order: player ranks, staff ranks right after them.
+		List<RankMenu.Entry> rankEntries = new ArrayList<>();
+		rankEntries.add(new RankMenu.Entry(NO_RANK, RankMenu.item(settings.menuItem("no-rank"), ChatColor.WHITE + name + shownTag,
 				RankMenu.lines(language.RANK_MENU_RANK_LORE))));
-		for(String rank : usableRanks(chooser)) {
-			RankMenu.Entry entry = new RankMenu.Entry(rank, rankItem(rank, name + shownTag, null));
-			(settings.isStaffRank(rank) ? staffEntries : playerEntries).add(entry);
+		List<String> usable = usableRanks(chooser);
+		for(String rank : usable) {
+			if(!settings.isStaffRank(rank)) rankEntries.add(new RankMenu.Entry(rank, rankItem(rank, name + shownTag, null)));
 		}
-		RankMenu.Entry real = realRank == null ? null : new RankMenu.Entry(null,
-				rankItem(realRank, name + shownTag, language.RANK_MENU_REAL_RANK.replace("%name%", name)));
-		RankMenu.Entry cancel = new RankMenu.Entry(RankMenu.CANCEL, RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL,
-				RankMenu.lines(language.RANK_MENU_CANCEL_LORE)));
-		// For another player (/odisguise): the menu says so.
-		boolean other = chooser != target;
-		List<String> headerLore = RankMenu.lines(language.RANK_MENU_HEADER_LORE);
-		if(other) headerLore.add(0, language.RANK_MENU_FOR.replace("%player%", target.getName()));
-		// What's picked so far: the tag and the invisibility switch.
-		if(!shownTag.isEmpty()) headerLore.add(language.RANK_MENU_TAG.replace("%tag%", shownTag.trim()));
-		if(invis) headerLore.add(language.RANK_MENU_HEADER_INVIS);
-		org.bukkit.inventory.ItemStack header = headerItem(menu.skin,
-				(other ? language.RANK_MENU_HEADER_OTHER.replace("%player%", target.getName()) : language.RANK_MENU_HEADER).replace("%name%", name),
-				headerLore);
-		org.bukkit.inventory.ItemStack frame = RankMenu.item(settings.menuItem("frame"), " ", null);
+		for(String rank : usable) {
+			if(settings.isStaffRank(rank)) rankEntries.add(new RankMenu.Entry(rank, rankItem(rank, name + shownTag, null)));
+		}
+		RankMenu.Entry real = menu.realRank == null ? null : new RankMenu.Entry(null,
+				rankItem(menu.realRank, name + shownTag, language.RANK_MENU_REAL_RANK.replace("%name%", name)));
+		RankMenu.Entry cancel = new RankMenu.Entry(RankMenu.CANCEL_ACTION, cancelItem());
 		// The tag button: only when this player may pick at least one tag.
 		RankMenu.Entry tagButton = null;
 		if(!usableTags(chooser).isEmpty()) {
-			DeluxeTagsHook.Tag current = tag == null || tag.isEmpty() ? null : deluxeTags.find(tag);
+			DeluxeTagsHook.Tag current = menu.tag == null || menu.tag.isEmpty() ? null : deluxeTags.find(menu.tag);
 			String shown = current != null ? current.label() : language.RANK_MENU_TAG_NONE;
 			tagButton = new RankMenu.Entry(RankMenu.TAG, RankMenu.item(settings.menuItem("tag"),
 					language.RANK_MENU_TAG.replace("%tag%", shown), RankMenu.lines(language.RANK_MENU_TAG_LORE)));
 		}
-		org.bukkit.inventory.ItemStack invisItem = invisButton(chooser, invis);
-		RankMenu.Entry invisEntry = invisItem == null ? null : new RankMenu.Entry(RankMenu.INVIS, invisItem);
-		String title = (other ? language.RANK_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.RANK_MENU_TITLE).replace("%name%", name);
-		new RankMenu(title, header, frame, playerEntries, staffEntries, real, cancel, tagButton, invisEntry,
-				choice -> {
+		String title = (chooser != target ? language.RANK_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.RANK_MENU_TITLE)
+				.replace("%name%", name);
+		new RankMenu(title, menuHeader(menu), menuFrame(), rankEntries, real, cancel, tagButton, invisButton(chooser, menu.invis),
+				(shown, choice) -> {
 					if(RankMenu.TAG.equals(choice)) {
-						openTagMenu(menu, tag, invis, 0, false);
-					} else if(RankMenu.INVIS.equals(choice)) {
-						openRankMenu(menu, tag, !invis);
+						openTagMenu(menu, 0, false);
+					} else if(RankMenu.INVIS_ACTION.equals(choice)) {
+						switchInvis(menu, shown);
+						return true;
+					} else if(RankMenu.CANCEL_ACTION.equals(choice)) {
+						finish(menu.done, false);
 					} else {
-						disguiseFromMenu(menu, choice, tag, invis);
+						disguiseFromMenu(menu, choice, menu.tag, menu.invis);
 					}
+					return false;
 				}).open(chooser);
 	}
 
@@ -663,12 +688,13 @@ public final class PlayerDisguiseManager implements Listener {
 	 * The tag list. From the rank menu (tagOnly false) a choice goes back to the rank menu with that tag;
 	 * for players who may only pick tags (tagOnly true) a choice disguises right away.
 	 */
-	private void openTagMenu(Menu menu, String tag, boolean invis, int page, boolean tagOnly) {
+	private void openTagMenu(Menu menu, int page, boolean tagOnly) {
 		Player chooser = menu.chooser;
 		Player target = menu.target;
 		String name = menu.name;
+		String tag = menu.tag;
 		Language language = language();
-		// "No tag" first, then every tag this player may use; 45 per page.
+		// "No tag" first, then every tag this player may use; 36 per page.
 		List<RankMenu.Entry> all = new ArrayList<>();
 		List<String> noneLore = RankMenu.lines(language.TAG_MENU_NONE_LORE);
 		noneLore.add("");
@@ -684,40 +710,40 @@ public final class PlayerDisguiseManager implements Listener {
 			String title = entry.shown().trim().isEmpty() ? ChatColor.WHITE + entry.id : entry.label();
 			all.add(new RankMenu.Entry(entry.id, RankMenu.item(settings.menuItem("tag-entry"), title, lore)));
 		}
-		int pages = Math.max(1, (all.size() + TagMenu.PER_PAGE - 1) / TagMenu.PER_PAGE);
+		int pages = Math.max(1, (all.size() + DisguiseMenu.PER_PAGE - 1) / DisguiseMenu.PER_PAGE);
 		int shownPage = Math.max(0, Math.min(page, pages - 1));
-		List<RankMenu.Entry> entries = new ArrayList<>(all.subList(shownPage * TagMenu.PER_PAGE,
-				Math.min(all.size(), (shownPage + 1) * TagMenu.PER_PAGE)));
-		// Only tags: there is no rank menu to go back to, so this button closes without disguising.
-		org.bukkit.inventory.ItemStack back = tagOnly
-				? RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL, RankMenu.lines(language.RANK_MENU_CANCEL_LORE))
+		List<RankMenu.Entry> entries = new ArrayList<>(all.subList(shownPage * DisguiseMenu.PER_PAGE,
+				Math.min(all.size(), (shownPage + 1) * DisguiseMenu.PER_PAGE)));
+		// Only tags: there is no rank menu to go back to.
+		org.bukkit.inventory.ItemStack back = tagOnly ? null
 				: RankMenu.item(settings.menuItem("back"), language.TAG_MENU_BACK, RankMenu.lines(language.TAG_MENU_BACK_LORE));
 		org.bukkit.inventory.ItemStack previous = shownPage > 0 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_PREVIOUS, null) : null;
 		org.bukkit.inventory.ItemStack next = shownPage < pages - 1 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_NEXT, null) : null;
 		String title = (chooser != target ? language.TAG_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.TAG_MENU_TITLE)
 				.replace("%name%", name);
-		new TagMenu(title, entries, back, previous, next, invisButton(chooser, invis), choice -> {
-			if(TagMenu.PREVIOUS.equals(choice)) {
-				openTagMenu(menu, tag, invis, shownPage - 1, tagOnly);
-			} else if(TagMenu.NEXT.equals(choice)) {
-				openTagMenu(menu, tag, invis, shownPage + 1, tagOnly);
-			} else if(RankMenu.INVIS.equals(choice)) {
-				openTagMenu(menu, tag, !invis, shownPage, tagOnly);
-			} else if(TagMenu.BACK.equals(choice)) {
-				if(tagOnly) {
-					finish(menu.done, false);
-				} else {
-					openRankMenu(menu, tag, invis);
-				}
-			} else {
-				String picked = TagMenu.NONE.equals(choice) ? "" : choice;
-				if(tagOnly) {
-					disguiseFromMenu(menu, null, picked, invis);
-				} else {
-					openRankMenu(menu, picked, invis);
-				}
-			}
-		}).open(chooser);
+		new TagMenu(title, menuHeader(menu), menuFrame(), entries, back, cancelItem(), previous, next, invisButton(chooser, menu.invis),
+				(shown, choice) -> {
+					if(TagMenu.PREVIOUS_ACTION.equals(choice)) {
+						openTagMenu(menu, shownPage - 1, tagOnly);
+					} else if(TagMenu.NEXT_ACTION.equals(choice)) {
+						openTagMenu(menu, shownPage + 1, tagOnly);
+					} else if(RankMenu.INVIS_ACTION.equals(choice)) {
+						switchInvis(menu, shown);
+						return true;
+					} else if(TagMenu.BACK.equals(choice)) {
+						openRankMenu(menu);
+					} else if(RankMenu.CANCEL_ACTION.equals(choice)) {
+						finish(menu.done, false);
+					} else {
+						menu.tag = TagMenu.NONE.equals(choice) ? "" : choice;
+						if(tagOnly) {
+							disguiseFromMenu(menu, null, menu.tag, menu.invis);
+						} else {
+							openRankMenu(menu);
+						}
+					}
+					return false;
+				}).open(chooser);
 	}
 
 	/** A rank in the menu: named the way others will see you ("[Gold] Notch"). firstLine: optional extra lore line on top. */

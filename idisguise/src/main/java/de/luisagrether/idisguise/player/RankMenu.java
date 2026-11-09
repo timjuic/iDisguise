@@ -2,37 +2,19 @@ package de.luisagrether.idisguise.player;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.plugin.Plugin;
 
 /**
- * The rank menu after /disguise <name>:
- *   row 1  frame with a name tag in the middle (who you disguise as)
- *   row 2  player ranks
- *   row 3  empty (only when staff ranks follow)
- *   row 4  staff ranks
- *   last   real rank of that player / no rank / cancel
- * Every click is cancelled; the choice runs on the next tick, only while this menu is still open.
+ * The rank menu after /disguise <name>: "no rank", the player ranks and then the staff ranks in one list
+ * (rows 2-5), the bottom row as in every disguise menu (see DisguiseMenu).
  */
-final class RankMenu implements InventoryHolder {
+final class RankMenu extends DisguiseMenu {
 
-	/** One clickable entry. value: the rank passed on (null = real rank, NO_RANK = no rank). */
+	/** One clickable entry. value: the action passed on (null = real rank, NO_RANK = no rank). */
 	static final class Entry {
 		final String value;
 		final ItemStack item;
@@ -43,83 +25,25 @@ final class RankMenu implements InventoryHolder {
 		}
 	}
 
-	static final String CANCEL = "\u0000cancel";
+	static final String CANCEL_ACTION = "\u0000cancel";
 	/** The tag button: opens the tag list. */
 	static final String TAG = "\u0000tag";
 	/** The invisibility button (staff): switches "also turn invisible" on / off. */
-	static final String INVIS = "\u0000invis";
+	static final String INVIS_ACTION = "\u0000invis";
 
-	private final Inventory inventory;
-	private final Map<Integer, String> actions = new HashMap<>();
-	private final Consumer<String> choose;
-
-	/**
-	 * header: the name tag on top. playerRanks / staffRanks: one entry per rank (staff may be empty).
-	 * realRank (may be null), noRank, cancel: the bottom row.
-	 */
-	RankMenu(String title, ItemStack header, ItemStack frame, List<Entry> playerRanks, List<Entry> staffRanks,
-			Entry realRank, Entry cancel, Entry tag, Entry invis, Consumer<String> choose) {
-		this.choose = choose;
-		// Player ranks ("no rank" first), slot by slot from the left; then an empty row and the staff ranks.
-		// Too many for the 6 rows a menu can have: the empty row goes first.
-		int playerRows = (playerRanks.size() + 8) / 9;
-		int staffRows = (staffRanks.size() + 8) / 9;
-		boolean gap = !staffRanks.isEmpty() && 1 + playerRows + 1 + staffRows + 1 <= 6;
-		List<int[]> layout = new ArrayList<>(); // {row, column, index in all}
-		List<Entry> all = new ArrayList<>();
-		int row = 1;
-		for(int i = 0; i < playerRanks.size(); i++) {
-			layout.add(new int[] {row + i / 9, i % 9, all.size()});
-			all.add(playerRanks.get(i));
+	/** ranks: in menu order. realRank, tag, invis may be null. */
+	RankMenu(String title, ItemStack header, ItemStack frame, List<Entry> ranks, Entry realRank, Entry cancel, Entry tag,
+			ItemStack invis, Choice choice) {
+		super(title, header, frame, choice);
+		if(ranks.size() > PER_PAGE) {
+			org.bukkit.Bukkit.getLogger().warning("[iDisguise] The rank menu has more than " + PER_PAGE + " ranks; some are left out."
+					+ " Use fewer ranks in player-disguise.yml.");
 		}
-		row += playerRows;
-		if(!staffRanks.isEmpty()) {
-			if(gap) row++;
-			for(int i = 0; i < staffRanks.size(); i++) {
-				layout.add(new int[] {row + i / 9, i % 9, all.size()});
-				all.add(staffRanks.get(i));
-			}
-			row += staffRows;
-		}
-		if(row + 1 > 6) {
-			org.bukkit.Bukkit.getLogger().warning("[iDisguise] The rank menu has more ranks than fit in 6 rows; some are left out."
-					+ " They still work with /disguise <name> <rank>. Use fewer ranks in player-disguise.yml.");
-		}
-		int rows = Math.min(6, row + 1);
-		// 1.8 menu titles are at most 32 characters.
-		this.inventory = Bukkit.createInventory(this, rows * 9, title.length() > 32 ? title.substring(0, 32) : title);
-
-		for(int slot = 0; slot < 9; slot++) inventory.setItem(slot, frame);
-		inventory.setItem(4, header);
-		for(int[] place : layout) {
-			if(place[0] < rows - 1) put(place[0] * 9 + place[1], all.get(place[2]));
-		}
-		int bottom = (rows - 1) * 9;
-		if(tag != null) put(bottom + 8, tag);
-		if(invis != null) put(bottom, invis);
-		if(realRank != null) {
-			put(bottom + 3, realRank);
-			put(bottom + 5, cancel);
-		} else {
-			put(bottom + 4, cancel);
-		}
-	}
-
-	private void put(int slot, Entry entry) {
-		inventory.setItem(slot, entry.item);
-		actions.put(slot, entry.value == null ? REAL_RANK : entry.value);
-	}
-
-	// Marker for "real rank": the map can't tell a null value from a missing slot.
-	private static final String REAL_RANK = "\u0000real-rank";
-
-	void open(Player player) {
-		player.openInventory(inventory);
-	}
-
-	@Override
-	public Inventory getInventory() {
-		return inventory;
+		for(int i = 0; i < ranks.size() && i < PER_PAGE; i++) put(FIRST + i, ranks.get(i));
+		put(INVIS, invis, INVIS_ACTION);
+		put(REAL_RANK, realRank);
+		put(CANCEL, cancel);
+		put(SWITCH, tag);
 	}
 
 	// ---------------------------------------------------------------- items
@@ -159,41 +83,6 @@ final class RankMenu implements InventoryHolder {
 
 	static List<String> lines(String text) {
 		return new ArrayList<>(Arrays.asList(text.split("\n")));
-	}
-
-	// ---------------------------------------------------------------- clicks
-
-	/** Cancels every click in the menu and runs the chosen entry. Registered once. */
-	static final class Clicks implements Listener {
-
-		private final Plugin plugin;
-
-		Clicks(Plugin plugin) {
-			this.plugin = plugin;
-		}
-
-		@EventHandler(priority = EventPriority.LOWEST)
-		public void onClick(InventoryClickEvent event) {
-			if(!(event.getView().getTopInventory().getHolder() instanceof RankMenu)) return;
-			event.setCancelled(true);
-			RankMenu menu = (RankMenu)event.getView().getTopInventory().getHolder();
-			int slot = event.getRawSlot();
-			if(!menu.actions.containsKey(slot) || !(event.getWhoClicked() instanceof Player)) return;
-			Player player = (Player)event.getWhoClicked();
-			String action = menu.actions.get(slot);
-			Bukkit.getScheduler().runTask(plugin, () -> {
-				if(!player.isOnline() || player.getOpenInventory().getTopInventory().getHolder() != menu) return;
-				player.closeInventory();
-				if(CANCEL.equals(action)) return;
-				menu.choose.accept(REAL_RANK.equals(action) ? null : action);
-			});
-		}
-
-		@EventHandler(priority = EventPriority.LOWEST)
-		public void onDrag(InventoryDragEvent event) {
-			if(event.getView().getTopInventory().getHolder() instanceof RankMenu) event.setCancelled(true);
-		}
-
 	}
 
 }
