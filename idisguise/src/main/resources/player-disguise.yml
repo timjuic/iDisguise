@@ -230,6 +230,7 @@ profiles:
 # default) lose these permissions while disguised, so nothing gives them away. Needs LuckPerms. Nothing is
 # saved: they come back when you undisguise, log out or the server restarts. "x.*" also takes away
 # every x.<something> the player has. Permissions of plugins you don't have do nothing.
+# roidstaff.staff: RoidStaff keeps a staff member's items on death; while disguised you are a normal player there.
 player-permissions:
 - essentials.keepinv
 - essentials.keepxp
@@ -252,5 +253,4 @@ player-permissions:
 - staff.slowmode.bypass
 - roidstaff.chatmoderation.bypass
 - woodcutting.pvpzone.instant
-# RoidStaff keeps a staff member's items on death: while disguised you are a normal player there.
 - roidstaff.staff
