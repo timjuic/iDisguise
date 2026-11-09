@@ -17,8 +17,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The tag list, opened from the rank menu: 45 tags per page, bottom row with previous page, back,
- * no tag and next page. Every click is cancelled; the choice runs on the next tick, only while this
+ * The tag list: "no tag" and the tags, 45 per page; bottom row with previous page, back (or cancel)
+ * and next page. Every click is cancelled; the choice runs on the next tick, only while this
  * menu is still open.
  */
 final class TagMenu implements InventoryHolder {
@@ -33,7 +33,7 @@ final class TagMenu implements InventoryHolder {
 	private final Map<Integer, String> actions = new HashMap<>();
 	private final Consumer<String> choose;
 
-	TagMenu(String title, java.util.List<RankMenu.Entry> tags, ItemStack none, ItemStack back, ItemStack previous, ItemStack next,
+	TagMenu(String title, java.util.List<RankMenu.Entry> tags, ItemStack back, ItemStack previous, ItemStack next,
 			Consumer<String> choose) {
 		this.choose = choose;
 		this.inventory = Bukkit.createInventory(this, 54, title.length() > 32 ? title.substring(0, 32) : title);
@@ -43,8 +43,7 @@ final class TagMenu implements InventoryHolder {
 			put(slot++, entry.item, entry.value);
 		}
 		if(previous != null) put(45, previous, PREVIOUS);
-		put(48, back, BACK);
-		put(50, none, NONE);
+		put(49, back, BACK);
 		if(next != null) put(53, next, NEXT);
 	}
 

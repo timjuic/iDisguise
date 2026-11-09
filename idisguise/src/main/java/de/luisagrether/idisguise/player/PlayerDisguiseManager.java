@@ -530,12 +530,13 @@ public final class PlayerDisguiseManager implements Listener {
 	private void openTagMenu(Player chooser, Player target, String name, String realRank, String tag, int page, boolean tagOnly,
 			Consumer<Boolean> done) {
 		Language language = language();
-		List<DeluxeTagsHook.Tag> tags = usableTags(chooser);
-		int pages = Math.max(1, (tags.size() + TagMenu.PER_PAGE - 1) / TagMenu.PER_PAGE);
-		int shownPage = Math.max(0, Math.min(page, pages - 1));
-		List<RankMenu.Entry> entries = new ArrayList<>();
-		for(int i = shownPage * TagMenu.PER_PAGE; i < Math.min(tags.size(), (shownPage + 1) * TagMenu.PER_PAGE); i++) {
-			DeluxeTagsHook.Tag entry = tags.get(i);
+		// "No tag" first, then every tag this player may use; 45 per page.
+		List<RankMenu.Entry> all = new ArrayList<>();
+		List<String> noneLore = RankMenu.lines(language.TAG_MENU_NONE_LORE);
+		noneLore.add("");
+		noneLore.add(tag != null && tag.isEmpty() ? language.TAG_MENU_SELECTED : language.TAG_MENU_PICK);
+		all.add(new RankMenu.Entry(TagMenu.NONE, RankMenu.item(settings.menuItem("no-tag"), language.TAG_MENU_NONE, noneLore)));
+		for(DeluxeTagsHook.Tag entry : usableTags(chooser)) {
 			List<String> lore = new ArrayList<>();
 			if(!entry.description.isEmpty()) {
 				lore.add(ChatColor.GRAY + ChatColor.translateAlternateColorCodes('&', entry.description));
@@ -543,18 +544,19 @@ public final class PlayerDisguiseManager implements Listener {
 			}
 			lore.add(entry.id.equalsIgnoreCase(tag) ? language.TAG_MENU_SELECTED : language.TAG_MENU_PICK);
 			String title = entry.shown().trim().isEmpty() ? ChatColor.WHITE + entry.id : entry.shown();
-			entries.add(new RankMenu.Entry(entry.id, RankMenu.item(settings.menuItem("tag-entry"), title, lore)));
+			all.add(new RankMenu.Entry(entry.id, RankMenu.item(settings.menuItem("tag-entry"), title, lore)));
 		}
-		List<String> noneLore = RankMenu.lines(language.TAG_MENU_NONE_LORE);
-		if(tag != null && tag.isEmpty()) noneLore.add(language.TAG_MENU_SELECTED);
-		org.bukkit.inventory.ItemStack none = RankMenu.item(settings.menuItem("no-tag"), language.TAG_MENU_NONE, noneLore);
+		int pages = Math.max(1, (all.size() + TagMenu.PER_PAGE - 1) / TagMenu.PER_PAGE);
+		int shownPage = Math.max(0, Math.min(page, pages - 1));
+		List<RankMenu.Entry> entries = new ArrayList<>(all.subList(shownPage * TagMenu.PER_PAGE,
+				Math.min(all.size(), (shownPage + 1) * TagMenu.PER_PAGE)));
 		// Only tags: there is no rank menu to go back to, so this button closes without disguising.
 		org.bukkit.inventory.ItemStack back = tagOnly
 				? RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL, RankMenu.lines(language.RANK_MENU_CANCEL_LORE))
 				: RankMenu.item(settings.menuItem("back"), language.TAG_MENU_BACK, RankMenu.lines(language.TAG_MENU_BACK_LORE));
 		org.bukkit.inventory.ItemStack previous = shownPage > 0 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_PREVIOUS, null) : null;
 		org.bukkit.inventory.ItemStack next = shownPage < pages - 1 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_NEXT, null) : null;
-		new TagMenu(language.TAG_MENU_TITLE.replace("%name%", name), entries, none, back, previous, next, choice -> {
+		new TagMenu(language.TAG_MENU_TITLE.replace("%name%", name), entries, back, previous, next, choice -> {
 			if(TagMenu.PREVIOUS.equals(choice)) {
 				openTagMenu(chooser, target, name, realRank, tag, shownPage - 1, tagOnly, done);
 			} else if(TagMenu.NEXT.equals(choice)) {
@@ -632,7 +634,11 @@ public final class PlayerDisguiseManager implements Listener {
 
 	private void disguiseRandomAs(CommandSender sender, Player target, String name, Consumer<Boolean> done) {
 		// Every rank the player may use has the same chance, "no rank" counts as one of them.
-		List<String> choices = new ArrayList<>(usableRanks(sender));
+		// Staff ranks are never picked at random (only by hand in the rank menu).
+		List<String> choices = new ArrayList<>();
+		for(String usable : usableRanks(sender)) {
+			if(!settings.isStaffRank(usable)) choices.add(usable);
+		}
 		choices.add(NO_RANK);
 		String rank = choices.get(new java.util.Random().nextInt(choices.size()));
 		String tag = null;
