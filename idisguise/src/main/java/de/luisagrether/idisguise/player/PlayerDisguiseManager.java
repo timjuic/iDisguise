@@ -81,6 +81,8 @@ public final class PlayerDisguiseManager implements Listener {
 	private PlayerDisguiseSettings settings;
 	private PlayerDisguiseStore store;
 	private PacketRewriter rewriter;
+	// The packet listener only runs while a player-disguised player is online.
+	private boolean listening;
 	private LuckPermsHook luckPerms;
 	private TabHook tab;
 	private SkinResolver skins;
@@ -188,7 +190,6 @@ public final class PlayerDisguiseManager implements Listener {
 			keepTabLines();
 		}, 20L, 20L);
 		rewriter = new PacketRewriter(plugin, this);
-		rewriter.register();
 		Bukkit.getPluginManager().registerEvents(this, plugin);
 		if(placeholderApi) {
 			try {
@@ -199,17 +200,21 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		available = true;
 
-		// Players already online (plugin reload): show their disguises again.
+		// Players already online (plugin reload): show their disguises again. The packet listener must
+		// be on first (rebuildSnapshots), so the refresh goes out disguised.
+		for(Player player : Bukkit.getOnlinePlayers()) {
+			PlayerDisguise disguise = disguises.get(player.getUniqueId());
+			if(disguise != null) markOnline(player, disguise);
+		}
+		rebuildSnapshots();
 		for(Player player : Bukkit.getOnlinePlayers()) {
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
 			if(disguise != null) {
-				markOnline(player, disguise);
 				applyLook(player, disguise);
 				removeRealEntry(player);
 				refresh(player);
 			}
 		}
-		rebuildSnapshots();
 	}
 
 	public void disable() {
@@ -221,7 +226,8 @@ public final class PlayerDisguiseManager implements Listener {
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
 			if(disguise != null) resetLook(player, disguise);
 		}
-		rewriter.unregister();
+		if(listening) rewriter.unregister();
+		listening = false;
 		store.close();
 		available = false;
 	}
@@ -844,6 +850,25 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		online = Collections.unmodifiableList(newOnline);
 		replacing = Collections.unmodifiableList(newReplacing);
+		updateListener();
+	}
+
+	/**
+	 * Listens to packets only while someone player-disguised is online. Only listening (even without
+	 * changing anything) can change the timing of packets other plugins send (it broke TAB's sidebar
+	 * with team packets), so with nobody disguised iDisguise doesn't touch packets at all.
+	 */
+	private void updateListener() {
+		if(rewriter == null) return;
+		boolean wanted = !online.isEmpty();
+		if(wanted == listening) return;
+		if(wanted) {
+			rewriter.register();
+		} else {
+			rewriter.unregister();
+		}
+		listening = wanted;
+		debug("Packet listener " + (wanted ? "on" : "off"));
 	}
 
 	/** The rank others see: the real player's rank while they are online, else the chosen or default rank. */
@@ -1138,6 +1163,12 @@ public final class PlayerDisguiseManager implements Listener {
 			own.setOffline();
 			own = null;
 		} else if(own != null) {
+			// The disguise's tab entry goes away here: when this was the last disguised player, the packet
+			// listener stops, and the server's own "player left" packet only names the real entry.
+			for(Player viewer : Bukkit.getOnlinePlayers()) {
+				if(viewer != quit) sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, own,
+						new WrappedGameProfile(own.getFakeUniqueId(), own.getFakeName())));
+			}
 			own.setOffline();
 		}
 
