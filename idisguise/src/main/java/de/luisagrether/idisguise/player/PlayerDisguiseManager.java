@@ -81,8 +81,12 @@ public final class PlayerDisguiseManager implements Listener {
 	private PlayerDisguiseSettings settings;
 	private PlayerDisguiseStore store;
 	private PacketRewriter rewriter;
-	// The packet listener only runs while a player-disguised player is online.
+	// The packet listener only runs while a player-disguised player is online (or just left, see leaving).
 	private boolean listening;
+	// Disguised players who just left: their disguise still covers the "left the game" message and
+	// an NPC copy (CombatLogX / Citizens) with their real name. player -> disguise, player -> until when
+	private final Map<UUID, PlayerDisguise> leaving = new ConcurrentHashMap<>();
+	private final Map<UUID, Long> leavingUntil = new ConcurrentHashMap<>();
 	private LuckPermsHook luckPerms;
 	private TabHook tab;
 	private SkinResolver skins;
@@ -189,6 +193,7 @@ public final class PlayerDisguiseManager implements Listener {
 		revealTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
 			updateRevealLooks();
 			keepTabLines();
+			keepLeaving();
 		}, 20L, 20L);
 		rewriter = new PacketRewriter(plugin, this);
 		Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -847,9 +852,46 @@ public final class PlayerDisguiseManager implements Listener {
 			newOnline.add(disguise);
 			if(profile.replaceNameInMessages) newReplacing.add(disguise);
 		}
+		for(PlayerDisguise left : leaving.values()) {
+			if(!newReplacing.contains(left)) newReplacing.add(left);
+		}
 		online = Collections.unmodifiableList(newOnline);
 		replacing = Collections.unmodifiableList(newReplacing);
 		updateListener();
+	}
+
+	/** A disguised player left: their disguise stays for a few seconds and while an NPC copy of them exists. */
+	private void startLeaving(PlayerDisguise disguise) {
+		leaving.put(disguise.getUniqueId(), disguise);
+		leavingUntil.put(disguise.getUniqueId(), System.currentTimeMillis() + 5000L);
+	}
+
+	/** Every second: forget players who left once the grace time is over and no NPC copy of them is left. */
+	private void keepLeaving() {
+		if(leaving.isEmpty()) return;
+		boolean changed = false;
+		long now = System.currentTimeMillis();
+		for(PlayerDisguise disguise : new ArrayList<>(leaving.values())) {
+			UUID uuid = disguise.getUniqueId();
+			if(hasNpcCopy(disguise.getRealName())) {
+				leavingUntil.put(uuid, now + 5000L);
+			} else if(now > leavingUntil.getOrDefault(uuid, 0L)) {
+				leaving.remove(uuid);
+				leavingUntil.remove(uuid);
+				changed = true;
+			}
+		}
+		if(changed) rebuildSnapshots();
+	}
+
+	/** An NPC (CombatLogX / Citizens: a player entity marked "NPC") with that name exists. */
+	private static boolean hasNpcCopy(String realName) {
+		for(org.bukkit.World world : Bukkit.getWorlds()) {
+			for(Player npc : world.getEntitiesByClass(Player.class)) {
+				if(npc.hasMetadata("NPC") && realName.equalsIgnoreCase(npc.getName())) return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -859,7 +901,7 @@ public final class PlayerDisguiseManager implements Listener {
 	 */
 	private void updateListener() {
 		if(rewriter == null) return;
-		boolean wanted = !online.isEmpty();
+		boolean wanted = !online.isEmpty() || !leaving.isEmpty();
 		if(wanted == listening) return;
 		if(wanted) {
 			rewriter.register();
@@ -1069,6 +1111,8 @@ public final class PlayerDisguiseManager implements Listener {
 	@EventHandler(priority = EventPriority.LOWEST)
 	public void onJoin(PlayerJoinEvent event) {
 		Player joined = event.getPlayer();
+		leaving.remove(joined.getUniqueId());
+		leavingUntil.remove(joined.getUniqueId());
 
 		// Someone is disguised as the player who just joined.
 		for(PlayerDisguise disguise : online) {
@@ -1133,6 +1177,7 @@ public final class PlayerDisguiseManager implements Listener {
 			disguise.getRemovedFor().remove(quit.getUniqueId());
 		}
 		PlayerDisguise own = disguises.get(quit.getUniqueId());
+		if(own != null && own.getProfile() != null && own.getProfile().replaceNameInMessages) startLeaving(own);
 		if(own != null && own.isGivenByStaff()) {
 			// Given with /odisguise: ends when the player leaves.
 			disguises.remove(quit.getUniqueId());
@@ -1332,6 +1377,9 @@ public final class PlayerDisguiseManager implements Listener {
 	PlayerDisguise disguiseOfCopy(String profileName) {
 		if(profileName == null) return null;
 		for(PlayerDisguise disguise : replacing) {
+			if(disguise.getRealName().equalsIgnoreCase(profileName)) return disguise;
+		}
+		for(PlayerDisguise disguise : leaving.values()) {
 			if(disguise.getRealName().equalsIgnoreCase(profileName)) return disguise;
 		}
 		return null;
