@@ -176,6 +176,8 @@ public class Language {
 	public String TAG_MENU_PREVIOUS = ChatColor.YELLOW + "Previous page";
 	@LastUpdated(60139)
 	public String TAG_MENU_NEXT = ChatColor.YELLOW + "Next page";
+	@LastUpdated(60160)
+	public String TAG_MENU_PAGE = ChatColor.GRAY + "Page " + ChatColor.WHITE + "%page%" + ChatColor.GRAY + "/" + ChatColor.WHITE + "%pages%";
 	@LastUpdated(60143)
 	public String PLAYER_DISGUISED = c("%prefix%&7You are now disguised as &e%name% &7(rank: %rank%&7%tag%&7).");
 	@LastUpdated(60154)

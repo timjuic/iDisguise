@@ -68,9 +68,9 @@ menu-items:
   # Tag button in the rank menu, the tags in the tag list, "no tag", back, and the page arrows.
   tag: NAME_TAG
   tag-entry: NAME_TAG
-  no-tag: PAPER
-  back: BARRIER
-  page: ARROW
+  no-tag: EMPTY_MAP
+  back: ARROW
+  page: PAPER
   # Invisibility button in the rank / tag menu (only for players with iDisguise.invis).
   invis: EYE_OF_ENDER
 

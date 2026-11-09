@@ -20,7 +20,7 @@ import org.bukkit.plugin.Plugin;
  * and the same bottom row, so their buttons sit in exactly the same places.
  *   row 1     frame, head (slot 4)
  *   rows 2-5  ranks / tags (36 slots)
- *   row 6     invisibility (45), previous page (47), real rank (48), cancel (49), next page (51),
+ *   row 6     invisibility (45), real rank / previous page (48), cancel (49), next page (50),
  *             tags / back to ranks (53)
  * Every click is cancelled; the choice runs on the next tick, only while this menu is still open.
  * The next menu opens straight over this one (never closed first): the 1.8 client keeps the cursor.
@@ -37,10 +37,10 @@ abstract class DisguiseMenu implements InventoryHolder {
 	static final int PER_PAGE = 36;
 	static final int HEADER = 4;
 	static final int INVIS = 45;
-	static final int PREVIOUS = 47;
+	static final int PREVIOUS = 48;
 	static final int REAL_RANK = 48;
 	static final int CANCEL = 49;
-	static final int NEXT = 51;
+	static final int NEXT = 50;
 	static final int SWITCH = 53;
 
 	// Marker for "real rank": the map can't tell a null value from a missing slot.
@@ -101,6 +101,11 @@ abstract class DisguiseMenu implements InventoryHolder {
 			if(!menu.actions.containsKey(slot) || !(event.getWhoClicked() instanceof Player)) return;
 			Player player = (Player)event.getWhoClicked();
 			String action = menu.actions.get(slot);
+			// Changes in place (the invisibility switch): right now, so the item changes without a delay.
+			if(RankMenu.INVIS_ACTION.equals(action)) {
+				menu.choice.choose(menu, action);
+				return;
+			}
 			Bukkit.getScheduler().runTask(plugin, () -> {
 				if(!player.isOnline() || player.getOpenInventory().getTopInventory().getHolder() != menu) return;
 				boolean stays = menu.choice.choose(menu, REAL_RANK_ACTION.equals(action) ? null : action);

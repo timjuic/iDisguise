@@ -187,6 +187,10 @@ final class PlayerDisguiseSettings {
 		if(item == null) item = NEW_MENU_ITEMS.get(key.toLowerCase(Locale.ENGLISH));
 		// The header was a name tag before 6.1.40: still the old default = the new default.
 		if("header".equalsIgnoreCase(key) && "NAME_TAG".equalsIgnoreCase(item)) item = "SKULL_ITEM:1";
+		// Changed in 6.1.60 so every button looks different: the old defaults = the new defaults.
+		if("back".equalsIgnoreCase(key) && "BARRIER".equalsIgnoreCase(item)) item = "ARROW";
+		if("page".equalsIgnoreCase(key) && "ARROW".equalsIgnoreCase(item)) item = "PAPER";
+		if("no-tag".equalsIgnoreCase(key) && "PAPER".equalsIgnoreCase(item)) item = "EMPTY_MAP";
 		return item != null ? item : "STAINED_CLAY:0";
 	}
 
@@ -195,9 +199,9 @@ final class PlayerDisguiseSettings {
 	static {
 		NEW_MENU_ITEMS.put("tag", "NAME_TAG");
 		NEW_MENU_ITEMS.put("tag-entry", "NAME_TAG");
-		NEW_MENU_ITEMS.put("no-tag", "PAPER");
-		NEW_MENU_ITEMS.put("back", "BARRIER");
-		NEW_MENU_ITEMS.put("page", "ARROW");
+		NEW_MENU_ITEMS.put("no-tag", "EMPTY_MAP");
+		NEW_MENU_ITEMS.put("back", "ARROW");
+		NEW_MENU_ITEMS.put("page", "PAPER");
 		NEW_MENU_ITEMS.put("invis", "EYE_OF_ENDER");
 	}
 

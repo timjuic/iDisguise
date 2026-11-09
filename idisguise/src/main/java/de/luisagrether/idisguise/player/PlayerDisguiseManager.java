@@ -717,8 +717,10 @@ public final class PlayerDisguiseManager implements Listener {
 		// Only tags: there is no rank menu to go back to.
 		org.bukkit.inventory.ItemStack back = tagOnly ? null
 				: RankMenu.item(settings.menuItem("back"), language.TAG_MENU_BACK, RankMenu.lines(language.TAG_MENU_BACK_LORE));
-		org.bukkit.inventory.ItemStack previous = shownPage > 0 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_PREVIOUS, null) : null;
-		org.bukkit.inventory.ItemStack next = shownPage < pages - 1 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_NEXT, null) : null;
+		List<String> pageLore = RankMenu.lines(language.TAG_MENU_PAGE.replace("%page%", String.valueOf(shownPage + 1))
+				.replace("%pages%", String.valueOf(pages)));
+		org.bukkit.inventory.ItemStack previous = shownPage > 0 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_PREVIOUS, pageLore) : null;
+		org.bukkit.inventory.ItemStack next = shownPage < pages - 1 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_NEXT, pageLore) : null;
 		String title = (chooser != target ? language.TAG_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.TAG_MENU_TITLE)
 				.replace("%name%", name);
 		new TagMenu(title, menuHeader(menu), menuFrame(), entries, back, cancelItem(), previous, next, invisButton(chooser, menu.invis),
