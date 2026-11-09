@@ -714,6 +714,23 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					args = Arrays.copyOfRange(args, 1, args.length);
 				}
 			}
+			boolean invisFlag = false;
+			if(playerDisguises.isAvailable() && hasNode(sender, PlayerDisguiseManager.PERM_INVIS)) {
+				List<String> kept = new ArrayList<>();
+				for(String arg : args) {
+					if("-i".equalsIgnoreCase(arg)) {
+						invisFlag = true;
+					} else {
+						kept.add(arg);
+					}
+				}
+				args = kept.toArray(new String[0]);
+			}
+			final boolean invis = invisFlag;
+			if(invis && args.length == 0) {
+				playerDisguises.setInvisible(sender, target, true);
+				return true;
+			}
 			if(args.length == 0) {
 				// /disguise alone: the help, with the active disguise at the bottom.
 				if(self) {
@@ -771,6 +788,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				if(self) sendStatus(target);
 			} else if(args[0].equalsIgnoreCase("list")) {
 				sendDisguiseList(sender);
+			} else if(args[0].equalsIgnoreCase("invis") && playerDisguises.isAvailable() && hasNode(sender, PlayerDisguiseManager.PERM_INVIS)) {
+				playerDisguises.toggleInvisible(sender, target);
 			} else if(args[0].equalsIgnoreCase("permissions") && hasPermissionAdmin(sender)) {
 				sendPermissions(sender);
 			} else if(args[0].equalsIgnoreCase("reload")) {
@@ -799,6 +818,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				} else if(!self || playerDisguises.checkCooldown(target)) {
 					Player finalTarget = target;
 					playerDisguises.disguiseRandom(sender, target, (success) -> {
+						if(success && invis) playerDisguises.setInvisible(sender, finalTarget, true);
 						if(success && self) playerDisguises.startCooldown(finalTarget);
 						if(success && !self) {
 							finalTarget.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
@@ -809,7 +829,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				if(args.length == 1) {
 					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_MISSING);
 				} else {
-					disguisePlayerCommand(sender, target, self, args[1]);
+					disguisePlayerCommand(sender, target, self, args[1], invis);
 				}
 			} else {
 				try {
@@ -947,7 +967,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				} catch(IllegalArgumentException e) {
 					// Not a mob: /disguise <name> [rank]
 					if(ACCOUNTNAME.matcher(args[0]).matches() && playerDisguises.isAvailable() && canDisguiseAsPlayer(sender)) {
-						disguisePlayerCommand(sender, target, self, args[0]);
+						disguisePlayerCommand(sender, target, self, args[0], invis);
 					} else {
 						if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
 						sender.sendMessage(language.DISGUISE_TYPE_NOT_FOUND.replace("%entityType%", args[0]));
@@ -1004,7 +1024,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		return true;
 	}
 
-	private void disguisePlayerCommand(CommandSender sender, Player target, boolean self, String name) {
+	private void disguisePlayerCommand(CommandSender sender, Player target, boolean self, String name, boolean invis) {
 		if(!playerDisguises.isAvailable() || config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER")) {
 			sender.sendMessage(language.DISGUISE_TYPE_NOT_SUPPORTED);
 			return;
@@ -1015,6 +1035,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 		if(self && !playerDisguises.checkCooldown(target)) return;
 		playerDisguises.disguiseCommand(sender, target, name, self, (success) -> {
+			if(success && invis) playerDisguises.setInvisible(sender, target, true);
 			if(success && self) playerDisguises.startCooldown(target);
 			if(success && !self) {
 				target.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
@@ -1036,10 +1057,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		boolean mobs = admin || hasAnyMobPermission(sender);
 		boolean players = playerDisguises.isAvailable() && (admin || hasPermission(sender, EntityType.PLAYER));
 		boolean random = playerDisguises.isAvailable() && (admin || playerDisguises.canUseRandom(sender));
+		boolean invisible = playerDisguises.isAvailable() && hasNode(sender, PlayerDisguiseManager.PERM_INVIS);
+		String invisArg = invisible ? " [-i]" : "";
 		List<String[]> lines = new ArrayList<>();
 		if(mobs) lines.add(new String[] {"/disguise <mob>", language.HELP_CMD_MOB, "/disguise "});
-		if(players) lines.add(new String[] {"/disguise <name>", language.HELP_CMD_PLAYER, "/disguise "});
-		if(random) lines.add(new String[] {"/disguise random", language.HELP_CMD_RANDOM, "/disguise random"});
+		if(players) lines.add(new String[] {"/disguise <name>" + invisArg, language.HELP_CMD_PLAYER, "/disguise "});
+		if(random) lines.add(new String[] {"/disguise random" + invisArg, language.HELP_CMD_RANDOM, "/disguise random"});
 		if(mobs || players || random) {
 			lines.add(new String[] {"/undisguise", language.HELP_CMD_UNDISGUISE, "/undisguise"});
 		}
@@ -1050,6 +1073,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		if(admin || hasPermissionOthers(sender)) {
 			adminLines.add(new String[] {"/odisguise <player> <disguise>", language.HELP_CMD_ODISGUISE, "/odisguise "});
 			adminLines.add(new String[] {"/undisguise <player>", language.HELP_CMD_UNDISGUISE_OTHER, "/undisguise "});
+		}
+		if(invisible) {
+			adminLines.add(new String[] {"/disguise invis", language.HELP_CMD_INVIS, "/disguise invis"});
 		}
 		if(admin || hasNode(sender, PlayerDisguiseManager.PERM_REVEAL)) {
 			adminLines.add(new String[] {"/disguise reveal", language.HELP_CMD_REVEAL_PLAYERS, "/disguise reveal"});
@@ -1079,6 +1105,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		{"iDisguise.rank.players", "fake ranks: every rank in player-ranks"},
 		{"iDisguise.rank.staff", "fake ranks: every rank in staff-ranks"},
 		{"iDisguise.tags", "pick a DeluxeTags tag for a disguise (own tags only)"},
+		{"iDisguise.invis", "fake invisibility: /disguise invis, -i (only ESP cheats see you)"},
 		{"iDisguise.tags.all", "pick any DeluxeTags tag for a disguise (staff: always all)"},
 		{"iDisguise.player.anyname", "names of real players (online or played here before)"},
 		{"iDisguise.player.staff", "staff settings, hidden in /disguise list, no cooldown"},
@@ -1139,6 +1166,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		} else {
 			state = language.STATUS_NONE;
 		}
+		if(playerDisguises.isInvisible(player)) state += language.STATUS_INVISIBLE;
 		player.sendMessage(language.STATUS_ACTIVE.replace("%disguise%", state));
 	}
 
@@ -1234,6 +1262,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				completions.add("?");
 				completions.add("list");
 				if(playerDisguises.canUseRandom(sender)) completions.add("random");
+				if(playerDisguises.isAvailable() && hasNode(sender, PlayerDisguiseManager.PERM_INVIS)) {
+					completions.add("invis");
+					completions.add("-i");
+				}
 				if(self && hasNode(sender, PlayerDisguiseManager.PERM_REVEAL)) completions.add("reveal");
 				if(self && hasNode(sender, PlayerDisguiseManager.PERM_WHOIS)) {
 					completions.add("whois");
@@ -1270,7 +1302,11 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						}
 					}
 				} catch(IllegalArgumentException e) {
-					// /disguise <name>: rank and tag are picked in the menu, nothing more to complete
+					// /disguise <name> [-i]: rank and tag are picked in the menu
+					if(args.length == (self ? 2 : 3) && playerDisguises.isAvailable() && hasNode(sender, PlayerDisguiseManager.PERM_INVIS)
+							&& "-i".startsWith(args[args.length - 1].toLowerCase(Locale.ENGLISH))) {
+						completions.add("-i");
+					}
 				}
 			}
 		} else if(command.getName().equalsIgnoreCase("undisguise")) {
@@ -1409,6 +1445,11 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	}
 
 	/** Mob disguises only: the mob-specific rules (pearls, blocks, regions, death) skip player disguises. */
+	/** For player disguises: mob disguise on right now. */
+	public boolean hasMobDisguise(Player player) {
+		return isMobDisguised(player);
+	}
+
 	private synchronized boolean isMobDisguised(Player player) {
 		return disguiseMap.containsKey(player.getUniqueId());
 	}

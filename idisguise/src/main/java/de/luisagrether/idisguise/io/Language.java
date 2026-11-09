@@ -119,6 +119,24 @@ public class Language {
 	public String LIST_LEGEND = c("&agreen &7= available, &cred &7= no permission.");
 	@LastUpdated(60126)
 	public String PLAYER_DISGUISE_LOADING = c("%prefix%&7Loading disguise as &e%name%&7...");
+	@LastUpdated(60147)
+	public String INVISIBLE_ON = c("%prefix%&7You are now &binvisible&7: only ESP / tracer cheats can see you.");
+	@LastUpdated(60147)
+	public String INVISIBLE_OFF = c("%prefix%&7You are &evisible&7 again.");
+	@LastUpdated(60147)
+	public String INVISIBLE_ON_OTHER = c("%prefix%&e%player% &7is now &binvisible&7.");
+	@LastUpdated(60147)
+	public String INVISIBLE_OFF_OTHER = c("%prefix%&e%player% &7is &evisible&7 again.");
+	@LastUpdated(60147)
+	public String INVISIBLE_NOT_WITH_MOB = c("%prefix%&cNot possible with a mob disguise.");
+	@LastUpdated(60147)
+	public String HELP_CMD_INVIS = "Fake invisibility on / off (only ESP cheats see you)";
+	@LastUpdated(60147)
+	public String STATUS_INVISIBLE = ChatColor.GRAY + " (" + ChatColor.AQUA + "invisible" + ChatColor.GRAY + ")";
+	@LastUpdated(60147)
+	public String LIST_INVISIBLE = ChatColor.AQUA + " [Invisible]";
+	@LastUpdated(60147)
+	public String LIST_INVISIBLE_PLAYERS = ChatColor.GRAY + "Invisible: " + ChatColor.AQUA + "%players%";
 	@LastUpdated(60139)
 	public String PLAYER_DISGUISE_TAG_UNKNOWN = c("%prefix%&cThere is no tag &e%tag%&c. Tags: &e%tags%");
 	@LastUpdated(60139)

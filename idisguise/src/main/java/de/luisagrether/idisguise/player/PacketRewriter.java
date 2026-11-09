@@ -21,7 +21,9 @@ import com.comphenix.protocol.wrappers.EnumWrappers.PlayerInfoAction;
 import com.comphenix.protocol.wrappers.PlayerInfoData;
 import com.comphenix.protocol.wrappers.WrappedChatComponent;
 import com.comphenix.protocol.wrappers.WrappedGameProfile;
+import com.comphenix.protocol.wrappers.WrappedDataWatcher;
 import com.comphenix.protocol.wrappers.WrappedSignedProperty;
+import com.comphenix.protocol.wrappers.WrappedWatchableObject;
 import com.google.common.collect.Multimap;
 
 import net.md_5.bungee.api.chat.BaseComponent;
@@ -55,6 +57,7 @@ final class PacketRewriter extends PacketAdapter {
 				PacketType.Play.Server.ENTITY_METADATA,
 				PacketType.Play.Server.SPAWN_ENTITY_LIVING,
 				PacketType.Play.Server.UPDATE_SIGN,
+
 				PacketType.Play.Client.TAB_COMPLETE);
 		this.manager = manager;
 	}
@@ -77,7 +80,7 @@ final class PacketRewriter extends PacketAdapter {
 
 	@Override
 	public void onPacketSending(PacketEvent event) {
-		if(event.isCancelled() || manager.isEmpty()) return;
+		if(event.isCancelled() || (manager.isEmpty() && !manager.invisibility().anyOnline())) return;
 		// Staff with "/disguise reveal players" on see everyone as they really are, with the real rank.
 		if(event.getPlayer() != null && manager.isRevealingPlayers(event.getPlayer().getUniqueId())) {
 			try {
@@ -91,6 +94,10 @@ final class PacketRewriter extends PacketAdapter {
 		}
 		try {
 			PacketType type = event.getPacketType();
+			// Fake invisibility first (staff with reveal on returned above: they see everyone normally).
+			if(manager.invisibility().anyOnline()) {
+				if(type == PacketType.Play.Server.ENTITY_METADATA) invisibleMetadata(event);
+			}
 			if(type == PacketType.Play.Server.PLAYER_INFO) {
 				rewritePlayerInfo(event);
 			} else if(type == PacketType.Play.Server.CHAT) {
@@ -267,6 +274,12 @@ final class PacketRewriter extends PacketAdapter {
 	private void checkSpawn(PacketEvent event) {
 		UUID uuid = event.getPacket().getUUIDs().readSafely(0);
 		if(uuid == null) return;
+		// Invisible: the body arrives already invisible, and its look is sent again right after.
+		Integer entityId = event.getPacket().getIntegers().readSafely(0);
+		if(entityId != null && uuid.equals(manager.invisibility().ownerOf(entityId)) && !event.getPlayer().getUniqueId().equals(uuid)) {
+			invisibleSpawn(event);
+			manager.sendInvisibleStateLater(uuid, event.getPlayer());
+		}
 		PlayerDisguise disguise = manager.get(uuid);
 		Player viewer = event.getPlayer();
 		if(disguise == null || viewer.getUniqueId().equals(uuid)) return;
@@ -280,6 +293,62 @@ final class PacketRewriter extends PacketAdapter {
 			return;
 		}
 		event.setPacket(spawn);
+	}
+
+	// ---------------------------------------------------------------- fake invisibility
+
+	/**
+	 * Others: invisible, never sprinting (no running particles), no potion swirls, no arrows in the body.
+	 * The player themselves: invisible and no swirls too (they see themselves invisible in F5).
+	 */
+	private void invisibleMetadata(PacketEvent event) {
+		Integer entityId = event.getPacket().getIntegers().readSafely(0);
+		UUID owner = entityId == null ? null : manager.invisibility().ownerOf(entityId);
+		if(owner == null) return;
+		boolean self = event.getPlayer().getUniqueId().equals(owner);
+		List<WrappedWatchableObject> objects = event.getPacket().getWatchableCollectionModifier().readSafely(0);
+		if(objects == null) return;
+		List<WrappedWatchableObject> result = new ArrayList<>(objects.size());
+		for(WrappedWatchableObject object : objects) {
+			Object value = invisibleValue(object.getIndex(), object.getValue(), self);
+			result.add(value == object.getValue() ? object : new WrappedWatchableObject(object.getIndex(), value));
+		}
+		PacketContainer copy = event.getPacket().shallowClone();
+		copy.getWatchableCollectionModifier().write(0, result);
+		event.setPacket(copy);
+	}
+
+	/** One metadata value as an invisible player shows it (the same object when nothing changes). */
+	static Object invisibleValue(int index, Object value, boolean self) {
+		if(index == 0 && value instanceof Byte) {
+			byte flags = (byte)((Byte)value | 0x20);
+			if(!self) flags &= ~0x08; // not sprinting: no running particles
+			return flags;
+		}
+		if(index == 7 && value instanceof Integer) return 0; // potion colour: no swirls
+		if(index == 9 && value instanceof Byte && !self) return (byte)0; // arrows in the body
+		return value;
+	}
+
+	/** The spawn packet carries the body's first metadata. */
+	private void invisibleSpawn(PacketEvent event) {
+		try {
+			WrappedDataWatcher watcher = event.getPacket().getDataWatcherModifier().readSafely(0);
+			if(watcher == null) return;
+			WrappedDataWatcher copy = watcher.deepClone();
+			for(int index : new int[] {0, 7, 9}) {
+				Object value = copy.getObject(index);
+				if(value == null) continue;
+				Object changed = invisibleValue(index, value, false);
+				if(changed != value) copy.setObject(index, changed);
+			}
+			PacketContainer packet = event.getPacket().shallowClone();
+			packet.getDataWatcherModifier().write(0, copy);
+			event.setPacket(packet);
+		} catch(RuntimeException e) {
+			// The look sent right after makes the body invisible anyway.
+			manager.packetError("NAMED_ENTITY_SPAWN (invisible)", e);
+		}
 	}
 
 	static PacketContainer playerInfo(PlayerInfoAction action, PlayerDisguise disguise, WrappedGameProfile profile) {

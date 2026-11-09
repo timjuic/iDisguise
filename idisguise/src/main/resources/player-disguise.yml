@@ -9,6 +9,7 @@
 #   iDisguise.rank.staff        fake ranks: every rank in staff-ranks
 #   iDisguise.tags              pick a DeluxeTags tag for a disguise (only tags you own)
 #   iDisguise.tags.all          pick any DeluxeTags tag for a disguise (staff can always pick any)
+#   iDisguise.invis             fake invisibility: /disguise invis, /disguise <name> -i (only ESP / tracer cheats see you)
 #   iDisguise.player.anyname    use names of players who are online or have played here before
 #   iDisguise.player.staff      get the "staff" settings below and stay hidden in /disguise list
 #   iDisguise.listplayers       see who is disguised as whom in /disguise list (staff stay hidden)

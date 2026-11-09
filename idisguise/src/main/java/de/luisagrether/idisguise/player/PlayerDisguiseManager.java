@@ -30,6 +30,10 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.events.PacketContainer;
@@ -81,6 +85,11 @@ public final class PlayerDisguiseManager implements Listener {
 	private PlayerDisguiseSettings settings;
 	private PlayerDisguiseStore store;
 	private PacketRewriter rewriter;
+	// Fake invisibility: who is invisible, and the listener for armor / sounds / particles (only while one is online).
+	private Invisibility invisibility;
+	private InvisiblePackets invisiblePackets;
+	private boolean invisibleListening;
+	public static final String PERM_INVIS = "iDisguise.invis";
 	// The packet listener only runs while a player-disguised player is online (or just left, see leaving).
 	private boolean listening;
 	// Disguised players who just left: their disguise still covers the "left the game" message and
@@ -205,6 +214,9 @@ public final class PlayerDisguiseManager implements Listener {
 			keepLeaving();
 		}, 20L, 20L);
 		rewriter = new PacketRewriter(plugin, this);
+		invisibility = new Invisibility(plugin.getDataFolder(), plugin.getLogger());
+		invisiblePackets = new InvisiblePackets(plugin, this);
+		for(Player player : Bukkit.getOnlinePlayers()) invisibility.online(player);
 		Bukkit.getPluginManager().registerEvents(this, plugin);
 		if(placeholderApi) {
 			try {
@@ -249,6 +261,8 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		if(listening) rewriter.unregister();
 		listening = false;
+		if(invisibleListening) invisiblePackets.unregister();
+		invisibleListening = false;
 		store.close();
 		available = false;
 	}
@@ -965,6 +979,155 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 	}
 
+	// ---------------------------------------------------------------- fake invisibility
+
+	Invisibility invisibility() {
+		return invisibility;
+	}
+
+	public boolean isInvisible(Player player) {
+		return invisibility != null && invisibility.isInvisible(player.getUniqueId());
+	}
+
+	/** Turns fake invisibility on or off for target (sender gets the message). */
+	public void setInvisible(CommandSender sender, Player target, boolean on) {
+		Language language = language();
+		if(invisibility == null) {
+			send(sender, language.DISGUISE_TYPE_NOT_SUPPORTED);
+			return;
+		}
+		if(on && plugin.hasMobDisguise(target)) {
+			send(sender, language.INVISIBLE_NOT_WITH_MOB);
+			return;
+		}
+		if(on == invisibility.isInvisible(target.getUniqueId())) {
+			sendInvisibleMessage(sender, target, on);
+			return;
+		}
+		invisibility.set(target.getUniqueId(), on);
+		if(on) {
+			invisibility.online(target);
+			log.start(target.getName(), target.getUniqueId(), "invisible", "-", null);
+		} else {
+			invisibility.offline(target.getUniqueId());
+			log.end(target.getName(), target.getUniqueId(), "invisible", "-");
+		}
+		updateListener();
+		// Everyone gets the new look right away, the player too (invisible in F5, effect icon).
+		for(Player viewer : Bukkit.getOnlinePlayers()) {
+			if(viewer != target) sendInvisibleState(target, viewer);
+		}
+		sendOwnInvisibility(target);
+		sendInvisibleMessage(sender, target, on);
+	}
+
+	public void toggleInvisible(CommandSender sender, Player target) {
+		setInvisible(sender, target, !isInvisible(target));
+	}
+
+	private void sendInvisibleMessage(CommandSender sender, Player target, boolean on) {
+		Language language = language();
+		if(sender == target) {
+			send(sender, on ? language.INVISIBLE_ON : language.INVISIBLE_OFF);
+		} else {
+			send(sender, (on ? language.INVISIBLE_ON_OTHER : language.INVISIBLE_OFF_OTHER).replace("%player%", target.getName()));
+		}
+	}
+
+	/** The player's look (metadata and equipment) for one viewer, through the rewriter. */
+	void sendInvisibleState(Player target, Player viewer) {
+		if(!target.isOnline() || !viewer.isOnline() || target.getWorld() != viewer.getWorld()) return;
+		try {
+			PacketContainer metadata = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_METADATA);
+			metadata.getIntegers().write(0, target.getEntityId());
+			metadata.getWatchableCollectionModifier().write(0,
+					com.comphenix.protocol.wrappers.WrappedDataWatcher.getEntityWatcher(target).getWatchableObjects());
+			sendFiltered(viewer, metadata);
+			org.bukkit.inventory.ItemStack[] armor = target.getInventory().getArmorContents();
+			org.bukkit.inventory.ItemStack[] items = {target.getItemInHand(), armor[0], armor[1], armor[2], armor[3]};
+			for(int slot = 0; slot < items.length; slot++) {
+				PacketContainer equipment = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_EQUIPMENT);
+				equipment.getIntegers().write(0, target.getEntityId());
+				equipment.getIntegers().write(1, slot);
+				equipment.getItemModifier().write(0, items[slot]);
+				sendFiltered(viewer, equipment);
+			}
+		} catch(RuntimeException e) {
+			debug("Could not send the look of " + target.getName() + " to " + viewer.getName(), e);
+		}
+	}
+
+	/** Right after the body was sent to a viewer (one tick later, when the client has it). */
+	void sendInvisibleStateLater(UUID target, Player viewer) {
+		Bukkit.getScheduler().runTask(plugin, () -> {
+			Player player = Bukkit.getPlayer(target);
+			if(player != null) sendInvisibleState(player, viewer);
+		});
+	}
+
+	/**
+	 * The player's own screen: invisible in F5 and the invisibility icon (no particles), or back to
+	 * normal. Only on their client: the server never gives them a real potion.
+	 */
+	private void sendOwnInvisibility(Player player) {
+		if(!player.isOnline() || invisibility == null) return;
+		boolean on = invisibility.isInvisible(player.getUniqueId());
+		try {
+			PacketContainer effect;
+			if(on) {
+				effect = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_EFFECT);
+				effect.getIntegers().write(0, player.getEntityId());
+				effect.getIntegers().write(1, 1000000);
+				effect.getBytes().write(0, (byte)14);
+				effect.getBytes().write(1, (byte)0);
+				effect.getBytes().write(2, (byte)1);
+			} else {
+				effect = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.REMOVE_ENTITY_EFFECT);
+				effect.getIntegers().write(0, player.getEntityId());
+				effect.getIntegers().write(1, 14);
+			}
+			// A real invisibility potion the player may have: leave its icon alone.
+			if(on || !player.hasPotionEffect(org.bukkit.potion.PotionEffectType.INVISIBILITY)) sendRaw(player, effect);
+			PacketContainer metadata = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.ENTITY_METADATA);
+			metadata.getIntegers().write(0, player.getEntityId());
+			metadata.getWatchableCollectionModifier().write(0,
+					com.comphenix.protocol.wrappers.WrappedDataWatcher.getEntityWatcher(player).getWatchableObjects());
+			sendFiltered(player, metadata);
+		} catch(RuntimeException e) {
+			debug("Could not send the invisibility of " + player.getName() + " to themselves", e);
+		}
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR)
+	public void onRespawn(PlayerRespawnEvent event) {
+		Player player = event.getPlayer();
+		if(!isInvisible(player)) return;
+		Bukkit.getScheduler().runTaskLater(plugin, () -> {
+			if(!player.isOnline()) return;
+			invisibility.online(player);
+			updateListener();
+			sendOwnInvisibility(player);
+		}, 5L);
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR)
+	public void onWorldChange(PlayerChangedWorldEvent event) {
+		Player player = event.getPlayer();
+		if(!isInvisible(player)) return;
+		invisibility.move(player, player.getLocation());
+		Bukkit.getScheduler().runTaskLater(plugin, () -> sendOwnInvisibility(player), 5L);
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onMove(PlayerMoveEvent event) {
+		if(invisibility != null && invisibility.anyOnline()) invisibility.move(event.getPlayer(), event.getTo());
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onTeleport(PlayerTeleportEvent event) {
+		if(invisibility != null && invisibility.anyOnline()) invisibility.move(event.getPlayer(), event.getTo());
+	}
+
 	/** Disguises saved by an older version don't know whose name they use: asked LuckPerms once. */
 	private void findOwner(PlayerDisguise disguise) {
 		if(disguise.getOwnerUuid() != null || luckPerms == null || factions == null) return;
@@ -1088,7 +1251,16 @@ public final class PlayerDisguiseManager implements Listener {
 	 */
 	private void updateListener() {
 		if(rewriter == null) return;
-		boolean wanted = !online.isEmpty() || !leaving.isEmpty();
+		boolean invisible = invisibility != null && invisibility.anyOnline();
+		if(invisiblePackets != null && invisible != invisibleListening) {
+			if(invisible) {
+				invisiblePackets.register();
+			} else {
+				invisiblePackets.unregister();
+			}
+			invisibleListening = invisible;
+		}
+		boolean wanted = !online.isEmpty() || !leaving.isEmpty() || invisible;
 		if(wanted == listening) return;
 		if(wanted) {
 			rewriter.register();
@@ -1288,7 +1460,16 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		for(PlayerDisguise disguise : shown) {
 			lines.add(language.LIST_DISGUISED_ENTRY.replace("%player%", disguise.getRealName()).replace("%name%", disguise.getFakeName())
-					+ (admin && disguise.isStaff() ? language.LIST_DISGUISED_STAFF : ""));
+					+ (admin && disguise.isStaff() ? language.LIST_DISGUISED_STAFF : "")
+					+ (admin && invisibility != null && invisibility.isInvisible(disguise.getUniqueId()) ? language.LIST_INVISIBLE : ""));
+		}
+		// Ops only: everyone with fake invisibility on (disguised or not).
+		if(admin && invisibility != null) {
+			List<String> names = new ArrayList<>();
+			for(Player player : Bukkit.getOnlinePlayers()) {
+				if(invisibility.isInvisible(player.getUniqueId())) names.add(player.getName());
+			}
+			if(!names.isEmpty()) lines.add(language.LIST_INVISIBLE_PLAYERS.replace("%players%", String.join(", ", names)));
 		}
 		return lines;
 	}
@@ -1298,6 +1479,12 @@ public final class PlayerDisguiseManager implements Listener {
 	@EventHandler(priority = EventPriority.LOWEST)
 	public void onJoin(PlayerJoinEvent event) {
 		Player joined = event.getPlayer();
+		// Invisible: before the server sends the player to others, so they arrive invisible.
+		if(invisibility != null && invisibility.isInvisible(joined.getUniqueId())) {
+			invisibility.online(joined);
+			updateListener();
+			Bukkit.getScheduler().runTaskLater(plugin, () -> sendOwnInvisibility(joined), 20L);
+		}
 		leaving.remove(joined.getUniqueId());
 		leavingUntil.remove(joined.getUniqueId());
 
@@ -1355,6 +1542,7 @@ public final class PlayerDisguiseManager implements Listener {
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void onQuit(PlayerQuitEvent event) {
 		Player quit = event.getPlayer();
+		if(invisibility != null) invisibility.offline(quit.getUniqueId());
 		lastTabInput.remove(quit.getUniqueId());
 		revealPlayers.remove(quit.getUniqueId());
 		revealLooks.remove(quit.getUniqueId());
@@ -1796,7 +1984,8 @@ public final class PlayerDisguiseManager implements Listener {
 				sendUnchanged(sender, language.WHOIS_HEADER.replace("%name%", name));
 				if(now != null) {
 					sendUnchanged(sender, language.WHOIS_NOW.replace("%player%", now.getRealName())
-							.replace("%state%", now.getProfile() != null ? language.WHOIS_ONLINE : language.WHOIS_OFFLINE));
+							.replace("%state%", now.getProfile() != null ? language.WHOIS_ONLINE : language.WHOIS_OFFLINE)
+							+ (has(sender, PERM_ADMIN) && invisibility != null && invisibility.isInvisible(now.getUniqueId()) ? language.LIST_INVISIBLE : ""));
 				}
 				if(sessions.isEmpty() && now == null) sendUnchanged(sender, language.WHOIS_NONE);
 				for(DisguiseLog.Session session : sessions) sendUnchanged(sender, line(language, session));
