@@ -31,6 +31,8 @@ final class Invisibility {
 	private final File file;
 	private final Logger logger;
 	private final Set<UUID> saved = ConcurrentHashMap.newKeySet();
+	// Given by staff (/odisguise): not saved, ends when the player logs out.
+	private final Set<UUID> givenByStaff = ConcurrentHashMap.newKeySet();
 	// online invisible players: entity ID -> player, player -> {world id hash, x, y, z}
 	private final Map<Integer, UUID> byEntityId = new ConcurrentHashMap<>();
 	private final Map<UUID, double[]> positions = new ConcurrentHashMap<>();
@@ -51,11 +53,20 @@ final class Invisibility {
 	}
 
 	boolean isInvisible(UUID player) {
-		return saved.contains(player);
+		return saved.contains(player) || givenByStaff.contains(player);
 	}
 
-	/** Turns it on or off (saved right away). */
-	void set(UUID player, boolean invisible) {
+	boolean isGivenByStaff(UUID player) {
+		return givenByStaff.contains(player) && !saved.contains(player);
+	}
+
+	/** Turns it on or off. Own invisibility is saved right away; given by staff is not saved. */
+	void set(UUID player, boolean invisible, boolean byStaff) {
+		if(invisible && byStaff) {
+			givenByStaff.add(player);
+			return;
+		}
+		givenByStaff.remove(player);
 		if(invisible) {
 			saved.add(player);
 		} else {
@@ -77,7 +88,7 @@ final class Invisibility {
 	/** An invisible player is online (join, respawn, turned on). */
 	void online(Player player) {
 		offline(player.getUniqueId());
-		if(!saved.contains(player.getUniqueId())) return;
+		if(!isInvisible(player.getUniqueId())) return;
 		byEntityId.put(player.getEntityId(), player.getUniqueId());
 		move(player, player.getLocation());
 	}

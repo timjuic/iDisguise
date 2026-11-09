@@ -1004,7 +1004,7 @@ public final class PlayerDisguiseManager implements Listener {
 			sendInvisibleMessage(sender, target, on);
 			return;
 		}
-		invisibility.set(target.getUniqueId(), on);
+		invisibility.set(target.getUniqueId(), on, sender != target);
 		if(on) {
 			invisibility.online(target);
 			log.start(target.getName(), target.getUniqueId(), "invisible", "invisible", null);
@@ -1558,7 +1558,14 @@ public final class PlayerDisguiseManager implements Listener {
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void onQuit(PlayerQuitEvent event) {
 		Player quit = event.getPlayer();
-		if(invisibility != null) invisibility.offline(quit.getUniqueId());
+		if(invisibility != null) {
+			// Given by staff: ends with the logout.
+			if(invisibility.isGivenByStaff(quit.getUniqueId())) {
+				invisibility.set(quit.getUniqueId(), false, false);
+				log.end(quit.getName(), quit.getUniqueId(), "invisible", "invisible");
+			}
+			invisibility.offline(quit.getUniqueId());
+		}
 		lastTabInput.remove(quit.getUniqueId());
 		revealPlayers.remove(quit.getUniqueId());
 		revealLooks.remove(quit.getUniqueId());
@@ -1755,9 +1762,15 @@ public final class PlayerDisguiseManager implements Listener {
 	 * rank is put back into TAB if TAB lost it (e.g. after /tab reload).
 	 */
 	private void check() {
-		if(tab != null && invisibility != null && invisibility.anyOnline()) {
+		if(invisibility != null && invisibility.anyOnline()) {
 			for(Player player : Bukkit.getOnlinePlayers()) {
-				if(isInvisible(player)) tab.setNameTagHidden(player, true);
+				if(!isInvisible(player)) continue;
+				// Own invisibility ends when the permission is gone (given by staff: until logout).
+				if(!invisibility.isGivenByStaff(player.getUniqueId()) && !has(player, PERM_INVIS)) {
+					setInvisible(player, player, false);
+					continue;
+				}
+				if(tab != null) tab.setNameTagHidden(player, true);
 			}
 		}
 		for(PlayerDisguise disguise : new ArrayList<>(online)) {

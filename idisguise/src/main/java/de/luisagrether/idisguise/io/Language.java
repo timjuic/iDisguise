@@ -129,6 +129,8 @@ public class Language {
 	public String INVISIBLE_OFF_OTHER = c("%prefix%&e%player% &7is &evisible&7 again.");
 	@LastUpdated(60147)
 	public String INVISIBLE_NOT_WITH_MOB = c("%prefix%&cNot possible with a mob disguise.");
+	@LastUpdated(60151)
+	public String HELP_CMD_INVIS_OTHER = "Fake invisibility on / off for another player (until they log out)";
 	@LastUpdated(60147)
 	public String HELP_CMD_INVIS = "Fake invisibility on / off (only ESP cheats see you)";
 	@LastUpdated(60147)

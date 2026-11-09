@@ -1071,7 +1071,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 
 		List<String[]> adminLines = new ArrayList<>();
 		if(admin || hasPermissionOthers(sender)) {
-			adminLines.add(new String[] {"/odisguise <player> <disguise>", language.HELP_CMD_ODISGUISE, "/odisguise "});
+			adminLines.add(new String[] {"/odisguise <player> <disguise>" + invisArg, language.HELP_CMD_ODISGUISE, "/odisguise "});
+			if(invisible) adminLines.add(new String[] {"/odisguise <player> invis", language.HELP_CMD_INVIS_OTHER, "/odisguise "});
 			adminLines.add(new String[] {"/undisguise <player>", language.HELP_CMD_UNDISGUISE_OTHER, "/undisguise "});
 		}
 		if(invisible) {
