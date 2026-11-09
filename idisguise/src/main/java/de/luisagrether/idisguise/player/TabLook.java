@@ -62,9 +62,9 @@ final class TabLook {
 		return property(group, world, "tagsuffix");
 	}
 
-	/** TAB tab prefix of a group (for %idisguise_tabprefix%), raw with & codes. */
-	String tabPrefix(String group, String world) {
-		return property(group, world, "tabprefix");
+	/** TAB tab prefix of a group as the player's own sidebar shows it: placeholders filled, colours applied. */
+	String tabPrefix(String group, Player player) {
+		return fill(property(group, player.getWorld().getName(), "tabprefix"), player, player);
 	}
 
 	Look look(Player viewer, Player target, String group) {

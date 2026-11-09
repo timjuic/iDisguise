@@ -142,11 +142,16 @@ final class FactionsHook {
 			if((Boolean)call(chat, "isTagRelationColored")) {
 				Player talking = event.getPlayer();
 				String message = event.getMessage();
-				for(Player reader : new ArrayList<>(event.getRecipients())) {
+				// Every copy is built first: if anything fails, nothing was sent and the chat goes on as normal
+				// (no message twice).
+				java.util.List<Player> readers = new ArrayList<>(event.getRecipients());
+				java.util.List<String> lines = new ArrayList<>(readers.size());
+				for(Player reader : readers) {
 					Object you = fplayer(reader);
 					String tag = you == null ? plainTag : String.valueOf(getChatTagTo.invoke(me, you));
-					reader.sendMessage(String.format(start + escape(tag.trim()) + end, talking.getDisplayName(), message));
+					lines.add(String.format(start + escape(tag.trim()) + end, talking.getDisplayName(), message));
 				}
+				for(int i = 0; i < readers.size(); i++) readers.get(i).sendMessage(lines.get(i));
 				// Factions does the same: everyone already has their copy, the event only logs it.
 				event.getRecipients().clear();
 			}

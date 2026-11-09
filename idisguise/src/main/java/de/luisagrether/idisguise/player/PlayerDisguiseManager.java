@@ -120,6 +120,7 @@ public final class PlayerDisguiseManager implements Listener {
 		PlayerDisguiseSettings fresh = new PlayerDisguiseSettings(plugin);
 		if(!fresh.enabled) return false;
 		settings = fresh;
+		tabLook = new TabLook();
 		factions = settings.realPlayerFaction ? FactionsHook.create(plugin.getLogger()) : null;
 		for(Player player : Bukkit.getOnlinePlayers()) {
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
@@ -1339,6 +1340,9 @@ public final class PlayerDisguiseManager implements Listener {
 				if(undisguise(player)) send(player, language().UNDISGUISED_NO_ACCESS);
 				continue;
 			}
+			// Disguised as someone online: follow their rank if it changed (chat shows it).
+			Player owner = disguise.isHiddenFromTab() ? Bukkit.getPlayerExact(disguise.getFakeName()) : null;
+			if(owner != null && owner != player) disguise.setOwnerRank(realRankOf(owner));
 			if(tab != null) tab.ensure(player, effectiveRank(disguise), disguise.getFakeName());
 		}
 	}
@@ -1646,16 +1650,23 @@ public final class PlayerDisguiseManager implements Listener {
 	 * rank while player-disguised ("no rank" = default-rank), otherwise the real rank.
 	 */
 	String realTabPrefix(Player player) {
-		if(player == null || tabLook == null) return "";
+		if(player == null) return "";
 		PlayerDisguise disguise = disguises.get(player.getUniqueId());
+		boolean disguised = disguise != null && disguise.getProfile() != null;
+		// Not disguised: exactly what TAB shows (%tab_tabprefix%), so normal players never see a difference.
+		if(!disguised && placeholderApi) {
+			String own = PlaceholderHook.tabTabPrefix(player);
+			if(own != null) return own;
+		}
+		if(tabLook == null) return "";
 		String group;
-		if(disguise != null && disguise.getProfile() != null) {
+		if(disguised) {
 			group = effectiveRank(disguise);
 			if(group == null) group = settings.defaultRank;
 		} else {
 			group = luckPerms == null ? null : luckPerms.primaryGroup(player);
 		}
-		return group == null ? "" : tabLook.tabPrefix(group, player.getWorld().getName());
+		return group == null ? "" : tabLook.tabPrefix(group, player);
 	}
 
 	/** Real names of disguised players swapped for the fake ones (for %idisguise_swap_...%). */

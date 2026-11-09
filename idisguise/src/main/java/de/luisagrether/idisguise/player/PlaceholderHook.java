@@ -27,6 +27,12 @@ final class PlaceholderHook extends PlaceholderExpansion implements me.clip.plac
 	}
 
 	/** The DeluxeTags tag as it appears in chat, or null. */
+	/** TAB's own %tab_tabprefix% for the player, or null when TAB's PlaceholderAPI expansion is off. */
+	static String tabTabPrefix(Player player) {
+		String value = PlaceholderAPI.setPlaceholders(player, "%tab_tabprefix%");
+		return value == null || value.contains("%tab_tabprefix%") ? null : value;
+	}
+
 	static String chatTag(Player player) {
 		String tag = PlaceholderAPI.setPlaceholders(player, "%deluxetags_tag%");
 		return tag == null || tag.contains("%deluxetags_tag%") ? null : tag;
