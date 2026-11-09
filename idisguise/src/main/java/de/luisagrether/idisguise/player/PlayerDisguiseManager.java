@@ -1065,7 +1065,10 @@ public final class PlayerDisguiseManager implements Listener {
 		disguises.put(target.getUniqueId(), disguise);
 		rebuildSnapshots();
 		save();
-		if(disguise.hasPlayerPermissions()) takePermissions(target);
+		if(disguise.hasPlayerPermissions()) {
+			takePermissions(target);
+			stopFlying(target);
+		}
 
 		applyLook(target, disguise);
 		removeRealEntry(target);
@@ -1100,6 +1103,7 @@ public final class PlayerDisguiseManager implements Listener {
 		save();
 		if(on) {
 			takePermissions(player);
+			stopFlying(player);
 		} else {
 			givePermissionsBack(player);
 		}
@@ -1130,6 +1134,17 @@ public final class PlayerDisguiseManager implements Listener {
 		} catch(Throwable t) {
 			plugin.getLogger().warning("Could not take staff permissions from " + player.getName() + " while disguised: " + t);
 		}
+	}
+
+	/**
+	 * Disguised with player permissions: flight that was on (/fly) goes off, like for a normal player.
+	 * Not in creative or spectator, where flying is part of the game mode.
+	 */
+	private static void stopFlying(Player player) {
+		org.bukkit.GameMode mode = player.getGameMode();
+		if(mode == org.bukkit.GameMode.CREATIVE || mode == org.bukkit.GameMode.SPECTATOR) return;
+		player.setFlying(false);
+		player.setAllowFlight(false);
 	}
 
 	private void givePermissionsBack(Player player) {
