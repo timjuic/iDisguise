@@ -57,6 +57,11 @@ final class TabLook {
 		}
 	}
 
+	/** TAB nametag suffix of a group, raw (placeholders not filled). */
+	String tagSuffix(String group, String world) {
+		return property(group, world, "tagsuffix");
+	}
+
 	/** TAB tab prefix of a group (for %idisguise_tabprefix%), raw with & codes. */
 	String tabPrefix(String group, String world) {
 		return property(group, world, "tabprefix");

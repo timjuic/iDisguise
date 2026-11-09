@@ -14,7 +14,7 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
  * %idisguise_tabprefix% = the TAB tab prefix of the rank others see (the disguise rank while disguised).
  * %idisguise_swap_<placeholder>% = that placeholder with real names of disguised players swapped (e.g. a combat enemy).
  */
-final class PlaceholderHook extends PlaceholderExpansion {
+final class PlaceholderHook extends PlaceholderExpansion implements me.clip.placeholderapi.expansion.Relational {
 
 	private final PlayerDisguiseManager manager;
 
@@ -62,6 +62,7 @@ final class PlaceholderHook extends PlaceholderExpansion {
 	public String onPlaceholderRequest(Player player, String params) {
 		if("name".equalsIgnoreCase(params)) return manager.visibleName(player);
 		if("tabprefix".equalsIgnoreCase(params)) return manager.realTabPrefix(player);
+		if("ownerfaction".equalsIgnoreCase(params)) return manager.ownerFaction(player);
 		// %idisguise_swap_<placeholder>%: that placeholder with disguised players' real names swapped for
 		// the fake ones, e.g. %idisguise_swap_combatlogx_current_enemy_name%.
 		if(params.length() > 5 && params.regionMatches(true, 0, "swap_", 0, 5)) {
@@ -69,6 +70,13 @@ final class PlaceholderHook extends PlaceholderExpansion {
 			if(inner.regionMatches(true, 0, "swap_", 0, 5)) return "";
 			return manager.swapNames(PlaceholderAPI.setPlaceholders(player, "%" + inner + "%"));
 		}
+		return null;
+	}
+
+	/** %rel_idisguise_ownercolor%: used by the nametag of a disguise that shows a real player's faction. */
+	@Override
+	public String onPlaceholderRequest(Player one, Player two, String identifier) {
+		if("ownercolor".equalsIgnoreCase(identifier)) return manager.ownerColor(one, two);
 		return null;
 	}
 

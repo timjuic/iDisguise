@@ -30,7 +30,9 @@ import net.md_5.bungee.chat.ComponentSerializer;
 /**
  * Rewrites what other players' clients are told about a disguised player (Minecraft 1.8 packets):
  *  - tab list entry: fake name + fake skin (the client takes the name above the head and the skin from it)
- *  - scoreboard teams (TAB nametags / sorting): real name -> fake name
+ *  - nametags: no team packets are touched (listening to them reordered TAB's sidebar packets and
+ *    sidebar lines vanished); TAB puts the fake name into the player's team by itself, since the
+ *    player's own tab entry carries the fake name (TAB's nick support)
  *  - chat: real name -> fake name in every message (death messages, /f who, other plugins)
  *  - tab-complete: fake names instead of real ones
  * The server itself never changes: the player keeps their real name, UUID, health and data.
@@ -43,7 +45,6 @@ final class PacketRewriter extends PacketAdapter {
 	PacketRewriter(Plugin plugin, PlayerDisguiseManager manager) {
 		super(plugin, ListenerPriority.HIGHEST,
 				PacketType.Play.Server.PLAYER_INFO,
-				PacketType.Play.Server.SCOREBOARD_TEAM,
 				PacketType.Play.Server.CHAT,
 				PacketType.Play.Server.TAB_COMPLETE,
 				PacketType.Play.Server.NAMED_ENTITY_SPAWN,
@@ -77,20 +78,11 @@ final class PacketRewriter extends PacketAdapter {
 	@Override
 	public void onPacketSending(PacketEvent event) {
 		if(event.isCancelled() || manager.isEmpty()) return;
-		if(event.getPacketType() == PacketType.Play.Server.SCOREBOARD_TEAM && event.getPlayer() != null) {
-			try {
-				manager.trackTeam(event.getPlayer().getUniqueId(), event.getPacket());
-			} catch(RuntimeException e) {
-				manager.packetError("SCOREBOARD_TEAM (tracking)", e);
-			}
-		}
 		// Staff with "/disguise reveal players" on see everyone as they really are, with the real rank.
 		if(event.getPlayer() != null && manager.isRevealingPlayers(event.getPlayer().getUniqueId())) {
 			try {
 				if(event.getPacketType() == PacketType.Play.Server.PLAYER_INFO) {
 					revealPlayerInfo(event);
-				} else if(event.getPacketType() == PacketType.Play.Server.SCOREBOARD_TEAM) {
-					revealTeam(event);
 				}
 			} catch(RuntimeException e) {
 				manager.packetError(event.getPacketType().name(), e);
@@ -101,8 +93,6 @@ final class PacketRewriter extends PacketAdapter {
 			PacketType type = event.getPacketType();
 			if(type == PacketType.Play.Server.PLAYER_INFO) {
 				rewritePlayerInfo(event);
-			} else if(type == PacketType.Play.Server.SCOREBOARD_TEAM) {
-				rewriteTeam(event);
 			} else if(type == PacketType.Play.Server.CHAT) {
 				rewriteChat(event);
 			} else if(type == PacketType.Play.Server.TAB_COMPLETE) {
@@ -211,21 +201,6 @@ final class PacketRewriter extends PacketAdapter {
 		event.setPacket(copy);
 	}
 
-	/** Reveal players: the nametag of a disguised player with the real rank. */
-	private void revealTeam(PacketEvent event) {
-		PacketContainer packet = event.getPacket();
-		String team = packet.getStrings().readSafely(0);
-		Integer mode = packet.getIntegers().readSafely(1);
-		if(team == null || mode == null || (mode != 0 && mode != 2)) return;
-		PlayerDisguiseManager.TeamState state = manager.teamOf(event.getPlayer().getUniqueId(), team);
-		TabLook.Look look = state == null ? null : manager.revealLook(event.getPlayer().getUniqueId(), state.player);
-		if(look == null) return;
-		PacketContainer copy = packet.shallowClone();
-		copy.getStrings().write(2, PlayerDisguiseManager.cut(look.tagPrefix, 16));
-		copy.getStrings().write(3, PlayerDisguiseManager.cut(look.tagSuffix, 16));
-		event.setPacket(copy);
-	}
-
 	private static WrappedChatComponent legacy(String text) {
 		return WrappedChatComponent.fromJson(ComponentSerializer.toString(net.md_5.bungee.api.chat.TextComponent.fromLegacyText(text)));
 	}
@@ -275,73 +250,6 @@ final class PacketRewriter extends PacketAdapter {
 		Collection<PlayerDisguise> disguises = manager.allOnline();
 		String replaced = NameReplacer.replaceJson(component.getJson(), disguises);
 		return replaced == null ? component : WrappedChatComponent.fromJson(replaced);
-	}
-
-	private void rewriteTeam(PacketEvent event) {
-		// Sidebar lines are teams too: never touched (their entries are the lines' IDs; a changed ID
-		// breaks the whole sidebar on 1.8). Names there: %idisguise_name% / %idisguise_swap_...% in TAB.
-		if(isSidebarTeam(event.getPacket())) {
-			return;
-		}
-		PacketContainer packet = event.getPacket();
-		PacketContainer copy = null;
-		// Disguised as a real player: the nametag shows that player's faction, not your own.
-		Integer mode = packet.getIntegers().readSafely(1);
-		if(mode != null && (mode == 0 || mode == 2) && event.getPlayer() != null) {
-			TabLook.Look look = manager.ownerTeamLook(event.getPlayer().getUniqueId(), packet.getStrings().readSafely(0));
-			if(look != null) {
-				copy = packet.shallowClone();
-				copy.getStrings().write(2, PlayerDisguiseManager.cut(look.tagPrefix, 16));
-				copy.getStrings().write(3, PlayerDisguiseManager.cut(look.tagSuffix, 16));
-			}
-		}
-		@SuppressWarnings("rawtypes")
-		Collection names = packet.getSpecificModifier(Collection.class).readSafely(0);
-		if(names == null || names.isEmpty()) {
-			if(copy != null) event.setPacket(copy);
-			return;
-		}
-		// Never for a name whose real player is online: the 1.8 client picks the nametag by name,
-		// so moving that name would change the real player's nametag too.
-		List<PlayerDisguise> disguises = new ArrayList<>();
-		for(PlayerDisguise disguise : manager.allOnline()) {
-			if(!disguise.isHiddenFromTab()) disguises.add(disguise);
-		}
-		if(disguises.isEmpty()) {
-			if(copy != null) event.setPacket(copy);
-			return;
-		}
-		List<String> result = new ArrayList<>(names.size());
-		boolean changed = false;
-		for(Object name : names) {
-			String fake = name instanceof String ? fakeNameOf((String)name, disguises) : null;
-			if(fake != null) {
-				result.add(fake);
-				changed = true;
-			} else {
-				result.add(String.valueOf(name));
-			}
-		}
-		if(changed) {
-			if(copy == null) copy = packet.shallowClone();
-			copy.getSpecificModifier(Collection.class).write(0, result);
-		}
-		if(copy != null) event.setPacket(copy);
-	}
-
-	/** A sidebar line team (TAB names them "TAB-Sidebar-..."; their entries start with a colour code). */
-	@SuppressWarnings("rawtypes")
-	private static boolean isSidebarTeam(PacketContainer packet) {
-		String team = packet.getStrings().readSafely(0);
-		if(team != null && team.toLowerCase(java.util.Locale.ENGLISH).contains("sidebar")) return true;
-		Collection entries = packet.getSpecificModifier(Collection.class).readSafely(0);
-		if(entries != null) {
-			for(Object entry : entries) {
-				String text = String.valueOf(entry);
-				if(!text.isEmpty() && text.charAt(0) == org.bukkit.ChatColor.COLOR_CHAR) return true;
-			}
-		}
-		return false;
 	}
 
 	private static String fakeNameOf(String realName, Collection<PlayerDisguise> disguises) {

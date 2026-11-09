@@ -95,8 +95,6 @@ public final class PlayerDisguiseManager implements Listener {
 	private org.bukkit.scheduler.BukkitTask revealTask;
 	private TabLook tabLook;
 	private FactionsHook factions;
-	// disguised player -> viewer -> nametag (with the real player's faction) last sent by the keeper
-	private final Map<UUID, Map<UUID, TabLook.Look>> ownerLooks = new ConcurrentHashMap<>();
 	private static final Set<String> FACTION_COMMANDS = new HashSet<>(java.util.Arrays.asList("f", "faction", "factions"));
 	// disguised player -> viewer -> tab line last sent by the keeper
 	private final Map<UUID, Map<UUID, String>> tabLines = new ConcurrentHashMap<>();
@@ -104,17 +102,6 @@ public final class PlayerDisguiseManager implements Listener {
 	private final Map<UUID, Long> lastDisguised = new ConcurrentHashMap<>();
 	// viewer -> disguised player -> how TAB would show the real player (staff with reveal on)
 	private final Map<UUID, Map<UUID, TabLook.Look>> revealLooks = new ConcurrentHashMap<>();
-	// viewer -> TAB team name -> the disguised player in it, and TAB's last settings for the team
-	private final Map<UUID, Map<String, TeamState>> teams = new ConcurrentHashMap<>();
-
-	static final class TeamState {
-		final UUID player;
-		volatile PacketContainer info;
-
-		TeamState(UUID player) {
-			this.player = player;
-		}
-	}
 
 	public PlayerDisguiseManager(iDisguise plugin) {
 		this.plugin = plugin;
@@ -138,7 +125,10 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		rebuildSnapshots();
 		tabLines.clear();
-		ownerLooks.clear();
+		for(Player player : Bukkit.getOnlinePlayers()) {
+			PlayerDisguise disguise = disguises.get(player.getUniqueId());
+			if(disguise != null && tab != null) tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
+		}
 		return true;
 	}
 
@@ -794,6 +784,41 @@ public final class PlayerDisguiseManager implements Listener {
 		});
 	}
 
+	/**
+	 * The TAB nametag suffix for a disguise that shows a real player's faction: the rank's tagsuffix from
+	 * groups.yml with the faction placeholders pointed at that player (TAB fills them per viewer).
+	 * null = TAB's normal suffix.
+	 */
+	private String ownerTagSuffix(Player player, PlayerDisguise disguise) {
+		if(tabLook == null || factionOwner(disguise) == null || disguise.isHiddenFromTab()) return null;
+		String rank = effectiveRank(disguise);
+		if(rank == null) rank = settings.defaultRank;
+		String suffix = tabLook.tagSuffix(rank, player.getWorld().getName());
+		if(!suffix.contains("factionsuuid_")) return null;
+		return suffix.replace("%rel_factionsuuid_relation_color%", "%rel_idisguise_ownercolor%")
+				.replace("%factionsuuid_faction_name%", "%idisguise_ownerfaction%");
+	}
+
+	/** %idisguise_ownerfaction%: faction name of the real player this disguise shows ("" otherwise). */
+	String ownerFaction(Player player) {
+		PlayerDisguise disguise = player == null ? null : disguises.get(player.getUniqueId());
+		UUID owner = disguise == null ? null : factionOwner(disguise);
+		return owner == null ? "" : factions.factionName(owner);
+	}
+
+	/** %rel_idisguise_ownercolor%: relation colour between a viewer and the real player a disguise shows. */
+	String ownerColor(Player one, Player two) {
+		if(one == null || two == null) return "";
+		PlayerDisguise disguise = disguises.get(two.getUniqueId());
+		Player viewer = one;
+		if(disguise == null || factionOwner(disguise) == null) {
+			disguise = disguises.get(one.getUniqueId());
+			viewer = two;
+		}
+		UUID owner = disguise == null ? null : factionOwner(disguise);
+		return owner == null ? "" : factions.relationColor(viewer, owner);
+	}
+
 	/** The real player whose faction this disguise shows, or null (made-up name or turned off). */
 	private UUID factionOwner(PlayerDisguise disguise) {
 		return factions == null ? null : disguise.getOwnerUuid();
@@ -845,6 +870,7 @@ public final class PlayerDisguiseManager implements Listener {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> {
 				if(player.isOnline() && disguises.get(player.getUniqueId()) == disguise) {
 					tab.apply(player, effectiveRank(disguise), disguise.getFakeName());
+					tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
 				}
 			}, 10L);
 		}
@@ -854,7 +880,10 @@ public final class PlayerDisguiseManager implements Listener {
 		String previous = disguise.getPreviousDisplayName();
 		player.setDisplayName(previous != null ? previous : player.getName());
 		// Right away, so the refresh after it already carries the real rank.
-		if(tab != null) tab.apply(player, null, null);
+		if(tab != null) {
+			tab.apply(player, null, null);
+			tab.setTagSuffix(player, null);
+		}
 		// Disguised as a player who is online: TAB sometimes drops that player's own nametag team for
 		// others when the disguise ends (their rank above the head was gone). Rebuild it.
 		Player owner = Bukkit.getPlayerExact(disguise.getFakeName());
@@ -874,7 +903,6 @@ public final class PlayerDisguiseManager implements Listener {
 		Bukkit.getScheduler().runTaskLater(plugin, () -> {
 			if(!player.isOnline() || disguises.get(player.getUniqueId()) != expected) return;
 			tabLines.remove(player.getUniqueId());
-			ownerLooks.remove(player.getUniqueId());
 			for(Player viewer : Bukkit.getOnlinePlayers()) {
 				if(viewer == player || !viewer.canSee(player)) continue;
 				viewer.hidePlayer(player);
@@ -1093,10 +1121,7 @@ public final class PlayerDisguiseManager implements Listener {
 		revealPlayers.remove(quit.getUniqueId());
 		revealLooks.remove(quit.getUniqueId());
 		tabLines.remove(quit.getUniqueId());
-		ownerLooks.remove(quit.getUniqueId());
-		for(Map<UUID, TabLook.Look> looks : ownerLooks.values()) looks.remove(quit.getUniqueId());
 		for(Map<UUID, String> lines : tabLines.values()) lines.remove(quit.getUniqueId());
-		teams.remove(quit.getUniqueId());
 		for(PlayerDisguise disguise : disguises.values()) {
 			disguise.getRemovedFor().remove(quit.getUniqueId());
 		}
@@ -1338,7 +1363,6 @@ public final class PlayerDisguiseManager implements Listener {
 					viewer.hidePlayer(disguised);
 					viewer.showPlayer(disguised);
 				}
-				resendTeam(viewer, disguise, on);
 			}
 			send(sender, on ? language.REVEAL_PLAYERS_ON : language.REVEAL_PLAYERS_OFF);
 		}
@@ -1367,12 +1391,6 @@ public final class PlayerDisguiseManager implements Listener {
 					debug("Could not build the tab line of " + target.getName(), e);
 					return;
 				}
-				if(owner != null) {
-					// The nametag too: TAB fills it with your own faction.
-					TabLook.Look before = ownerLooks.computeIfAbsent(disguise.getUniqueId(), id -> new ConcurrentHashMap<>())
-							.put(viewer.getUniqueId(), look);
-					if(!look.sameTag(before)) resendTeam(viewer, disguise, false);
-				}
 				String line = NameReplacer.replace(look.tabLine, replacing);
 				if(line.equals(sent.get(viewer.getUniqueId()))) continue;
 				sent.put(viewer.getUniqueId(), line);
@@ -1385,18 +1403,6 @@ public final class PlayerDisguiseManager implements Listener {
 	void forgetTabLine(UUID disguised, UUID viewer) {
 		Map<UUID, String> sent = tabLines.get(disguised);
 		if(sent != null) sent.remove(viewer);
-		Map<UUID, TabLook.Look> looks = ownerLooks.get(disguised);
-		if(looks != null) looks.remove(viewer);
-	}
-
-	/** The nametag (with the real player's faction) this viewer should get for a TAB team, or null. */
-	TabLook.Look ownerTeamLook(UUID viewer, String team) {
-		TeamState state = team == null ? null : teamOf(viewer, team);
-		if(state == null) return null;
-		PlayerDisguise disguise = disguises.get(state.player);
-		if(disguise == null || disguise.isHiddenFromTab() || factionOwner(disguise) == null) return null;
-		Map<UUID, TabLook.Look> looks = ownerLooks.get(state.player);
-		return looks == null ? null : looks.get(viewer);
 	}
 
 	/** How the viewer (reveal players on) should see this disguised player, or null. */
@@ -1429,71 +1435,7 @@ public final class PlayerDisguiseManager implements Listener {
 				if(before != null && !before.tabLine.equals(look.tabLine)) {
 					sendRaw(viewer, PacketRewriter.displayName(target, look.tabLine));
 				}
-				if(before != null && !look.sameTag(before)) {
-					resendTeam(viewer, disguise, true);
-				}
 			}
-		}
-	}
-
-	/** Remembers which TAB team a disguised player is in, per viewer (from the packets TAB sends). */
-	void trackTeam(UUID viewer, PacketContainer packet) {
-		String team = packet.getStrings().readSafely(0);
-		Integer mode = packet.getIntegers().readSafely(1);
-		if(team == null || mode == null) return;
-		Map<String, TeamState> states = teams.computeIfAbsent(viewer, id -> new ConcurrentHashMap<>());
-		if(mode == 1) {
-			states.remove(team);
-			return;
-		}
-		if(mode == 0 || mode == 3) {
-			@SuppressWarnings("rawtypes")
-			Collection names = packet.getSpecificModifier(Collection.class).readSafely(0);
-			if(names != null) {
-				for(Object name : names) {
-					for(PlayerDisguise disguise : online) {
-						if(disguise.getRealName().equalsIgnoreCase(String.valueOf(name)) || disguise.getFakeName().equalsIgnoreCase(String.valueOf(name))) {
-							states.put(team, new TeamState(disguise.getUniqueId()));
-						}
-					}
-				}
-			}
-		}
-		TeamState state = states.get(team);
-		if(state != null && (mode == 0 || mode == 2)) state.info = packet.deepClone();
-	}
-
-	/** The TAB team of a disguised player as this viewer knows it, or null. */
-	TeamState teamOf(UUID viewer, String team) {
-		Map<String, TeamState> states = teams.get(viewer);
-		return states == null ? null : states.get(team);
-	}
-
-	/**
-	 * Puts the right name into the disguised player's TAB team for this viewer and sends the team's
-	 * look again: the real name and rank (reveal on) or the disguise (reveal off).
-	 */
-	private void resendTeam(Player viewer, PlayerDisguise disguise, boolean reveal) {
-		Map<String, TeamState> states = teams.get(viewer.getUniqueId());
-		if(states == null) return;
-		for(Map.Entry<String, TeamState> entry : states.entrySet()) {
-			TeamState state = entry.getValue();
-			if(!state.player.equals(disguise.getUniqueId()) || state.info == null) continue;
-			PacketContainer join = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.SCOREBOARD_TEAM);
-			join.getStrings().write(0, entry.getKey());
-			join.getIntegers().write(1, 3);
-			join.getSpecificModifier(Collection.class).write(0, new ArrayList<>(java.util.Collections.singletonList(
-					reveal || disguise.isHiddenFromTab() ? disguise.getRealName() : disguise.getFakeName())));
-			sendRaw(viewer, join);
-			PacketContainer update = state.info.deepClone();
-			update.getIntegers().write(1, 2);
-			update.getSpecificModifier(Collection.class).write(0, new ArrayList<String>());
-			TabLook.Look look = reveal ? revealLook(viewer.getUniqueId(), disguise.getUniqueId()) : ownerTeamLook(viewer.getUniqueId(), entry.getKey());
-			if(look != null) {
-				update.getStrings().write(2, cut(look.tagPrefix, 16));
-				update.getStrings().write(3, cut(look.tagSuffix, 16));
-			}
-			sendRaw(viewer, update);
 		}
 	}
 
