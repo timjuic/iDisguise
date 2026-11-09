@@ -111,7 +111,6 @@ final class TabHook {
 			if(formatManager != null) {
 				setName.invoke(formatManager, tabPlayer, name);
 			}
-			rebuildNameTag(player);
 		} catch(Throwable t) {
 			Throwable cause = t.getCause() != null ? t.getCause() : t;
 			plugin.getLogger().warning("Could not update TAB for " + player.getName() + ": " + cause);

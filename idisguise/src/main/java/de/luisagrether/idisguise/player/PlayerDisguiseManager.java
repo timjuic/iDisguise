@@ -687,7 +687,6 @@ public final class PlayerDisguiseManager implements Listener {
 		applyLook(target, disguise);
 		removeRealEntry(target);
 		refresh(target);
-		refreshLater(target, disguise);
 		log.start(target.getName(), target.getUniqueId(), "player", name, effectiveRank(disguise));
 		if(previous != null) log.end(target.getName(), target.getUniqueId(), "player", previous.getFakeName());
 
@@ -707,7 +706,6 @@ public final class PlayerDisguiseManager implements Listener {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
 			refresh(player);
-			refreshLater(player, null);
 		}
 		return true;
 	}
@@ -918,23 +916,6 @@ public final class PlayerDisguiseManager implements Listener {
 				if(owner.isOnline()) tab.rebuildNameTag(owner);
 			}, 20L);
 		}
-	}
-
-	/**
-	 * A second refresh once TAB has switched the rank (10 ticks after disguising): what other players
-	 * got in the first refresh could still carry the old rank, nametag team and sorting, and TAB can't
-	 * update the disguise's tab entry itself (it has its own ID). expected == null: undisguised.
-	 */
-	private void refreshLater(Player player, PlayerDisguise expected) {
-		Bukkit.getScheduler().runTaskLater(plugin, () -> {
-			if(!player.isOnline() || disguises.get(player.getUniqueId()) != expected) return;
-			tabLines.remove(player.getUniqueId());
-			for(Player viewer : Bukkit.getOnlinePlayers()) {
-				if(viewer == player || !viewer.canSee(player)) continue;
-				viewer.hidePlayer(player);
-				viewer.showPlayer(player);
-			}
-		}, 25L);
 	}
 
 	/**
