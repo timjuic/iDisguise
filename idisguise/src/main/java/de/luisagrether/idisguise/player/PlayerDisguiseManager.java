@@ -1321,6 +1321,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(tab != null) {
 			tab.apply(player, effectiveRank(disguise), disguise.getFakeName(), sortName(disguise));
 			tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
+			tab.setTabSuffix(player, ownTabSuffix(player, disguise));
 		}
 	}
 
@@ -1334,6 +1335,13 @@ public final class PlayerDisguiseManager implements Listener {
 		return tabLook.sortName(rank != null ? rank : settings.defaultRank, disguise.getFakeName());
 	}
 
+	/** The own tab line's suffix while disguised: the rank's suffix with [V] when vanished (staff ranks have it already). */
+	private String ownTabSuffix(Player player, PlayerDisguise disguise) {
+		if(tabLook == null) return null;
+		String rank = effectiveRank(disguise);
+		return tabLook.ownTabSuffix(rank != null ? rank : settings.defaultRank, player.getWorld().getName());
+	}
+
 	private void resetLook(Player player, PlayerDisguise disguise) {
 		String previous = disguise.getPreviousDisplayName();
 		player.setDisplayName(previous != null ? previous : player.getName());
@@ -1341,6 +1349,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(tab != null) {
 			tab.apply(player, null, null);
 			tab.setTagSuffix(player, null);
+			tab.setTabSuffix(player, null);
 		}
 		rebuildOwnerNameTag(player, disguise);
 	}
@@ -1814,6 +1823,7 @@ public final class PlayerDisguiseManager implements Listener {
 				// player's own tab entry) and the nametag faction.
 				resendOwnEntry(player);
 				tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
+				tab.setTabSuffix(player, ownTabSuffix(player, disguise));
 			}
 		}
 	}

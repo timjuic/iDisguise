@@ -21,6 +21,7 @@ final class TabHook {
 	private final Method setTemporaryGroup;
 	private final Method getTabListFormatManager;
 	private final Method setName;
+	private final Method setTabSuffix;
 	private final Method hasTemporaryGroup;
 	private final Method getGroup;
 	private final Method getNameTagManager;
@@ -45,6 +46,13 @@ final class TabHook {
 		setTemporaryGroup = tabPlayer.getMethod("setTemporaryGroup", String.class);
 		getTabListFormatManager = tabApi.getMethod("getTabListFormatManager");
 		setName = formatManager.getMethod("setName", tabPlayer, String.class);
+		Method tabSuffix = null;
+		try {
+			tabSuffix = formatManager.getMethod("setSuffix", tabPlayer, String.class);
+		} catch(NoSuchMethodException e) {
+			// older TAB: no [V] on the player's own tab line while disguised
+		}
+		setTabSuffix = tabSuffix;
 		hasTemporaryGroup = tabPlayer.getMethod("hasTemporaryGroup");
 		getGroup = tabPlayer.getMethod("getGroup");
 		getNameTagManager = tabApi.getMethod("getNameTagManager");
@@ -152,6 +160,19 @@ final class TabHook {
 		} catch(Throwable t) {
 			Throwable cause = t.getCause() != null ? t.getCause() : t;
 			plugin.getLogger().warning("Could not update TAB for " + player.getName() + ": " + cause);
+		}
+	}
+
+	/** A custom tab-list suffix for the player's own tab line (TAB fills its placeholders); null = TAB's normal one. */
+	void setTabSuffix(Player player, String suffix) {
+		if(setTabSuffix == null) return;
+		try {
+			Object api = getInstance.invoke(null);
+			Object formatManager = getTabListFormatManager.invoke(api);
+			Object tabPlayer = getPlayer.invoke(api, player.getUniqueId());
+			if(formatManager != null && tabPlayer != null) setTabSuffix.invoke(formatManager, tabPlayer, suffix);
+		} catch(Throwable t) {
+			plugin.getLogger().warning("Could not set the tab suffix of " + player.getName() + ": " + t);
 		}
 	}
 

@@ -85,6 +85,16 @@ final class TabLook {
 		return (char)('0' - 1 + position) + part + "A";
 	}
 
+	/**
+	 * The rank's tab suffix plus PremiumVanish's [V] placeholder, for the player's own tab line while
+	 * disguised; null when the rank's suffix already has it (staff ranks) or PremiumVanish isn't there.
+	 */
+	String ownTabSuffix(String group, String world) {
+		if(group == null || Bukkit.getPluginManager().getPlugin("PremiumVanish") == null) return null;
+		String suffix = property(group, world, "tabsuffix");
+		return suffix.contains("premiumvanish") ? null : suffix + "%premiumvanish_vanishsuffix%";
+	}
+
 	/** TAB nametag suffix of a group, raw (placeholders not filled). */
 	String tagSuffix(String group, String world) {
 		return property(group, world, "tagsuffix");
