@@ -569,7 +569,7 @@ public final class PlayerDisguiseManager implements Listener {
 		Player chooser = menu.chooser;
 		Player target = menu.target;
 		if(chooser != target || checkCooldown(chooser)) {
-			boolean button = permsButton(chooser, menu.playerPerms) != null;
+			boolean button = permsButton(menu) != null;
 			disguise(chooser, target, menu.name, rank, tag, menu.skin, success -> {
 				if(success && button) setPlayerPermissions(target, menu.playerPerms);
 				if(success && invis && target.isOnline()) setInvisible(chooser, target, true);
@@ -648,9 +648,13 @@ public final class PlayerDisguiseManager implements Listener {
 		return RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL, RankMenu.lines(language.RANK_MENU_CANCEL_LORE));
 	}
 
-	/** The "player permissions" button, or null when this player isn't staff (or there's no LuckPerms). */
-	private org.bukkit.inventory.ItemStack permsButton(Player chooser, boolean on) {
-		if(luckPerms == null || settings.playerPermissions.isEmpty() || !has(chooser, PERM_STAFF)) return null;
+	/**
+	 * The "player permissions" button, or null: only when both the one picking and the one disguised are
+	 * staff (a normal player disguised with /odisguise keeps their own rank's perks), and with LuckPerms.
+	 */
+	private org.bukkit.inventory.ItemStack permsButton(Menu menu) {
+		boolean on = menu.playerPerms;
+		if(luckPerms == null || settings.playerPermissions.isEmpty() || !has(menu.chooser, PERM_STAFF) || !has(menu.target, PERM_STAFF)) return null;
 		Language language = language();
 		return RankMenu.item(settings.menuItem("player-permissions"), on ? language.RANK_MENU_PERMS_ON : language.RANK_MENU_PERMS_OFF,
 				RankMenu.lines(language.RANK_MENU_PERMS_LORE));
@@ -658,7 +662,7 @@ public final class PlayerDisguiseManager implements Listener {
 
 	private void switchPerms(Menu menu, DisguiseMenu shown) {
 		menu.playerPerms = !menu.playerPerms;
-		shown.replace(DisguiseMenu.PLAYER_PERMS, permsButton(menu.chooser, menu.playerPerms));
+		shown.replace(DisguiseMenu.PLAYER_PERMS, permsButton(menu));
 	}
 
 	/** The invisibility button was clicked: switched in the open menu, nothing reopens. */
@@ -699,7 +703,7 @@ public final class PlayerDisguiseManager implements Listener {
 		String title = (chooser != target ? language.RANK_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.RANK_MENU_TITLE)
 				.replace("%name%", name);
 		menu.shown = new RankMenu(title, menuHeader(menu), menuFrame(), rankEntries, real, cancel, tagButton, invisButton(chooser, menu.invis),
-				permsButton(chooser, menu.playerPerms),
+				permsButton(menu),
 				(shown, choice) -> {
 					if(RankMenu.TAG.equals(choice)) {
 						openTagMenu(menu, 0, false);
@@ -759,7 +763,7 @@ public final class PlayerDisguiseManager implements Listener {
 		String title = (chooser != target ? language.TAG_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.TAG_MENU_TITLE)
 				.replace("%name%", name);
 		menu.shown = new TagMenu(title, menuHeader(menu), menuFrame(), entries, back, cancelItem(), previous, next, invisButton(chooser, menu.invis),
-				permsButton(chooser, menu.playerPerms),
+				permsButton(menu),
 				(shown, choice) -> {
 					if(TagMenu.PREVIOUS_ACTION.equals(choice)) {
 						openTagMenu(menu, shownPage - 1, tagOnly);
