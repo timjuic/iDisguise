@@ -427,16 +427,15 @@ public final class PlayerDisguiseManager implements Listener {
 
 	/**
 	 * A rank as players see it: its TAB tab prefix ("&5Obsidian"), without the trailing space and colour;
-	 * a rank whose prefix shows no text: its name in grey ("&7Default").
+	 * a rank whose prefix shows no text (default): "none".
 	 */
 	private String rankLook(String rank, Player player) {
 		String group = rank != null ? rank : settings.defaultRank;
 		if(group == null) return "-";
 		String shown = tabLook == null ? "" : tabLook.tabPrefix(group, player);
 		shown = shown.replaceAll("(?:\\s|\u00a7.)+$", "");
-		if(ChatColor.stripColor(shown).trim().isEmpty()) {
-			return ChatColor.GRAY + group.substring(0, 1).toUpperCase(Locale.ENGLISH) + group.substring(1);
-		}
+		// No prefix text (like default): "none", the same as for no tag.
+		if(ChatColor.stripColor(shown).trim().isEmpty()) return language().RANK_MENU_TAG_NONE;
 		return shown;
 	}
 
