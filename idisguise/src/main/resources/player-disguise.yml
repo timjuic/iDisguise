@@ -1,4 +1,4 @@
-# Player disguises: /disguise <name> [rank]
+# Player disguises: /disguise <name> (rank and tag are picked in a menu, only what the player may use)
 # Other players see you as <name>: skin, name above the head, tab list, chat and commands.
 # Needs ProtocolLib and only works on Minecraft 1.8.8. Mob disguises are not affected by this file.
 #
@@ -20,7 +20,7 @@
 # Turn player disguises on or off.
 enabled: true
 
-# Player ranks that can be faked: /disguise <name> <rank>, or picked in the menu after /disguise <name>.
+# Player ranks that can be faked: picked in the menu after /disguise <name>.
 # A rank looks exactly like your LuckPerms group (chat prefix) and TAB group (tab list and nametag) of the same name.
 player-ranks:
 - gold

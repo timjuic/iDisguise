@@ -809,7 +809,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				if(args.length == 1) {
 					sender.sendMessage(language.PLAYER_DISGUISE_ACCOUNT_NAME_MISSING);
 				} else {
-					disguisePlayerCommand(sender, target, self, args[1], args.length > 2 ? args[2] : null, args.length > 3 ? args[3] : null);
+					disguisePlayerCommand(sender, target, self, args[1]);
 				}
 			} else {
 				try {
@@ -947,7 +947,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				} catch(IllegalArgumentException e) {
 					// Not a mob: /disguise <name> [rank]
 					if(ACCOUNTNAME.matcher(args[0]).matches() && playerDisguises.isAvailable() && canDisguiseAsPlayer(sender)) {
-						disguisePlayerCommand(sender, target, self, args[0], args.length > 1 ? args[1] : null, args.length > 2 ? args[2] : null);
+						disguisePlayerCommand(sender, target, self, args[0]);
 					} else {
 						if(debugMode) getLogger().log(Level.SEVERE, "Unexpected failure!", e);
 						sender.sendMessage(language.DISGUISE_TYPE_NOT_FOUND.replace("%entityType%", args[0]));
@@ -1004,7 +1004,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		return true;
 	}
 
-	private void disguisePlayerCommand(CommandSender sender, Player target, boolean self, String name, String rank, String tag) {
+	private void disguisePlayerCommand(CommandSender sender, Player target, boolean self, String name) {
 		if(!playerDisguises.isAvailable() || config.DISGUISE_TYPE_BLACKLIST.contains("PLAYER")) {
 			sender.sendMessage(language.DISGUISE_TYPE_NOT_SUPPORTED);
 			return;
@@ -1014,7 +1014,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			return;
 		}
 		if(self && !playerDisguises.checkCooldown(target)) return;
-		playerDisguises.disguiseCommand(sender, target, name, rank, tag, self, (success) -> {
+		playerDisguises.disguiseCommand(sender, target, name, self, (success) -> {
 			if(success && self) playerDisguises.startCooldown(target);
 			if(success && !self) {
 				target.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
@@ -1038,11 +1038,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		boolean random = playerDisguises.isAvailable() && (admin || playerDisguises.canUseRandom(sender));
 		List<String[]> lines = new ArrayList<>();
 		if(mobs) lines.add(new String[] {"/disguise <mob>", language.HELP_CMD_MOB, "/disguise "});
-		if(players) {
-			// Only the arguments this player may use: no hint at ranks or tags they can't have.
-			String usage = "/disguise <name>" + (playerDisguises.canUseRanks(sender) ? " [rank]" : "") + (playerDisguises.canUseTags(sender) ? " [tag]" : "");
-			lines.add(new String[] {usage, language.HELP_CMD_PLAYER, "/disguise "});
-		}
+		if(players) lines.add(new String[] {"/disguise <name>", language.HELP_CMD_PLAYER, "/disguise "});
 		if(random) lines.add(new String[] {"/disguise random", language.HELP_CMD_RANDOM, "/disguise random"});
 		if(mobs || players || random) {
 			lines.add(new String[] {"/undisguise", language.HELP_CMD_UNDISGUISE, "/undisguise"});
@@ -1275,16 +1271,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						}
 					}
 				} catch(IllegalArgumentException e) {
-					// /disguise <name> [rank] [tag]: suggest the ranks this player may fake, then the tags
-					if(args.length == (self ? 2 : 3) && playerDisguises.isAvailable()) {
-						for(String rank : playerDisguises.usableRanks(sender)) {
-							if(StringUtil.startsWithIgnoreCase(rank, args[args.length - 1])) completions.add(rank);
-						}
-					} else if(args.length == (self ? 3 : 4) && playerDisguises.isAvailable()) {
-						for(String tag : playerDisguises.usableTagIds(sender)) {
-							if(StringUtil.startsWithIgnoreCase(tag, args[args.length - 1])) completions.add(tag);
-						}
-					}
+					// /disguise <name>: rank and tag are picked in the menu, nothing more to complete
 				}
 			}
 		} else if(command.getName().equalsIgnoreCase("undisguise")) {

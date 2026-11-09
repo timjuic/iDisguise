@@ -388,30 +388,6 @@ public final class PlayerDisguiseManager implements Listener {
 		return result;
 	}
 
-	/**
-	 * Checks a typed tag. Returns the identifier to save ("" = no tag), or null after telling the
-	 * sender why it can't be used.
-	 */
-	private String checkTag(CommandSender sender, String input) {
-		Language language = language();
-		if(!canUseTags(sender)) {
-			send(sender, language.DISGUISE_NO_PERMISSION);
-			return null;
-		}
-		if(NO_TAG.equalsIgnoreCase(input)) return "";
-		DeluxeTagsHook.Tag tag = deluxeTags == null ? null : deluxeTags.find(input);
-		if(tag == null) {
-			List<String> ids = usableTagIds(sender);
-			send(sender, language.PLAYER_DISGUISE_TAG_UNKNOWN.replace("%tag%", input).replace("%tags%", ids.isEmpty() ? "-" : String.join(", ", ids)));
-			return null;
-		}
-		if(!canUseTag(sender, tag)) {
-			send(sender, language.PLAYER_DISGUISE_TAG_NO_PERMISSION.replace("%tag%", tag.id));
-			return null;
-		}
-		return tag.id;
-	}
-
 	/** Fake ranks this sender may use (tab completion). */
 	public List<String> usableRanks(CommandSender sender) {
 		List<String> result = new ArrayList<>();
@@ -448,34 +424,19 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	/**
-	 * /disguise <name> [rank] from a player for themselves: without a rank, a menu with the ranks
-	 * they may use opens (when there is more than one and the real player isn't online).
+	 * /disguise <name>: rank and tag are picked in a menu, only what this player may pick: ranks (with a
+	 * tag button when tags are allowed too), or only tags (the tag list right away). Nothing to pick, or
+	 * not from a player (console): disguised straight away. /odisguise: the menu opens for the sender.
 	 */
-	public void disguiseCommand(CommandSender sender, Player target, String name, String rankInput, String tagInput, boolean self, Consumer<Boolean> done) {
-		// "/disguise <name> <tag>": a tag given where the rank goes (not a rank, but a tag or "none").
-		if(tagInput == null && rankInput != null && settings != null && settings.findRank(rankInput) == null && canUseTags(sender)
-				&& (NO_TAG.equalsIgnoreCase(rankInput) || deluxeTags.find(rankInput) != null)) {
-			tagInput = rankInput;
-			rankInput = null;
-		}
-		String tag = null;
-		if(tagInput != null) {
-			tag = checkTag(sender, tagInput);
-			if(tag == null) {
-				finish(done, false);
-				return;
-			}
-		}
-		disguiseCommand0(sender, target, name, rankInput, tag, self, done);
-	}
-
-	private void disguiseCommand0(CommandSender sender, Player target, String name, String rankInput, String tag, boolean self, Consumer<Boolean> done) {
+	public void disguiseCommand(CommandSender sender, Player target, String name, boolean self, Consumer<Boolean> done) {
+		Player chooser = sender instanceof Player ? (Player)sender : null;
 		Player owner = Bukkit.getPlayerExact(name);
-		boolean menu = available && rankInput == null && self && sender instanceof Player
-				&& (owner == null || owner == target) && (canUseRanks(sender) || !usableTags(sender).isEmpty())
-				&& iDisguise.ACCOUNTNAME.matcher(name).matches() && !"random".equalsIgnoreCase(name);
-		if(!menu) {
-			disguise(sender, target, name, rankInput, tag, done);
+		// Disguised as someone who is online, the rank is theirs: only the tag can be picked.
+		boolean ranks = (owner == null || owner == target) && canUseRanks(sender);
+		boolean tags = !usableTags(sender).isEmpty();
+		if(!available || chooser == null || (!ranks && !tags)
+				|| !iDisguise.ACCOUNTNAME.matcher(name).matches() || "random".equalsIgnoreCase(name)) {
+			disguise(sender, target, name, null, null, done);
 			return;
 		}
 		// Check the name first: the menu only opens for a name that can be used.
@@ -484,7 +445,7 @@ public final class PlayerDisguiseManager implements Listener {
 		boolean blockKnown = !has(sender, PERM_ANY_NAME) && settings.blockKnownNamesForPlayers;
 		if(problem != null || plugin.isPlayerNameBlacklisted(name)
 				|| (luckPerms == null && blockKnown && hasPlayedBefore(name, target))) {
-			disguise(sender, target, name, rankInput, tag, done);
+			disguise(sender, target, name, null, null, done);
 			return;
 		}
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -505,24 +466,35 @@ public final class PlayerDisguiseManager implements Listener {
 			boolean refused = known && blockKnown;
 			String finalRealRank = realRank;
 			Bukkit.getScheduler().runTask(plugin, () -> {
-				if(!target.isOnline()) return;
+				if(!target.isOnline() || !chooser.isOnline()) return;
 				if(refused) {
-					disguise(sender, target, name, rankInput, tag, done);
+					disguise(sender, target, name, null, null, done);
+				} else if(ranks) {
+					openRankMenu(chooser, target, name, finalRealRank, null, done);
 				} else {
-					openRankMenu(target, name, finalRealRank, tag, done);
+					openTagMenu(chooser, target, name, finalRealRank, null, 0, true, done);
 				}
 			});
 		});
 	}
 
-	private void openRankMenu(Player player, String name, String realRank, String tag, Consumer<Boolean> done) {
+	/** Disguises from a menu choice (the cooldown is checked again: two open menus can't skip it). */
+	private void disguiseFromMenu(Player chooser, Player target, String name, String rank, String tag, Consumer<Boolean> done) {
+		if(chooser != target || checkCooldown(chooser)) {
+			disguise(chooser, target, name, rank, tag, done);
+		} else {
+			finish(done, false);
+		}
+	}
+
+	private void openRankMenu(Player chooser, Player target, String name, String realRank, String tag, Consumer<Boolean> done) {
 		Language language = language();
 		List<RankMenu.Entry> playerEntries = new ArrayList<>();
 		List<RankMenu.Entry> staffEntries = new ArrayList<>();
 		// "No rank" first, like the lowest rank.
 		playerEntries.add(new RankMenu.Entry(NO_RANK, RankMenu.item(settings.menuItem("no-rank"), ChatColor.WHITE + name,
 				RankMenu.lines(language.RANK_MENU_RANK_LORE))));
-		for(String rank : usableRanks(player)) {
+		for(String rank : usableRanks(chooser)) {
 			RankMenu.Entry entry = new RankMenu.Entry(rank, rankItem(rank, name, null));
 			(settings.isStaffRank(rank) ? staffEntries : playerEntries).add(entry);
 		}
@@ -533,9 +505,9 @@ public final class PlayerDisguiseManager implements Listener {
 		org.bukkit.inventory.ItemStack header = RankMenu.item(settings.menuItem("header"), language.RANK_MENU_HEADER.replace("%name%", name),
 				RankMenu.lines(language.RANK_MENU_HEADER_LORE));
 		org.bukkit.inventory.ItemStack frame = RankMenu.item(settings.menuItem("frame"), " ", null);
-		// The tag button: only with DeluxeTags and at least one tag this player may use.
+		// The tag button: only when this player may pick at least one tag.
 		RankMenu.Entry tagButton = null;
-		if(deluxeTags != null && !usableTags(player).isEmpty()) {
+		if(!usableTags(chooser).isEmpty()) {
 			DeluxeTagsHook.Tag current = tag == null || tag.isEmpty() ? null : deluxeTags.find(tag);
 			String shown = current != null ? current.shown() : language.RANK_MENU_TAG_NONE;
 			tagButton = new RankMenu.Entry(RankMenu.TAG, RankMenu.item(settings.menuItem("tag"),
@@ -544,22 +516,21 @@ public final class PlayerDisguiseManager implements Listener {
 		new RankMenu(language.RANK_MENU_TITLE.replace("%name%", name), header, frame, playerEntries, staffEntries, real, cancel, tagButton,
 				choice -> {
 					if(RankMenu.TAG.equals(choice)) {
-						openTagMenu(player, name, realRank, tag, 0, done);
-						return;
-					}
-					// Two menus open at once can't get around the cooldown.
-					if(checkCooldown(player)) {
-						disguise(player, player, name, choice, tag, done);
+						openTagMenu(chooser, target, name, realRank, tag, 0, false, done);
 					} else {
-						finish(done, false);
+						disguiseFromMenu(chooser, target, name, choice, tag, done);
 					}
-				}).open(player);
+				}).open(chooser);
 	}
 
-	/** The tag list (opened from the rank menu); a choice goes back to the rank menu with that tag. */
-	private void openTagMenu(Player player, String name, String realRank, String tag, int page, Consumer<Boolean> done) {
+	/**
+	 * The tag list. From the rank menu (tagOnly false) a choice goes back to the rank menu with that tag;
+	 * for players who may only pick tags (tagOnly true) a choice disguises right away.
+	 */
+	private void openTagMenu(Player chooser, Player target, String name, String realRank, String tag, int page, boolean tagOnly,
+			Consumer<Boolean> done) {
 		Language language = language();
-		List<DeluxeTagsHook.Tag> tags = usableTags(player);
+		List<DeluxeTagsHook.Tag> tags = usableTags(chooser);
 		int pages = Math.max(1, (tags.size() + TagMenu.PER_PAGE - 1) / TagMenu.PER_PAGE);
 		int shownPage = Math.max(0, Math.min(page, pages - 1));
 		List<RankMenu.Entry> entries = new ArrayList<>();
@@ -577,22 +548,32 @@ public final class PlayerDisguiseManager implements Listener {
 		List<String> noneLore = RankMenu.lines(language.TAG_MENU_NONE_LORE);
 		if(tag != null && tag.isEmpty()) noneLore.add(language.TAG_MENU_SELECTED);
 		org.bukkit.inventory.ItemStack none = RankMenu.item(settings.menuItem("no-tag"), language.TAG_MENU_NONE, noneLore);
-		org.bukkit.inventory.ItemStack back = RankMenu.item(settings.menuItem("back"), language.TAG_MENU_BACK, RankMenu.lines(language.TAG_MENU_BACK_LORE));
+		// Only tags: there is no rank menu to go back to, so this button closes without disguising.
+		org.bukkit.inventory.ItemStack back = tagOnly
+				? RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL, RankMenu.lines(language.RANK_MENU_CANCEL_LORE))
+				: RankMenu.item(settings.menuItem("back"), language.TAG_MENU_BACK, RankMenu.lines(language.TAG_MENU_BACK_LORE));
 		org.bukkit.inventory.ItemStack previous = shownPage > 0 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_PREVIOUS, null) : null;
 		org.bukkit.inventory.ItemStack next = shownPage < pages - 1 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_NEXT, null) : null;
 		new TagMenu(language.TAG_MENU_TITLE.replace("%name%", name), entries, none, back, previous, next, choice -> {
 			if(TagMenu.PREVIOUS.equals(choice)) {
-				openTagMenu(player, name, realRank, tag, shownPage - 1, done);
+				openTagMenu(chooser, target, name, realRank, tag, shownPage - 1, tagOnly, done);
 			} else if(TagMenu.NEXT.equals(choice)) {
-				openTagMenu(player, name, realRank, tag, shownPage + 1, done);
+				openTagMenu(chooser, target, name, realRank, tag, shownPage + 1, tagOnly, done);
 			} else if(TagMenu.BACK.equals(choice)) {
-				openRankMenu(player, name, realRank, tag, done);
-			} else if(TagMenu.NONE.equals(choice)) {
-				openRankMenu(player, name, realRank, "", done);
+				if(tagOnly) {
+					finish(done, false);
+				} else {
+					openRankMenu(chooser, target, name, realRank, tag, done);
+				}
 			} else {
-				openRankMenu(player, name, realRank, choice, done);
+				String picked = TagMenu.NONE.equals(choice) ? "" : choice;
+				if(tagOnly) {
+					disguiseFromMenu(chooser, target, name, null, picked, done);
+				} else {
+					openRankMenu(chooser, target, name, realRank, picked, done);
+				}
 			}
-		}).open(player);
+		}).open(chooser);
 	}
 
 	/** A rank in the menu: named the way others will see you ("[Gold] Notch"). firstLine: optional extra lore line on top. */
