@@ -43,7 +43,7 @@ final class DeluxeTagsHook {
 
 		/** The tag without spaces at the start and end (colours kept), for messages and menus. */
 		String label() {
-			return shown().replaceFirst("^((?:§.)*)\s+", "$1").replaceFirst("\s+((?:§.)*)$", "$1");
+			return shown().replaceFirst("^((?:\u00a7.)*)\\s+", "$1").replaceFirst("\\s+((?:\u00a7.)*)$", "$1");
 		}
 	}
 
