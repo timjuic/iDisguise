@@ -71,6 +71,8 @@ menu-items:
   no-tag: PAPER
   back: BARRIER
   page: ARROW
+  # Invisibility button in the rank / tag menu (only for players with iDisguise.invis).
+  invis: EYE_OF_ENDER
 
 # Rank used when no rank is given (and none can be copied). Use the group of players without a rank.
 default-rank: default

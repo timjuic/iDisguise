@@ -200,6 +200,19 @@ public class Language {
 	public String RANK_MENU_TITLE = ChatColor.DARK_GRAY + "Rank for " + ChatColor.GOLD + "%name%";
 	@LastUpdated(60101)
 	public String RANK_MENU_HEADER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguising as " + ChatColor.YELLOW + ChatColor.BOLD + "%name%";
+	@LastUpdated(60158)
+	public String RANK_MENU_INVIS_OFF = ChatColor.GRAY + "Invisible: " + ChatColor.RED + ChatColor.BOLD + "OFF";
+	@LastUpdated(60158)
+	public String RANK_MENU_INVIS_ON = ChatColor.GRAY + "Invisible: " + ChatColor.GREEN + ChatColor.BOLD + "ON";
+	@LastUpdated(60158)
+	public String RANK_MENU_INVIS_LORE = ChatColor.GRAY + "ON: you also turn invisible after disguising.\n"
+			+ ChatColor.GRAY + "Players see nothing at all, only ESP / tracer\n"
+			+ ChatColor.GRAY + "cheats still show you: use it to catch cheaters.\n"
+			+ ChatColor.GRAY + "It stays on until " + ChatColor.YELLOW + "/disguise invis" + ChatColor.GRAY + ".\n"
+			+ ChatColor.GRAY + "OFF: invisibility stays as it is now.\n\n"
+			+ ChatColor.YELLOW + "\u00bb Click to switch";
+	@LastUpdated(60158)
+	public String RANK_MENU_HEADER_INVIS = ChatColor.AQUA + "Invisible after disguising";
 	@LastUpdated(60101)
 	public String RANK_MENU_HEADER_LORE = ChatColor.GRAY + "Pick the rank other players will see.";
 	@LastUpdated(60140)
@@ -241,10 +254,8 @@ public class Language {
 	public String HELP_ADMIN_TITLE = ChatColor.RED.toString() + ChatColor.BOLD + "Admin " + ChatColor.DARK_GRAY + "\u00bb " + ChatColor.GRAY + "Commands";
 	@LastUpdated(60110)
 	public String HELP_CMD_REVEAL_PLAYERS = "See disguised players as who they really are (only you)";
-	@LastUpdated(60101)
-	public String HELP_CMD_WHOIS = "Who is or was behind a disguise name";
-	@LastUpdated(60101)
-	public String HELP_CMD_HISTORY = "Every disguise a player has used";
+	@LastUpdated(60158)
+	public String HELP_CMD_INFO = "Who is or was behind a disguise name, and a player's own disguises";
 	@LastUpdated(60125)
 	public String HELP_CMD_PERMISSIONS = "Every permission of this plugin";
 	@LastUpdated(60125)
@@ -269,10 +280,8 @@ public class Language {
 	public String REVEAL_PLAYERS_ON = c("%prefix%&aYou now see disguised players as who they really are &7(only on your screen)&a.");
 	@LastUpdated(60106)
 	public String REVEAL_PLAYERS_OFF = c("%prefix%&7You see player disguises again.");
-	@LastUpdated(60106)
-	public String WHOIS_USAGE = c("%prefix%&cUse &e/disguise whois <name>");
-	@LastUpdated(60106)
-	public String HISTORY_USAGE = c("%prefix%&cUse &e/disguise history <player>");
+	@LastUpdated(60158)
+	public String INFO_USAGE = c("%prefix%&cUse &e/disguise info <name> &7(a disguise name or a real player)");
 	@LastUpdated(60106)
 	public String WHOIS_HEADER = c("%prefix%&7Disguise name &e%name%&7:");
 	@LastUpdated(60101)
@@ -283,6 +292,8 @@ public class Language {
 	public String WHOIS_OFFLINE = "offline, still disguised";
 	@LastUpdated(60101)
 	public String WHOIS_NONE = ChatColor.GRAY + " Nobody has used this name.";
+	@LastUpdated(60158)
+	public String INFO_NONE = c("%prefix%&7Nobody has used &e%name% &7as a disguise, and &e%name% &7has never disguised.");
 	@LastUpdated(60106)
 	public String HISTORY_HEADER = c("%prefix%&7Disguises of &e%player%&7:");
 	@LastUpdated(60101)

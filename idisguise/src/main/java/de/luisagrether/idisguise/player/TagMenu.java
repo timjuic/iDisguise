@@ -34,7 +34,7 @@ final class TagMenu implements InventoryHolder {
 	private final Consumer<String> choose;
 
 	TagMenu(String title, java.util.List<RankMenu.Entry> tags, ItemStack back, ItemStack previous, ItemStack next,
-			Consumer<String> choose) {
+			ItemStack invis, Consumer<String> choose) {
 		this.choose = choose;
 		this.inventory = Bukkit.createInventory(this, 54, title.length() > 32 ? title.substring(0, 32) : title);
 		int slot = 0;
@@ -44,6 +44,7 @@ final class TagMenu implements InventoryHolder {
 		}
 		if(previous != null) put(45, previous, PREVIOUS);
 		put(49, back, BACK);
+		if(invis != null) put(47, invis, RankMenu.INVIS);
 		if(next != null) put(53, next, NEXT);
 	}
 

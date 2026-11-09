@@ -727,10 +727,6 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				args = kept.toArray(new String[0]);
 			}
 			final boolean invis = invisFlag;
-			if(invis && args.length == 0) {
-				playerDisguises.setInvisible(sender, target, true);
-				return true;
-			}
 			if(args.length == 0) {
 				// /disguise alone: the help, with the active disguise at the bottom.
 				if(self) {
@@ -808,10 +804,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				}
 			} else if(self && args[0].equalsIgnoreCase("reveal")) {
 				playerDisguises.revealCommand(sender, args);
-			} else if(self && args[0].equalsIgnoreCase("whois")) {
-				playerDisguises.whoisCommand(sender, args);
-			} else if(self && args[0].equalsIgnoreCase("history")) {
-				playerDisguises.historyCommand(sender, args);
+			} else if(self && args[0].equalsIgnoreCase("info")) {
+				playerDisguises.infoCommand(sender, args);
 			} else if(args[0].equalsIgnoreCase("random") && playerDisguises.isAvailable()) {
 				if(!playerDisguises.canUseRandom(sender)) {
 					sender.sendMessage(language.DISGUISE_NO_PERMISSION);
@@ -1082,8 +1076,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			adminLines.add(new String[] {"/disguise reveal", language.HELP_CMD_REVEAL_PLAYERS, "/disguise reveal"});
 		}
 		if(admin || hasNode(sender, PlayerDisguiseManager.PERM_WHOIS)) {
-			adminLines.add(new String[] {"/disguise whois <name>", language.HELP_CMD_WHOIS, "/disguise whois "});
-			adminLines.add(new String[] {"/disguise history <player>", language.HELP_CMD_HISTORY, "/disguise history "});
+			adminLines.add(new String[] {"/disguise info <name>", language.HELP_CMD_INFO, "/disguise info "});
 		}
 		if(admin) {
 			adminLines.add(new String[] {"/disguise permissions", language.HELP_CMD_PERMISSIONS, "/disguise permissions"});
@@ -1113,7 +1106,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		{"#Staff tools"},
 		{"iDisguise.listplayers", "see who is disguised as whom in /disguise list"},
 		{"iDisguise.reveal", "/disguise reveal players: see through player disguises"},
-		{"iDisguise.whois", "/disguise whois and /disguise history"},
+		{"iDisguise.whois", "/disguise info: who is behind a disguise name, a player's disguises"},
 		{"iDisguise.see", "right-click a disguise mob to see who is inside"},
 		{"iDisguise.admin", "everyone in /disguise list, version, this list, /disguise reload, no cooldown"},
 		{"#Mobs and others"},
@@ -1265,12 +1258,10 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 				if(playerDisguises.canUseRandom(sender)) completions.add("random");
 				if(playerDisguises.isAvailable() && hasNode(sender, PlayerDisguiseManager.PERM_INVIS)) {
 					completions.add("invis");
-					completions.add("-i");
 				}
 				if(self && hasNode(sender, PlayerDisguiseManager.PERM_REVEAL)) completions.add("reveal");
 				if(self && hasNode(sender, PlayerDisguiseManager.PERM_WHOIS)) {
-					completions.add("whois");
-					completions.add("history");
+					completions.add("info");
 				}
 				for(EntityType type : EntityType.values()) {
 					if(type.equals(EntityType.PLAYER) && !playerDisguises.isAvailable()) continue;

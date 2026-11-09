@@ -198,6 +198,7 @@ final class PlayerDisguiseSettings {
 		NEW_MENU_ITEMS.put("no-tag", "PAPER");
 		NEW_MENU_ITEMS.put("back", "BARRIER");
 		NEW_MENU_ITEMS.put("page", "ARROW");
+		NEW_MENU_ITEMS.put("invis", "EYE_OF_ENDER");
 	}
 
 	boolean isStaffRank(String rank) {
