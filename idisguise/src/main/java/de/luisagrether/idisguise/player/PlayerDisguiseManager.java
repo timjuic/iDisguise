@@ -158,6 +158,12 @@ public final class PlayerDisguiseManager implements Listener {
 	public void enable() {
 		// The log also records mob disguises, so it exists even when player disguises are off.
 		log = new DisguiseLog(plugin.getDataFolder(), plugin.getLogger());
+		// What other plugins' configs need (TAB, InteractiveChat, Factions); written again on every start.
+		try {
+			plugin.saveResource("OUTSIDE-CHANGES.txt", true);
+		} catch(RuntimeException e) {
+			plugin.getLogger().warning("Could not write OUTSIDE-CHANGES.txt: " + e);
+		}
 		settings = new PlayerDisguiseSettings(plugin);
 		if(!settings.enabled) {
 			unavailableReason = "turned off in player-disguise.yml";
