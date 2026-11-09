@@ -530,7 +530,7 @@ public final class PlayerDisguiseManager implements Listener {
 		RankMenu.Entry tagButton = null;
 		if(!usableTags(chooser).isEmpty()) {
 			DeluxeTagsHook.Tag current = tag == null || tag.isEmpty() ? null : deluxeTags.find(tag);
-			String shown = current != null ? current.shown() : language.RANK_MENU_TAG_NONE;
+			String shown = current != null ? current.label() : language.RANK_MENU_TAG_NONE;
 			tagButton = new RankMenu.Entry(RankMenu.TAG, RankMenu.item(settings.menuItem("tag"),
 					language.RANK_MENU_TAG.replace("%tag%", shown), RankMenu.lines(language.RANK_MENU_TAG_LORE)));
 		}
@@ -564,7 +564,7 @@ public final class PlayerDisguiseManager implements Listener {
 				lore.add("");
 			}
 			lore.add(entry.id.equalsIgnoreCase(tag) ? language.TAG_MENU_SELECTED : language.TAG_MENU_PICK);
-			String title = entry.shown().trim().isEmpty() ? ChatColor.WHITE + entry.id : entry.shown();
+			String title = entry.shown().trim().isEmpty() ? ChatColor.WHITE + entry.id : entry.label();
 			all.add(new RankMenu.Entry(entry.id, RankMenu.item(settings.menuItem("tag-entry"), title, lore)));
 		}
 		int pages = Math.max(1, (all.size() + TagMenu.PER_PAGE - 1) / TagMenu.PER_PAGE);
@@ -879,7 +879,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(canUseTags(sender)) {
 			DeluxeTagsHook.Tag picked = chosenTag == null || chosenTag.isEmpty() ? null : deluxeTags.find(chosenTag);
 			tagPart = language.PLAYER_DISGUISED_TAG.replace("%tag%", picked != null && !picked.shown().trim().isEmpty()
-					? picked.shown() : language.RANK_MENU_TAG_NONE);
+					? picked.label() : language.RANK_MENU_TAG_NONE);
 		}
 		send(sender, language.PLAYER_DISGUISED.replace("%name%", name).replace("%rank%", rankLook(effectiveRank(disguise), target))
 				.replace("%tag%", tagPart));

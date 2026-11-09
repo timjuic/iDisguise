@@ -36,9 +36,14 @@ final class DeluxeTagsHook {
 			this.permission = permission;
 		}
 
-		/** The tag as it shows in chat, colours applied. */
+		/** The tag as it shows in chat, colours applied (with its spaces, which separate it from the name). */
 		String shown() {
 			return ChatColor.translateAlternateColorCodes('&', display);
+		}
+
+		/** The tag without spaces at the start and end (colours kept), for messages and menus. */
+		String label() {
+			return shown().replaceFirst("^((?:§.)*)\s+", "$1").replaceFirst("\s+((?:§.)*)$", "$1");
 		}
 	}
 
