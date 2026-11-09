@@ -149,6 +149,15 @@ public class Language {
 	public String RANK_MENU_TAG_NONE = ChatColor.GRAY + "none";
 	@LastUpdated(60139)
 	public String RANK_MENU_TAG_LORE = ChatColor.GRAY + "The tag others see in chat.\n\n" + ChatColor.YELLOW + "\u00bb Click to pick a tag";
+	@LastUpdated(60155)
+	public String RANK_MENU_TITLE_OTHER = ChatColor.DARK_GRAY + "%player%: rank for " + ChatColor.GOLD + "%name%";
+	@LastUpdated(60155)
+	public String RANK_MENU_HEADER_OTHER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguising " + ChatColor.YELLOW + ChatColor.BOLD + "%player%"
+			+ ChatColor.GOLD + ChatColor.BOLD + " as " + ChatColor.YELLOW + ChatColor.BOLD + "%name%";
+	@LastUpdated(60155)
+	public String RANK_MENU_FOR = ChatColor.GRAY + "For: " + ChatColor.YELLOW + "%player%";
+	@LastUpdated(60155)
+	public String TAG_MENU_TITLE_OTHER = ChatColor.DARK_GRAY + "%player%: tag for " + ChatColor.GOLD + "%name%";
 	@LastUpdated(60139)
 	public String TAG_MENU_TITLE = ChatColor.DARK_GRAY + "Tag for " + ChatColor.GOLD + "%name%";
 	@LastUpdated(60139)

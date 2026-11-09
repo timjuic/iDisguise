@@ -543,8 +543,13 @@ public final class PlayerDisguiseManager implements Listener {
 				rankItem(realRank, name, language.RANK_MENU_REAL_RANK.replace("%name%", name)));
 		RankMenu.Entry cancel = new RankMenu.Entry(RankMenu.CANCEL, RankMenu.item(settings.menuItem("cancel"), language.RANK_MENU_CANCEL,
 				RankMenu.lines(language.RANK_MENU_CANCEL_LORE)));
-		org.bukkit.inventory.ItemStack header = RankMenu.item(settings.menuItem("header"), language.RANK_MENU_HEADER.replace("%name%", name),
-				RankMenu.lines(language.RANK_MENU_HEADER_LORE));
+		// For another player (/odisguise): the menu says so.
+		boolean other = chooser != target;
+		List<String> headerLore = RankMenu.lines(language.RANK_MENU_HEADER_LORE);
+		if(other) headerLore.add(0, language.RANK_MENU_FOR.replace("%player%", target.getName()));
+		org.bukkit.inventory.ItemStack header = RankMenu.item(settings.menuItem("header"),
+				(other ? language.RANK_MENU_HEADER_OTHER.replace("%player%", target.getName()) : language.RANK_MENU_HEADER).replace("%name%", name),
+				headerLore);
 		org.bukkit.inventory.ItemStack frame = RankMenu.item(settings.menuItem("frame"), " ", null);
 		// The tag button: only when this player may pick at least one tag.
 		RankMenu.Entry tagButton = null;
@@ -554,7 +559,8 @@ public final class PlayerDisguiseManager implements Listener {
 			tagButton = new RankMenu.Entry(RankMenu.TAG, RankMenu.item(settings.menuItem("tag"),
 					language.RANK_MENU_TAG.replace("%tag%", shown), RankMenu.lines(language.RANK_MENU_TAG_LORE)));
 		}
-		new RankMenu(language.RANK_MENU_TITLE.replace("%name%", name), header, frame, playerEntries, staffEntries, real, cancel, tagButton,
+		String title = (other ? language.RANK_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.RANK_MENU_TITLE).replace("%name%", name);
+		new RankMenu(title, header, frame, playerEntries, staffEntries, real, cancel, tagButton,
 				choice -> {
 					if(RankMenu.TAG.equals(choice)) {
 						openTagMenu(chooser, target, name, realRank, tag, 0, false, done);
@@ -597,7 +603,9 @@ public final class PlayerDisguiseManager implements Listener {
 				: RankMenu.item(settings.menuItem("back"), language.TAG_MENU_BACK, RankMenu.lines(language.TAG_MENU_BACK_LORE));
 		org.bukkit.inventory.ItemStack previous = shownPage > 0 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_PREVIOUS, null) : null;
 		org.bukkit.inventory.ItemStack next = shownPage < pages - 1 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_NEXT, null) : null;
-		new TagMenu(language.TAG_MENU_TITLE.replace("%name%", name), entries, back, previous, next, choice -> {
+		String title = (chooser != target ? language.TAG_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.TAG_MENU_TITLE)
+				.replace("%name%", name);
+		new TagMenu(title, entries, back, previous, next, choice -> {
 			if(TagMenu.PREVIOUS.equals(choice)) {
 				openTagMenu(chooser, target, name, realRank, tag, shownPage - 1, tagOnly, done);
 			} else if(TagMenu.NEXT.equals(choice)) {
