@@ -185,6 +185,8 @@ final class PlayerDisguiseSettings {
 			item = menuItems.get(key.toLowerCase(Locale.ENGLISH).substring(0, key.length() - 5));
 		}
 		if(item == null) item = NEW_MENU_ITEMS.get(key.toLowerCase(Locale.ENGLISH));
+		// The header was a name tag before 6.1.40: still the old default = the new default.
+		if("header".equalsIgnoreCase(key) && "NAME_TAG".equalsIgnoreCase(item)) item = "SKULL_ITEM:1";
 		return item != null ? item : "STAINED_CLAY:0";
 	}
 

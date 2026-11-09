@@ -1038,7 +1038,11 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		boolean random = playerDisguises.isAvailable() && (admin || playerDisguises.canUseRandom(sender));
 		List<String[]> lines = new ArrayList<>();
 		if(mobs) lines.add(new String[] {"/disguise <mob>", language.HELP_CMD_MOB, "/disguise "});
-		if(players) lines.add(new String[] {"/disguise <name> [rank] [tag]", language.HELP_CMD_PLAYER, "/disguise "});
+		if(players) {
+			// Only the arguments this player may use: no hint at ranks or tags they can't have.
+			String usage = "/disguise <name>" + (playerDisguises.canUseRanks(sender) ? " [rank]" : "") + (playerDisguises.canUseTags(sender) ? " [tag]" : "");
+			lines.add(new String[] {usage, language.HELP_CMD_PLAYER, "/disguise "});
+		}
 		if(random) lines.add(new String[] {"/disguise random", language.HELP_CMD_RANDOM, "/disguise random"});
 		if(mobs || players || random) {
 			lines.add(new String[] {"/undisguise", language.HELP_CMD_UNDISGUISE, "/undisguise"});
@@ -1078,7 +1082,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		{"iDisguise.random", "/disguise random"},
 		{"iDisguise.rank.players", "fake ranks: every rank in player-ranks"},
 		{"iDisguise.rank.staff", "fake ranks: every rank in staff-ranks"},
-		{"iDisguise.tags.all", "any DeluxeTags tag for a disguise (else only own tags; staff: all)"},
+		{"iDisguise.tags", "pick a DeluxeTags tag for a disguise (own tags only)"},
+		{"iDisguise.tags.all", "pick any DeluxeTags tag for a disguise (staff: always all)"},
 		{"iDisguise.player.anyname", "names of real players (online or played here before)"},
 		{"iDisguise.player.staff", "staff settings, hidden in /disguise list, no cooldown"},
 		{"#Staff tools"},

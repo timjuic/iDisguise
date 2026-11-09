@@ -102,6 +102,7 @@ public final class PlayerDisguiseManager implements Listener {
 	private TabLook tabLook;
 	private FactionsHook factions;
 	private DeluxeTagsHook deluxeTags;
+	public static final String PERM_TAGS = "iDisguise.tags";
 	public static final String PERM_TAGS_ALL = "iDisguise.tags.all";
 	private static final String NO_TAG = "none";
 	private static final Set<String> FACTION_COMMANDS = new HashSet<>(java.util.Arrays.asList("f", "faction", "factions"));
@@ -350,8 +351,20 @@ public final class PlayerDisguiseManager implements Listener {
 		lastDisguised.put(player.getUniqueId(), System.currentTimeMillis());
 	}
 
-	/** Staff, iDisguise.tags.all or the console: every tag; everyone else: tags they own in DeluxeTags. */
+	/** May pick a tag for a disguise at all: staff, iDisguise.tags, iDisguise.tags.all (and DeluxeTags is there). */
+	public boolean canUseTags(CommandSender sender) {
+		if(deluxeTags == null) return false;
+		return !(sender instanceof Player) || has(sender, PERM_STAFF) || has(sender, PERM_TAGS) || has(sender, PERM_TAGS_ALL);
+	}
+
+	/** May pick at least one fake rank. */
+	public boolean canUseRanks(CommandSender sender) {
+		return !usableRanks(sender).isEmpty();
+	}
+
+	/** Staff, iDisguise.tags.all or the console: every tag; iDisguise.tags: tags they own in DeluxeTags. */
 	private boolean canUseTag(CommandSender sender, DeluxeTagsHook.Tag tag) {
+		if(!canUseTags(sender)) return false;
 		if(!(sender instanceof Player) || has(sender, PERM_STAFF) || has(sender, PERM_TAGS_ALL)) return true;
 		return deluxeTags.owns((Player)sender, tag);
 	}
@@ -359,7 +372,7 @@ public final class PlayerDisguiseManager implements Listener {
 	/** Tags this sender may give a disguise (tab completion, tag list). */
 	List<DeluxeTagsHook.Tag> usableTags(CommandSender sender) {
 		List<DeluxeTagsHook.Tag> result = new ArrayList<>();
-		if(deluxeTags == null) return result;
+		if(!canUseTags(sender)) return result;
 		for(DeluxeTagsHook.Tag tag : deluxeTags.tags()) {
 			if(canUseTag(sender, tag)) result.add(tag);
 		}
@@ -369,7 +382,7 @@ public final class PlayerDisguiseManager implements Listener {
 	/** Tag identifiers for tab completion ("none" first). */
 	public List<String> usableTagIds(CommandSender sender) {
 		List<String> result = new ArrayList<>();
-		if(deluxeTags == null) return result;
+		if(!canUseTags(sender)) return result;
 		result.add(NO_TAG);
 		for(DeluxeTagsHook.Tag tag : usableTags(sender)) result.add(tag.id);
 		return result;
@@ -381,6 +394,10 @@ public final class PlayerDisguiseManager implements Listener {
 	 */
 	private String checkTag(CommandSender sender, String input) {
 		Language language = language();
+		if(!canUseTags(sender)) {
+			send(sender, language.DISGUISE_NO_PERMISSION);
+			return null;
+		}
 		if(NO_TAG.equalsIgnoreCase(input)) return "";
 		DeluxeTagsHook.Tag tag = deluxeTags == null ? null : deluxeTags.find(input);
 		if(tag == null) {
@@ -436,7 +453,7 @@ public final class PlayerDisguiseManager implements Listener {
 	 */
 	public void disguiseCommand(CommandSender sender, Player target, String name, String rankInput, String tagInput, boolean self, Consumer<Boolean> done) {
 		// "/disguise <name> <tag>": a tag given where the rank goes (not a rank, but a tag or "none").
-		if(tagInput == null && rankInput != null && settings != null && settings.findRank(rankInput) == null && deluxeTags != null
+		if(tagInput == null && rankInput != null && settings != null && settings.findRank(rankInput) == null && canUseTags(sender)
 				&& (NO_TAG.equalsIgnoreCase(rankInput) || deluxeTags.find(rankInput) != null)) {
 			tagInput = rankInput;
 			rankInput = null;
@@ -455,7 +472,7 @@ public final class PlayerDisguiseManager implements Listener {
 	private void disguiseCommand0(CommandSender sender, Player target, String name, String rankInput, String tag, boolean self, Consumer<Boolean> done) {
 		Player owner = Bukkit.getPlayerExact(name);
 		boolean menu = available && rankInput == null && self && sender instanceof Player
-				&& (owner == null || owner == target) && !usableRanks(sender).isEmpty()
+				&& (owner == null || owner == target) && (canUseRanks(sender) || !usableTags(sender).isEmpty())
 				&& iDisguise.ACCOUNTNAME.matcher(name).matches() && !"random".equalsIgnoreCase(name);
 		if(!menu) {
 			disguise(sender, target, name, rankInput, tag, done);
@@ -637,7 +654,14 @@ public final class PlayerDisguiseManager implements Listener {
 		List<String> choices = new ArrayList<>(usableRanks(sender));
 		choices.add(NO_RANK);
 		String rank = choices.get(new java.util.Random().nextInt(choices.size()));
-		disguise(sender, target, name, rank, done);
+		String tag = null;
+		if(canUseTags(sender)) {
+			List<String> tags = new ArrayList<>();
+			tags.add("");
+			for(DeluxeTagsHook.Tag usable : usableTags(sender)) tags.add(usable.id);
+			tag = tags.get(new java.util.Random().nextInt(tags.size()));
+		}
+		disguise(sender, target, name, rank, tag, done);
 	}
 
 	// ---------------------------------------------------------------- disguise
@@ -671,6 +695,11 @@ public final class PlayerDisguiseManager implements Listener {
 		String chosenRank = null;
 		boolean noRank = NO_RANK.equals(rankInput);
 		if(noRank) rankInput = null;
+		if(rankInput != null && !canUseRanks(sender)) {
+			send(sender, language.DISGUISE_NO_PERMISSION);
+			finish(done, false);
+			return;
+		}
 		if(rankInput != null) {
 			chosenRank = settings.findRank(rankInput);
 			if(chosenRank == null) {

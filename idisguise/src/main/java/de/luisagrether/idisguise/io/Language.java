@@ -165,8 +165,8 @@ public class Language {
 	public String RANK_MENU_HEADER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguising as " + ChatColor.YELLOW + ChatColor.BOLD + "%name%";
 	@LastUpdated(60101)
 	public String RANK_MENU_HEADER_LORE = ChatColor.GRAY + "Pick the rank other players will see.";
-	@LastUpdated(60101)
-	public String RANK_MENU_RANK_LORE = ChatColor.GRAY + "Others will see you like this in chat, tab and above your head.\n\n" + ChatColor.YELLOW + "\u00bb Click to disguise";
+	@LastUpdated(60140)
+	public String RANK_MENU_RANK_LORE = ChatColor.GRAY + "Others will see you like this in chat,\n" + ChatColor.GRAY + "tab and above your head.\n\n" + ChatColor.YELLOW + "\u00bb Click to disguise";
 	@LastUpdated(60101)
 	public String RANK_MENU_REAL_RANK = ChatColor.YELLOW + "Real rank of %name%";
 	@LastUpdated(60100)
