@@ -165,6 +165,16 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	public void enable() {
+		// The %idisguise_...% placeholders come first, before anything that could fail: other plugins (TAB,
+		// InteractiveChat) use them, and without disguises they simply give the normal values.
+		placeholderApi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null;
+		if(placeholderApi) {
+			try {
+				PlaceholderHook.register(this);
+			} catch(Throwable t) {
+				plugin.getLogger().warning("Could not register the %idisguise_...% placeholders: " + t);
+			}
+		}
 		// The log also records mob disguises, so it exists even when player disguises are off.
 		log = new DisguiseLog(plugin.getDataFolder(), plugin.getLogger());
 		// What other plugins' configs need (TAB, InteractiveChat, Factions); written again on every start.
@@ -234,13 +244,6 @@ public final class PlayerDisguiseManager implements Listener {
 		invisiblePackets = new InvisiblePackets(plugin, this);
 		for(Player player : Bukkit.getOnlinePlayers()) invisibility.online(player);
 		Bukkit.getPluginManager().registerEvents(this, plugin);
-		if(placeholderApi) {
-			try {
-				PlaceholderHook.register(this);
-			} catch(Throwable t) {
-				plugin.getLogger().warning("Could not register the %idisguise_name% placeholder: " + t);
-			}
-		}
 		available = true;
 
 		// Players already online (plugin reload): show their disguises again. The packet listener must

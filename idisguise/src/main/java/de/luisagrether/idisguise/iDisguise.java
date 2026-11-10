@@ -617,7 +617,12 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 
 		playerDisguises = new PlayerDisguiseManager(this);
-		playerDisguises.enable();
+		try {
+			playerDisguises.enable();
+		} catch(Throwable t) {
+			// Never takes the whole plugin (and its placeholders other plugins use) down with it.
+			getLogger().log(java.util.logging.Level.SEVERE, "Player disguises could not start (mob disguises and the placeholders still work)", t);
+		}
 
 		Bukkit.getServicesManager().register(DisguiseAPI.class, this, this, ServicePriority.Normal);
 

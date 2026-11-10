@@ -64,26 +64,60 @@ final class PlaceholderHook extends PlaceholderExpansion implements me.clip.plac
 		return true;
 	}
 
+	/**
+	 * Never throws: other plugins (TAB, InteractiveChat) ask for these all the time, often from their own
+	 * threads. On any error the answer is the plain value a player without a disguise would get.
+	 */
 	@Override
 	public String onPlaceholderRequest(Player player, String params) {
-		if("name".equalsIgnoreCase(params)) return manager.visibleName(player);
-		if("tabprefix".equalsIgnoreCase(params)) return manager.realTabPrefix(player);
-		if("ownerfaction".equalsIgnoreCase(params)) return manager.ownerFaction(player);
-		if("vanishsuffix".equalsIgnoreCase(params)) return manager.vanishSuffix(player);
-		// %idisguise_swap_<placeholder>%: that placeholder with disguised players' real names swapped for
-		// the fake ones, e.g. %idisguise_swap_combatlogx_current_enemy_name%.
-		if(params.length() > 5 && params.regionMatches(true, 0, "swap_", 0, 5)) {
-			String inner = params.substring(5);
-			if(inner.regionMatches(true, 0, "swap_", 0, 5)) return "";
-			return manager.swapNames(PlaceholderAPI.setPlaceholders(player, "%" + inner + "%"));
+		if(params == null) return null;
+		try {
+			if("name".equalsIgnoreCase(params)) return manager.visibleName(player);
+			if("tabprefix".equalsIgnoreCase(params)) return manager.realTabPrefix(player);
+			if("ownerfaction".equalsIgnoreCase(params)) return manager.ownerFaction(player);
+			if("vanishsuffix".equalsIgnoreCase(params)) return manager.vanishSuffix(player);
+			// %idisguise_swap_<placeholder>%: that placeholder with disguised players' real names swapped for
+			// the fake ones, e.g. %idisguise_swap_combatlogx_current_enemy_name%.
+			if(params.length() > 5 && params.regionMatches(true, 0, "swap_", 0, 5)) {
+				String inner = params.substring(5);
+				if(inner.regionMatches(true, 0, "swap_", 0, 5)) return "";
+				return manager.swapNames(PlaceholderAPI.setPlaceholders(player, "%" + inner + "%"));
+			}
+			return null;
+		} catch(Throwable t) {
+			manager.debug("Placeholder %idisguise_" + params + "% failed", t);
+			return fallback(player, params);
 		}
-		return null;
+	}
+
+	private String fallback(Player player, String params) {
+		try {
+			if(player == null) return "";
+			if("name".equalsIgnoreCase(params)) {
+				PlayerDisguise disguise = manager.get(player.getUniqueId());
+				return disguise != null ? disguise.getFakeName() : player.getName();
+			}
+			if("tabprefix".equalsIgnoreCase(params)) {
+				String own = tabTabPrefix(player);
+				return own != null ? own : "";
+			}
+			if(params.length() > 5 && params.regionMatches(true, 0, "swap_", 0, 5)) {
+				return PlaceholderAPI.setPlaceholders(player, "%" + params.substring(5) + "%");
+			}
+		} catch(Throwable ignored) {
+		}
+		return "";
 	}
 
 	/** %rel_idisguise_ownercolor%: used by the nametag of a disguise that shows a real player's faction. */
 	@Override
 	public String onPlaceholderRequest(Player one, Player two, String identifier) {
-		if("ownercolor".equalsIgnoreCase(identifier)) return manager.ownerColor(one, two);
+		try {
+			if("ownercolor".equalsIgnoreCase(identifier)) return manager.ownerColor(one, two);
+		} catch(Throwable t) {
+			manager.debug("Placeholder %rel_idisguise_" + identifier + "% failed", t);
+			return "";
+		}
 		return null;
 	}
 
