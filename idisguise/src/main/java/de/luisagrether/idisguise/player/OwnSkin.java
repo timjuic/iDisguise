@@ -63,7 +63,7 @@ final class OwnSkin implements PluginMessageListener {
 		try {
 			Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
 			Bukkit.getMessenger().registerIncomingPluginChannel(plugin, CHANNEL, this);
-		} catch(RuntimeException e) {
+		} catch(Throwable e) {
 			plugin.getLogger().warning("Players can't see their own disguise skin (plugin channel): " + e);
 			return;
 		}
@@ -78,7 +78,13 @@ final class OwnSkin implements PluginMessageListener {
 				}
 			}
 		};
-		ProtocolLibrary.getProtocolManager().addPacketListener(dimensionListener);
+		try {
+			ProtocolLibrary.getProtocolManager().addPacketListener(dimensionListener);
+		} catch(Throwable t) {
+			// Never stops the rest of the plugin: without it, players just see their real skin on themselves.
+			dimensionListener = null;
+			plugin.getLogger().warning("Players can't see their own disguise skin (packet listener): " + t);
+		}
 	}
 
 	void stop() {
@@ -126,7 +132,7 @@ final class OwnSkin implements PluginMessageListener {
 				send(player, new byte[] {VERSION, RESET});
 				requested.remove(player.getUniqueId());
 			}
-		} catch(Exception e) {
+		} catch(Throwable e) {
 			manager.debug("Could not ask the proxy for the own skin of " + player.getName(), e);
 		}
 	}
@@ -156,8 +162,16 @@ final class OwnSkin implements PluginMessageListener {
 		if(left == 1) Bukkit.getScheduler().runTask(plugin, () -> refreshWhenFree(player, 0));
 	}
 
-	/** Not while a menu or chest is open, not while riding, sleeping or dead: waits (at most 15 seconds). */
 	private void refreshWhenFree(Player player, int tries) {
+		try {
+			tryRefresh(player, tries);
+		} catch(Throwable t) {
+			plugin.getLogger().warning("Could not refresh " + player.getName() + "'s own view (a relog fixes it): " + t);
+		}
+	}
+
+	/** Not while a menu or chest is open, not while riding, sleeping or dead: waits (at most 15 seconds). */
+	private void tryRefresh(Player player, int tries) {
 		if(!player.isOnline()) return;
 		boolean busy = player.isDead() || player.isSleeping() || player.isInsideVehicle()
 				|| player.getOpenInventory().getType() != InventoryType.CRAFTING;
