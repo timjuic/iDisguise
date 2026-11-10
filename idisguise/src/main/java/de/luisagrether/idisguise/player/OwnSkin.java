@@ -49,8 +49,10 @@ final class OwnSkin implements PluginMessageListener {
 	private final Map<UUID, Integer> dimensions = new ConcurrentHashMap<>();
 	// The skin the proxy was asked to use (null: real skin).
 	private final Map<UUID, String> requested = new ConcurrentHashMap<>();
-	// Answers still expected: an answer is only used when it was asked for.
-	private final Map<UUID, Integer> awaiting = new ConcurrentHashMap<>();
+	// When the proxy was last asked: an answer is only used shortly after asking.
+	private final Map<UUID, Long> lastAsked = new ConcurrentHashMap<>();
+	// A refresh is already planned (several answers in a row give one refresh).
+	private final java.util.Set<UUID> refreshPlanned = ConcurrentHashMap.newKeySet();
 	private PacketAdapter dimensionListener;
 	private boolean refreshBroken;
 
@@ -108,7 +110,8 @@ final class OwnSkin implements PluginMessageListener {
 
 	void quit(Player player) {
 		requested.remove(player.getUniqueId());
-		awaiting.remove(player.getUniqueId());
+		lastAsked.remove(player.getUniqueId());
+		refreshPlanned.remove(player.getUniqueId());
 		dimensions.remove(player.getUniqueId());
 	}
 
@@ -126,60 +129,70 @@ final class OwnSkin implements PluginMessageListener {
 				out.writeByte(SET);
 				out.writeUTF(disguise.getSkinValue());
 				out.writeUTF(disguise.getSkinSignature() == null ? "" : disguise.getSkinSignature());
-				send(player, bytes.toByteArray());
-				requested.put(player.getUniqueId(), disguise.getSkinValue());
+				// Only noted when it really went out (the proxy may not have announced the helper yet).
+				if(send(player, bytes.toByteArray())) requested.put(player.getUniqueId(), disguise.getSkinValue());
 			} else if(!want && now != null) {
-				send(player, new byte[] {VERSION, RESET});
 				requested.remove(player.getUniqueId());
+				send(player, new byte[] {VERSION, RESET});
 			}
 		} catch(Throwable e) {
 			manager.debug("Could not ask the proxy for the own skin of " + player.getName(), e);
 		}
 	}
 
-	private void send(Player player, byte[] data) {
+	/** False when it could not go out (no helper on the proxy, or not announced yet). */
+	private boolean send(Player player, byte[] data) {
 		// Bukkit only sends it when the proxy registered the channel, i.e. when the helper is there.
-		if(!player.getListeningPluginChannels().contains(CHANNEL)) return;
+		if(!player.getListeningPluginChannels().contains(CHANNEL)) return false;
 		player.sendPluginMessage(plugin, CHANNEL, data);
-		awaiting.merge(player.getUniqueId(), 1, Integer::sum);
+		lastAsked.put(player.getUniqueId(), System.currentTimeMillis());
+		return true;
 	}
 
 	@Override
 	public void onPluginMessageReceived(String channel, Player player, byte[] message) {
 		if(!CHANNEL.equals(channel) || player == null) return;
-		Integer left = awaiting.get(player.getUniqueId());
-		if(left == null || left <= 0) return; // not asked for
+		Long asked = lastAsked.get(player.getUniqueId());
+		if(asked == null || System.currentTimeMillis() - asked > 30000L) return; // not asked for
+		byte action;
 		try {
 			DataInputStream in = new DataInputStream(new ByteArrayInputStream(message));
 			if(in.readByte() != VERSION) return;
-			in.readByte();
+			action = in.readByte();
 		} catch(Exception e) {
 			return;
 		}
-		if(left == 1) awaiting.remove(player.getUniqueId());
-		else awaiting.put(player.getUniqueId(), left - 1);
-		// Only after the last answer: one refresh, never two in a row.
-		if(left == 1) Bukkit.getScheduler().runTask(plugin, () -> refreshWhenFree(player, 0));
+		// Only an answer to what is wanted now counts (an older answer after a quick /d + /ud is skipped).
+		boolean disguisedSkin = requested.containsKey(player.getUniqueId());
+		if(action == SET ? !disguisedSkin : action == RESET ? disguisedSkin : true) return;
+		// A tick later: several answers in a row give one refresh.
+		if(refreshPlanned.add(player.getUniqueId())) {
+			Bukkit.getScheduler().runTaskLater(plugin, () -> refreshWhenFree(player, 0), 2L);
+		}
 	}
 
 	private void refreshWhenFree(Player player, int tries) {
 		try {
-			tryRefresh(player, tries);
+			if(!tryRefresh(player, tries)) return;
 		} catch(Throwable t) {
 			plugin.getLogger().warning("Could not refresh " + player.getName() + "'s own view (a relog fixes it): " + t);
 		}
+		refreshPlanned.remove(player.getUniqueId());
 	}
 
 	/** Not while a menu or chest is open, not while riding, sleeping or dead: waits (at most 15 seconds). */
-	private void tryRefresh(Player player, int tries) {
-		if(!player.isOnline()) return;
+	/** False while it waits for another try (the refresh stays planned). */
+	private boolean tryRefresh(Player player, int tries) {
+		if(!player.isOnline()) return true;
 		boolean busy = player.isDead() || player.isSleeping() || player.isInsideVehicle()
 				|| player.getOpenInventory().getType() != InventoryType.CRAFTING;
 		if(busy) {
-			if(tries < 30) Bukkit.getScheduler().runTaskLater(plugin, () -> refreshWhenFree(player, tries + 1), 10L);
-			return;
+			if(tries >= 30) return true;
+			Bukkit.getScheduler().runTaskLater(plugin, () -> refreshWhenFree(player, tries + 1), 10L);
+			return false;
 		}
 		refresh(player);
+		return true;
 	}
 
 	/**

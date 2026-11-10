@@ -176,6 +176,10 @@ public final class IDisguiseProxy extends Plugin implements Listener {
 		if(connection == null || !loginProfileField.getDeclaringClass().isInstance(connection)) return false;
 		Object profile = getLoginProfile.invoke(connection);
 		Saved before = saved.get(player.getUniqueId());
+		// Something else (e.g. SkinsRestorer) changed the skin data since: that is the "before" now.
+		if(before != null && (profile != before.ourProfile || (profile != null && getProperties.invoke(profile) != before.ourProperties))) {
+			before = null;
+		}
 		if(before == null) {
 			before = new Saved(profile, profile == null ? null : getProperties.invoke(profile));
 		}

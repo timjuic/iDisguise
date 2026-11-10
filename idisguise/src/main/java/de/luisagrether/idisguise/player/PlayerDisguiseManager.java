@@ -2031,6 +2031,8 @@ public final class PlayerDisguiseManager implements Listener {
 					applyLook(joined, disguise);
 					// Later than the rest: the proxy has told this server about its channels by then.
 					Bukkit.getScheduler().runTaskLater(plugin, () -> ownSkin.update(joined), 15L);
+				// Once more a bit later, in case the proxy was slow (does nothing when already asked).
+				Bukkit.getScheduler().runTaskLater(plugin, () -> ownSkin.update(joined), 100L);
 					if(disguise.hasPlayerPermissions()) {
 						takePermissions(joined);
 						stopBypass(joined);
