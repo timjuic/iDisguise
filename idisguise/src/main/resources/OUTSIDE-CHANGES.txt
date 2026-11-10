@@ -51,6 +51,10 @@ Recommended
   BungeeCord /glist (permission bungeecord.command.list) lists every player by their REAL name on the
   proxy, where iDisguise can't change anything. Take it away from players.
 
+  Optional: iDisguiseProxy-<version>.jar in the proxy's plugins folder (restart the proxy) lets a disguised
+  player see the disguise skin on themselves too (see-own-disguise in player-disguise.yml). No config, no
+  folder. Without it, others still see the disguise; only the player's own F5 shows the real skin.
+
 
 Not changed (works as it is)
 ----------------------------

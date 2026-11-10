@@ -105,6 +105,11 @@ random-name-pool: 40
 # false = they only see mob disguises, so player disguises stay on in combat (see remove-in-combat below).
 visible-to-other-plugins: false
 
+# A disguised player also sees the disguise skin on themselves (F5, inventory). Needs the iDisguiseProxy jar
+# in the plugins folder of the BungeeCord proxy; without it this does nothing. Your own game reloads you once
+# on /disguise and /undisguise (no loading screen). false = you see your real skin on yourself (others never do).
+see-own-disguise: true
+
 # Where else a disguised player's real name is swapped for the fake one (chat, tab and nametags always are).
 # Turn one off if it ever causes trouble with another plugin.
 name-swap:
@@ -237,6 +242,7 @@ player-permissions:
 - essentials.keepinv
 - essentials.keepxp
 - essentials.teleport.timer.bypass
+- essentials.teleport.timer.move
 - essentials.teleport.cooldown.bypass
 - essentials.teleport.cooldown.bypass.*
 - essentials.commandcooldowns.bypass
@@ -249,6 +255,7 @@ player-permissions:
 - combatlogx.bypass
 - combatlogx.bypass.*
 - factions.fly.auto
+- factions.teleport.instant
 - worldguard.region.bypass.*
 - silkspawners.destroydrop.*
 - staff.freezechat.bypass

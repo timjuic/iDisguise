@@ -85,6 +85,8 @@ public final class PlayerDisguiseManager implements Listener {
 	private PlayerDisguiseSettings settings;
 	private PlayerDisguiseStore store;
 	private PacketRewriter rewriter;
+	// see-own-disguise: the disguise skin on the player's own screen (needs the proxy helper).
+	private OwnSkin ownSkin;
 	// Fake invisibility: who is invisible, and the listener for armor / sounds / particles (only while one is online).
 	private Invisibility invisibility;
 	private InvisiblePackets invisiblePackets;
@@ -157,6 +159,7 @@ public final class PlayerDisguiseManager implements Listener {
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
 			if(disguise != null && tab != null) tab.setTagSuffix(player, ownerTagSuffix(player, disguise));
 			if(disguise != null && disguise.hasPlayerPermissions()) takePermissions(player);
+			ownSkin.update(player);
 		}
 		return true;
 	}
@@ -225,6 +228,8 @@ public final class PlayerDisguiseManager implements Listener {
 			keepLeaving();
 		}, 20L, 20L);
 		rewriter = new PacketRewriter(plugin, this);
+		ownSkin = new OwnSkin(plugin, this);
+		ownSkin.start();
 		invisibility = new Invisibility(plugin.getDataFolder(), plugin.getLogger());
 		invisiblePackets = new InvisiblePackets(plugin, this);
 		for(Player player : Bukkit.getOnlinePlayers()) invisibility.online(player);
@@ -251,6 +256,7 @@ public final class PlayerDisguiseManager implements Listener {
 				applyLook(player, disguise);
 				removeRealEntry(player);
 				refresh(player);
+				ownSkin.update(player);
 			}
 		}
 	}
@@ -267,7 +273,9 @@ public final class PlayerDisguiseManager implements Listener {
 		for(Player player : Bukkit.getOnlinePlayers()) {
 			givePermissionsBack(player);
 			giveBypassBack(player);
+			ownSkin.resetNow(player);
 		}
+		ownSkin.stop();
 		checkTask.cancel();
 		revealTask.cancel();
 		for(Player player : Bukkit.getOnlinePlayers()) {
@@ -324,7 +332,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(plugin.debugMode()) plugin.getLogger().log(Level.WARNING, message, error);
 	}
 
-	private void debug(String message) {
+	void debug(String message) {
 		if(plugin.debugMode()) plugin.getLogger().info("[player disguise] " + message);
 	}
 
@@ -1210,6 +1218,7 @@ public final class PlayerDisguiseManager implements Listener {
 		applyLook(target, disguise);
 		removeRealEntry(target);
 		refresh(target);
+		ownSkin.update(target);
 		log.start(target.getName(), target.getUniqueId(), "player", name, effectiveRank(disguise));
 		if(previous != null) log.end(target.getName(), target.getUniqueId(), "player", previous.getFakeName());
 
@@ -1335,6 +1344,7 @@ public final class PlayerDisguiseManager implements Listener {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
 			refresh(player);
+			ownSkin.update(player);
 		}
 		return true;
 	}
@@ -1523,7 +1533,7 @@ public final class PlayerDisguiseManager implements Listener {
 	 * The player's own screen: invisible in F5 and the invisibility icon (no particles), or back to
 	 * normal. Only on their client: the server never gives them a real potion.
 	 */
-	private void sendOwnInvisibility(Player player) {
+	void sendOwnInvisibility(Player player) {
 		if(!player.isOnline() || invisibility == null) return;
 		boolean on = invisibility.isInvisible(player.getUniqueId());
 		try {
@@ -1810,7 +1820,7 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	/** The player's own tab entry again (through the rewriter, which decides the name in it). */
-	private void resendOwnEntry(Player player) {
+	void resendOwnEntry(Player player) {
 		WrappedGameProfile own = WrappedGameProfile.fromPlayer(player);
 		sendRaw(player, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, null, own));
 		PacketContainer add = new PacketContainer(com.comphenix.protocol.PacketType.Play.Server.PLAYER_INFO);
@@ -2016,6 +2026,8 @@ public final class PlayerDisguiseManager implements Listener {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> {
 				if(joined.isOnline() && disguises.get(joined.getUniqueId()) == disguise) {
 					applyLook(joined, disguise);
+					// Later than the rest: the proxy has told this server about its channels by then.
+					Bukkit.getScheduler().runTaskLater(plugin, () -> ownSkin.update(joined), 15L);
 					if(disguise.hasPlayerPermissions()) {
 						takePermissions(joined);
 						stopBypass(joined);
@@ -2037,6 +2049,7 @@ public final class PlayerDisguiseManager implements Listener {
 			invisibility.offline(quit.getUniqueId());
 		}
 		lastTabInput.remove(quit.getUniqueId());
+		if(ownSkin != null) ownSkin.quit(quit);
 		// LuckPerms forgets temporary permissions on logout; taken again on join while still disguised.
 		takenPermissions.remove(quit.getUniqueId());
 		revealPlayers.remove(quit.getUniqueId());

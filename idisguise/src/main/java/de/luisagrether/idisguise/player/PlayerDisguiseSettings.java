@@ -45,6 +45,7 @@ final class PlayerDisguiseSettings {
 	final boolean realPlayerFaction;
 	final int randomNamePool;
 	final boolean visibleToOtherPlugins;
+	final boolean seeOwnDisguise;
 	final java.util.Set<String> commandsNotTranslated = new java.util.HashSet<>();
 	final java.util.Set<String> realPlayerCommands = new java.util.HashSet<>();
 	final java.util.Set<String> repairAfterCommands = new java.util.HashSet<>();
@@ -90,6 +91,7 @@ final class PlayerDisguiseSettings {
 		realPlayerFaction = config.getBoolean("real-player-faction", true);
 		randomNamePool = Math.max(5, config.getInt("random-name-pool", 40));
 		visibleToOtherPlugins = config.getBoolean("visible-to-other-plugins", false);
+		seeOwnDisguise = config.getBoolean("see-own-disguise", true);
 		swapInMenus = config.getBoolean("name-swap.menus", true);
 		swapInTitles = config.getBoolean("name-swap.titles", true);
 		swapInHolograms = config.getBoolean("name-swap.holograms", true);
