@@ -950,6 +950,11 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 							if(!self) {
 								target.sendMessage(language.ODISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
 							}
+							// Invisibility doesn't work on a mob: it goes off (with the usual message).
+							if(playerDisguises.isInvisible(target)) {
+								playerDisguises.setInvisible(sender, target, false);
+								sender.sendMessage(language.INVISIBLE_OFF_FOR_MOB);
+							}
 						} catch(EventCancelledException e) {
 							sender.sendMessage(
 								self ?
@@ -1000,6 +1005,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					if(!self) {
 						target.sendMessage(language.UNDISGUISE_NOTIFICATION.replace("%sender%", sender.getName()));
 					}
+					// Fully back to normal: fake invisibility goes off too.
+					if(playerDisguises.isInvisible(target)) playerDisguises.setInvisible(sender, target, false);
 				} catch(EventCancelledException e) {
 					sender.sendMessage(
 						self ?
@@ -1007,6 +1014,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 						language.UNDISGUISE_OTHER_EVENT_CANCELLED.replace("%player%", target.getName())
 					);
 				}
+			} else if(playerDisguises.isInvisible(target)) {
+				// Only invisible: /undisguise turns that off.
+				playerDisguises.setInvisible(sender, target, false);
 			} else {
 				sender.sendMessage(
 					self ?
