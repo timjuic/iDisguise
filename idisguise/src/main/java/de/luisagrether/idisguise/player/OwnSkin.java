@@ -207,17 +207,34 @@ final class OwnSkin implements PluginMessageListener {
 			return;
 		}
 		// Everything is prepared first: if anything is missing, the respawn is never sent.
-		PacketContainer respawn;
+		// The server's own respawn packet with the server's own values (difficulty, world type, game mode),
+		// exactly what the server sends on a real respawn. An empty value would break the packet on its way
+		// out and disconnect the player, so then nothing is sent.
+		Object respawn;
 		Object connection;
+		Method sendPacket;
 		Method teleport;
 		try {
-			respawn = new PacketContainer(PacketType.Play.Server.RESPAWN);
-			respawn.getIntegers().write(0, dimension);
-			respawn.getDifficulties().write(0, EnumWrappers.Difficulty.valueOf(player.getWorld().getDifficulty().name()));
-			respawn.getGameModes().write(0, NativeGameMode.fromBukkit(player.getGameMode()));
-			respawn.getWorldTypeModifier().write(0, player.getWorld().getWorldType());
 			Object handle = player.getClass().getMethod("getHandle").invoke(player);
+			Object world = handle.getClass().getField("world").get(handle);
+			Object difficulty = world.getClass().getMethod("getDifficulty").invoke(world);
+			Object worldData = world.getClass().getMethod("getWorldData").invoke(world);
+			Object worldType = worldData == null ? null : worldData.getClass().getMethod("getType").invoke(worldData);
+			Object interact = handle.getClass().getField("playerInteractManager").get(handle);
+			Object gameMode = interact.getClass().getMethod("getGameMode").invoke(interact);
+			if(difficulty == null || worldType == null || gameMode == null) {
+				throw new IllegalStateException("empty value: difficulty " + difficulty + ", world type " + worldType + ", game mode " + gameMode);
+			}
+			String nms = handle.getClass().getPackage().getName();
+			Class<?> packetClass = Class.forName(nms + ".PacketPlayOutRespawn");
+			java.lang.reflect.Constructor<?> create = null;
+			for(java.lang.reflect.Constructor<?> candidate : packetClass.getConstructors()) {
+				if(candidate.getParameterCount() == 4) create = candidate;
+			}
+			if(create == null) throw new NoSuchMethodException("PacketPlayOutRespawn(int, difficulty, world type, game mode)");
+			respawn = create.newInstance(dimension, difficulty, worldType, gameMode);
 			connection = handle.getClass().getField("playerConnection").get(handle);
+			sendPacket = connection.getClass().getMethod("sendPacket", Class.forName(nms + ".Packet"));
 			teleport = connection.getClass().getMethod("teleport", Location.class);
 		} catch(Throwable t) {
 			refreshBroken = true;
@@ -227,7 +244,7 @@ final class OwnSkin implements PluginMessageListener {
 		}
 		manager.resendOwnEntry(player);
 		try {
-			ProtocolLibrary.getProtocolManager().sendServerPacket(player, respawn, false);
+			sendPacket.invoke(connection, respawn);
 			teleport.invoke(connection, player.getLocation());
 		} catch(Throwable t) {
 			plugin.getLogger().warning("Could not refresh " + player.getName() + "'s own view (a relog fixes it): " + t);
