@@ -15,7 +15,6 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.plugin.messaging.PluginMessageListener;
-import org.bukkit.potion.PotionEffect;
 
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
@@ -49,8 +48,10 @@ final class OwnSkin implements PluginMessageListener {
 	private final Map<UUID, Integer> dimensions = new ConcurrentHashMap<>();
 	// The skin the proxy was asked to use (null: real skin).
 	private final Map<UUID, String> requested = new ConcurrentHashMap<>();
-	// When the proxy was last asked: an answer is only used shortly after asking.
+	// When the proxy was last asked, and how many answers are still open: one answer per question, and only
+	// shortly after asking (a modded game can't trigger refreshes by sending answers itself).
 	private final Map<UUID, Long> lastAsked = new ConcurrentHashMap<>();
+	private final Map<UUID, Integer> openAnswers = new ConcurrentHashMap<>();
 	// A refresh is already planned (several answers in a row give one refresh).
 	private final java.util.Set<UUID> refreshPlanned = ConcurrentHashMap.newKeySet();
 	private PacketAdapter dimensionListener;
@@ -111,13 +112,14 @@ final class OwnSkin implements PluginMessageListener {
 	void quit(Player player) {
 		requested.remove(player.getUniqueId());
 		lastAsked.remove(player.getUniqueId());
+		openAnswers.remove(player.getUniqueId());
 		refreshPlanned.remove(player.getUniqueId());
 		dimensions.remove(player.getUniqueId());
 	}
 
 	/** Asks the proxy for the skin the player should see on themselves now (after disguise, undisguise, join, reload). */
 	void update(Player player) {
-		if(!player.isOnline()) return;
+		if(!isCurrent(player)) return;
 		PlayerDisguise disguise = manager.get(player.getUniqueId());
 		boolean want = manager.settings().seeOwnDisguise && disguise != null && disguise.hasSkin();
 		String now = requested.get(player.getUniqueId());
@@ -145,8 +147,17 @@ final class OwnSkin implements PluginMessageListener {
 		// Bukkit only sends it when the proxy registered the channel, i.e. when the helper is there.
 		if(!player.getListeningPluginChannels().contains(CHANNEL)) return false;
 		player.sendPluginMessage(plugin, CHANNEL, data);
-		lastAsked.put(player.getUniqueId(), System.currentTimeMillis());
+		UUID id = player.getUniqueId();
+		Long before = lastAsked.put(id, System.currentTimeMillis());
+		// Answers from long ago never came: start counting again.
+		if(before == null || System.currentTimeMillis() - before > 30000L) openAnswers.remove(id);
+		openAnswers.merge(id, 1, Integer::sum);
 		return true;
+	}
+
+	/** The player's live object (a quick relog makes a new one; tasks of the old one stop). */
+	private static boolean isCurrent(Player player) {
+		return player != null && player.isOnline() && Bukkit.getPlayer(player.getUniqueId()) == player;
 	}
 
 	@Override
@@ -154,6 +165,10 @@ final class OwnSkin implements PluginMessageListener {
 		if(!CHANNEL.equals(channel) || player == null) return;
 		Long asked = lastAsked.get(player.getUniqueId());
 		if(asked == null || System.currentTimeMillis() - asked > 30000L) return; // not asked for
+		Integer open = openAnswers.get(player.getUniqueId());
+		if(open == null || open <= 0) return; // more answers than questions
+		if(open == 1) openAnswers.remove(player.getUniqueId());
+		else openAnswers.put(player.getUniqueId(), open - 1);
 		byte action;
 		try {
 			DataInputStream in = new DataInputStream(new ByteArrayInputStream(message));
@@ -183,7 +198,7 @@ final class OwnSkin implements PluginMessageListener {
 	/** Not while a menu or chest is open, not while riding, sleeping or dead: waits (at most 15 seconds). */
 	/** False while it waits for another try (the refresh stays planned). */
 	private boolean tryRefresh(Player player, int tries) {
-		if(!player.isOnline()) return true;
+		if(!isCurrent(player)) return true;
 		boolean busy = player.isDead() || player.isSleeping() || player.isInsideVehicle()
 				|| player.getOpenInventory().getType() != InventoryType.CRAFTING;
 		if(busy) {
@@ -202,7 +217,9 @@ final class OwnSkin implements PluginMessageListener {
 	 */
 	private void refresh(Player player) {
 		Integer dimension = dimensions.get(player.getUniqueId());
-		if(refreshBroken || dimension == null) {
+		// A respawn into another dimension than the game has would leave it in an empty world: only when the
+		// tracked one is the world's own, and only for 1.8 games (newer games rebuild their world on a respawn).
+		if(refreshBroken || dimension == null || dimension != player.getWorld().getEnvironment().getId() || !isOneEightGame(player)) {
 			manager.resendOwnEntry(player);
 			return;
 		}
@@ -252,6 +269,23 @@ final class OwnSkin implements PluginMessageListener {
 		restoreAfterRespawn(player);
 	}
 
+	/** True for a 1.8 game. With ViaVersion, its version; without it, every game on this 1.8 server is 1.8. */
+	private static boolean isOneEightGame(Player player) {
+		Class<?> via;
+		try {
+			via = Class.forName("com.viaversion.viaversion.api.Via");
+		} catch(Throwable notThere) {
+			return true;
+		}
+		try {
+			Object api = via.getMethod("getAPI").invoke(null);
+			Object version = api.getClass().getMethod("getPlayerVersion", UUID.class).invoke(api, player.getUniqueId());
+			return version instanceof Integer && (Integer)version == 47;
+		} catch(Throwable unsure) {
+			return false;
+		}
+	}
+
 	private void restoreAfterRespawn(Player player) {
 		try {
 			player.updateInventory();
@@ -278,10 +312,32 @@ final class OwnSkin implements PluginMessageListener {
 		} catch(Throwable t) {
 			manager.debug("Own view refresh: XP", t);
 		}
+		// Only shown again on the player's own screen, exactly like the server does after a world change: the
+		// real effects are never touched (removing and adding absorption would refill its hearts).
 		try {
-			for(PotionEffect effect : player.getActivePotionEffects()) player.addPotionEffect(effect, true);
+			Object handle = player.getClass().getMethod("getHandle").invoke(player);
+			Object connection = handle.getClass().getField("playerConnection").get(handle);
+			String nms = handle.getClass().getPackage().getName();
+			Class<?> packetType = Class.forName(nms + ".Packet");
+			Method sendPacket = connection.getClass().getMethod("sendPacket", packetType);
+			int id = (Integer)handle.getClass().getMethod("getId").invoke(handle);
+			Class<?> effectPacket = Class.forName(nms + ".PacketPlayOutEntityEffect");
+			Class<?> mobEffect = Class.forName(nms + ".MobEffect");
+			java.lang.reflect.Constructor<?> newEffect = effectPacket.getConstructor(int.class, mobEffect);
+			Object effects = handle.getClass().getMethod("getEffects").invoke(handle);
+			if(effects instanceof java.util.Collection) {
+				for(Object effect : new java.util.ArrayList<>((java.util.Collection<?>)effects)) {
+					if(effect != null) sendPacket.invoke(connection, newEffect.newInstance(id, effect));
+				}
+			}
+			// The player's own entity data (skin layers, absorption hearts, ...), all of it.
+			Object watcher = handle.getClass().getMethod("getDataWatcher").invoke(handle);
+			Class<?> metadataPacket = Class.forName(nms + ".PacketPlayOutEntityMetadata");
+			if(watcher != null) {
+				sendPacket.invoke(connection, metadataPacket.getConstructor(int.class, Class.forName(nms + ".DataWatcher"), boolean.class).newInstance(id, watcher, true));
+			}
 		} catch(Throwable t) {
-			manager.debug("Own view refresh: potion effects", t);
+			manager.debug("Own view refresh: potion effects / entity data", t);
 		}
 		try {
 			if(manager.isInvisible(player)) manager.sendOwnInvisibility(player);

@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>de.luisagrether.idisguise</groupId>
   <artifactId>idisguise-proxy</artifactId>
-  <version>1.1</version>
+  <version>1.2</version>
   <name>iDisguiseProxy</name>
   <description>BungeeCord helper: a disguised player sees their own disguise skin.</description>
 

@@ -21,6 +21,8 @@ import net.md_5.bungee.api.connection.Server;
 import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.event.PluginMessageEvent;
 import net.md_5.bungee.api.event.ServerConnectEvent;
+import net.md_5.bungee.api.event.ServerConnectedEvent;
+import net.md_5.bungee.api.event.ServerSwitchEvent;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.api.plugin.Plugin;
 import net.md_5.bungee.event.EventHandler;
@@ -62,6 +64,9 @@ public final class IDisguiseProxy extends Plugin implements Listener {
 	}
 
 	private final Map<UUID, Saved> saved = new ConcurrentHashMap<>();
+	// Players on their way to another server (since when): a late request from the old server is ignored,
+	// so the next server never gets the disguise skin.
+	private final Map<UUID, Long> switching = new ConcurrentHashMap<>();
 
 	private Method getLoginProfile;
 	private Field loginProfileField;
@@ -135,6 +140,10 @@ public final class IDisguiseProxy extends Plugin implements Listener {
 			if(in.readByte() != VERSION) return;
 			byte action = in.readByte();
 			if(action == SET) {
+				// Only from the server the player is on, and not while moving to another one.
+				if(player.getServer() == null || !server.getInfo().equals(player.getServer().getInfo())) return;
+				Long since = switching.get(player.getUniqueId());
+				if(since != null && System.currentTimeMillis() - since < 15000L) return;
 				String value = in.readUTF();
 				String signature = in.readUTF();
 				if(value.isEmpty() || value.length() > MAX_TEXT || signature.length() > MAX_TEXT) return;
@@ -151,16 +160,37 @@ public final class IDisguiseProxy extends Plugin implements Listener {
 	/** Leaving the server (or joining the first one): the real skin data is back before the next server gets it. */
 	@EventHandler(priority = EventPriority.LOWEST)
 	public void onConnect(ServerConnectEvent event) {
-		try {
-			restore(event.getPlayer());
-		} catch(Throwable t) {
-			getLogger().warning("Could not give " + event.getPlayer().getName() + " their own skin data back: " + t);
-		}
+		ProxiedPlayer player = event.getPlayer();
+		// Already on that server (e.g. /server factions while there): nothing changes.
+		if(player.getServer() != null && event.getTarget() != null && event.getTarget().equals(player.getServer().getInfo())) return;
+		switching.put(player.getUniqueId(), System.currentTimeMillis());
+		restoreSafely(player);
+	}
+
+	@EventHandler
+	public void onConnected(ServerConnectedEvent event) {
+		switching.remove(event.getPlayer().getUniqueId());
+		restoreSafely(event.getPlayer());
+	}
+
+	@EventHandler
+	public void onSwitch(ServerSwitchEvent event) {
+		switching.remove(event.getPlayer().getUniqueId());
+		restoreSafely(event.getPlayer());
 	}
 
 	@EventHandler
 	public void onDisconnect(PlayerDisconnectEvent event) {
 		saved.remove(event.getPlayer().getUniqueId());
+		switching.remove(event.getPlayer().getUniqueId());
+	}
+
+	private void restoreSafely(ProxiedPlayer player) {
+		try {
+			restore(player);
+		} catch(Throwable t) {
+			getLogger().warning("Could not give " + player.getName() + " their own skin data back: " + t);
+		}
 	}
 
 	private void reply(Server server, byte action) throws IOException {
