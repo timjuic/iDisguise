@@ -71,6 +71,8 @@ menu-items:
   no-tag: EMPTY_MAP
   back: ARROW
   page: PAPER
+  # "Random rank & tag" button, bottom left of the rank / tag menu: a random player rank and tag, disguised right away.
+  random: NETHER_STAR
   # Invisibility button in the rank / tag menu (only for players with iDisguise.invis).
   invis: EYE_OF_ENDER
   # "Player permissions" button in the rank / tag menu (only for staff: iDisguise.player.staff).
@@ -226,7 +228,7 @@ profiles:
     # Remove the disguise when hitting or getting hit by a player.
     remove-in-combat: false
 
-# Staff (iDisguise.player.staff) with the "Player permissions" button ON (in the disguise menu, ON by
+# Staff (iDisguise.player.staff) with the "Player permissions" button ON (in the disguise menu, OFF by
 # default) lose these permissions while disguised, so nothing gives them away. Needs LuckPerms. Nothing is
 # saved: they come back when you undisguise, log out or the server restarts. "x.*" also takes away
 # every x.<something> the player has. Permissions of plugins you don't have do nothing.

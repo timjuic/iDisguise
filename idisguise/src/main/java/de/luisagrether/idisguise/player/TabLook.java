@@ -89,10 +89,27 @@ final class TabLook {
 	 * The rank's tab suffix plus PremiumVanish's [V] placeholder, for the player's own tab line while
 	 * disguised; null when the rank's suffix already has it (staff ranks) or PremiumVanish isn't there.
 	 */
-	String ownTabSuffix(String group, String world) {
+	String ownTabSuffix(String group, String world, boolean ownPlaceholder) {
 		if(group == null || Bukkit.getPluginManager().getPlugin("PremiumVanish") == null) return null;
 		String suffix = property(group, world, "tabsuffix");
-		return suffix.contains("premiumvanish") ? null : suffix + "%premiumvanish_vanishsuffix%";
+		if(suffix.contains("premiumvanish")) return null;
+		// %idisguise_vanishsuffix%: the [V] without a second space when the suffix already ends with one.
+		return suffix + (ownPlaceholder ? "%idisguise_vanishsuffix%" : "%premiumvanish_vanishsuffix%");
+	}
+
+	/** %idisguise_vanishsuffix%: PremiumVanish's [V] as TAB shows it, without its space when the rank's suffix ends with one. */
+	String ownVanishSuffix(String group, Player player) {
+		String vanish = fill("%premiumvanish_vanishsuffix%", player, player);
+		if(group == null) return vanish;
+		String suffix = fill(property(group, player.getWorld().getName(), "tabsuffix"), player, player);
+		return join(suffix, vanish).substring(suffix.length());
+	}
+
+	/** text + add, without a double space where they meet (add's leading space is dropped when text ends with one). */
+	static String join(String text, String add) {
+		if(add.isEmpty() || !ChatColor.stripColor(text).endsWith(" ") || !ChatColor.stripColor(add).startsWith(" ")) return text + add;
+		int space = add.indexOf(' ');
+		return text + add.substring(0, space) + add.substring(space + 1);
 	}
 
 	/** TAB nametag suffix of a group, raw (placeholders not filled). */
@@ -117,8 +134,10 @@ final class TabLook {
 		String tabSuffix = property(group, world, "tabsuffix");
 		// Vanished (only players who may see vanished ones see this line): the [V] TAB shows for staff
 		// ranks, also when the (disguise) rank's suffix has none.
-		if(!tabSuffix.contains("premiumvanish") && isVanished(target)) tabSuffix += "%premiumvanish_vanishsuffix%";
+		boolean addVanish = !tabSuffix.contains("premiumvanish") && isVanished(target);
 		String tabLine = fill(owner(property(group, world, "tabprefix") + name + tabSuffix, viewer, factions, owner), viewer, target);
+		// No double space before the [V] when the suffix ends with a space (e.g. an empty faction name).
+		if(addVanish) tabLine = join(tabLine, fill("%premiumvanish_vanishsuffix%", viewer, target));
 		return new Look(tabLine, fill(owner(property(group, world, "tagprefix"), viewer, factions, owner), viewer, target),
 				fill(owner(property(group, world, "tagsuffix"), viewer, factions, owner), viewer, target));
 	}

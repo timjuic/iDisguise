@@ -1095,7 +1095,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	private static final String[][] PERMISSIONS = {
 		{"#Player disguises"},
 		{"iDisguise.disguise.PLAYER", "use player disguises"},
-		{"iDisguise.random", "/disguise random"},
+		{"iDisguise.random", "/disguise random, and a click on the menu head for another random name"},
 		{"iDisguise.rank.players", "fake ranks: every rank in player-ranks"},
 		{"iDisguise.rank.staff", "fake ranks: every rank in staff-ranks"},
 		{"iDisguise.tags", "pick a DeluxeTags tag for a disguise (own tags only)"},

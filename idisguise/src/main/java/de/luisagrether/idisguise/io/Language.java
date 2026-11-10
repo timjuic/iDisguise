@@ -152,9 +152,6 @@ public class Language {
 	@LastUpdated(60155)
 	public String RANK_MENU_TITLE_OTHER = ChatColor.DARK_GRAY + "%player%: rank for " + ChatColor.GOLD + "%name%";
 	@LastUpdated(60155)
-	public String RANK_MENU_HEADER_OTHER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguising " + ChatColor.YELLOW + ChatColor.BOLD + "%player%"
-			+ ChatColor.GOLD + ChatColor.BOLD + " as " + ChatColor.YELLOW + ChatColor.BOLD + "%name%";
-	@LastUpdated(60155)
 	public String RANK_MENU_FOR = ChatColor.GRAY + "For: " + ChatColor.YELLOW + "%player%";
 	@LastUpdated(60155)
 	public String TAG_MENU_TITLE_OTHER = ChatColor.DARK_GRAY + "%player%: tag for " + ChatColor.GOLD + "%name%";
@@ -200,8 +197,24 @@ public class Language {
 	public String RANDOM_NOT_READY = c("%prefix%&cNo random names are ready yet. Try again in a few seconds.");
 	@LastUpdated(60100)
 	public String RANK_MENU_TITLE = ChatColor.DARK_GRAY + "Rank for " + ChatColor.GOLD + "%name%";
-	@LastUpdated(60101)
-	public String RANK_MENU_HEADER = ChatColor.GOLD.toString() + ChatColor.BOLD + "Disguising as " + ChatColor.YELLOW + ChatColor.BOLD + "%name%";
+	@LastUpdated(60166)
+	public String RANK_MENU_HEADER = ChatColor.WHITE + "%name%";
+	@LastUpdated(60166)
+	public String RANK_MENU_HEADER_REROLL = ChatColor.YELLOW + "» Click for a random name";
+	@LastUpdated(60166)
+	public String RANK_MENU_HEADER_NO_NAMES = ChatColor.RED + "No new names right now,\n" + ChatColor.RED + "try again in a moment.";
+	@LastUpdated(60166)
+	public String RANK_MENU_RANDOM = ChatColor.LIGHT_PURPLE + "Random rank & tag";
+	@LastUpdated(60166)
+	public String RANK_MENU_RANDOM_RANK = ChatColor.LIGHT_PURPLE + "Random rank";
+	@LastUpdated(60166)
+	public String RANK_MENU_RANDOM_LORE = ChatColor.GRAY + "Picks a random rank and a random\n" + ChatColor.GRAY + "tag, then disguises right away.";
+	@LastUpdated(60166)
+	public String RANK_MENU_RANDOM_RANK_LORE = ChatColor.GRAY + "Picks a random rank, then\n" + ChatColor.GRAY + "disguises right away.";
+	@LastUpdated(60166)
+	public String RANK_MENU_RANDOM_NO_STAFF = ChatColor.RED + "Staff ranks are not included.";
+	@LastUpdated(60166)
+	public String RANK_MENU_RANDOM_CLICK = ChatColor.YELLOW + "» Click to disguise";
 	@LastUpdated(60158)
 	public String RANK_MENU_INVIS_OFF = ChatColor.GRAY + "Invisible: " + ChatColor.RED + ChatColor.BOLD + "OFF";
 	@LastUpdated(60158)
@@ -229,14 +242,15 @@ public class Language {
 			+ ChatColor.GRAY + "All back when you undisguise.\n"
 			+ ChatColor.GRAY + "OFF: you keep your staff permissions.\n\n"
 			+ ChatColor.YELLOW + "\u00bb Click to switch";
-	@LastUpdated(60158)
-	public String RANK_MENU_HEADER_INVIS = ChatColor.AQUA + "Invisible after disguising";
-	@LastUpdated(60101)
-	public String RANK_MENU_HEADER_LORE = ChatColor.GRAY + "Pick the rank other players will see.";
 	@LastUpdated(60140)
 	public String RANK_MENU_RANK_LORE = ChatColor.GRAY + "Others will see you like this in chat,\n" + ChatColor.GRAY + "tab and above your head.\n\n" + ChatColor.YELLOW + "\u00bb Click to disguise";
-	@LastUpdated(60101)
-	public String RANK_MENU_REAL_RANK = ChatColor.YELLOW + "Real rank of %name%";
+	@LastUpdated(60166)
+	public String RANK_MENU_REAL_RANK = ChatColor.YELLOW + "Real rank of %name%\n"
+			+ ChatColor.GRAY + "%name% has played here before.\n"
+			+ ChatColor.GRAY + "This is the rank they really have,\n"
+			+ ChatColor.GRAY + "so you look exactly like them.\n"
+			+ ChatColor.GRAY + "(Their rank, not yours.)\n\n"
+			+ ChatColor.YELLOW + "» Click to disguise";
 	@LastUpdated(60100)
 	public String RANK_MENU_NO_RANK = ChatColor.WHITE + "No rank";
 	@LastUpdated(60100)
@@ -254,8 +268,8 @@ public class Language {
 	public String HELP_CMD_MOB = "Disguise as a mob";
 	@LastUpdated(60100)
 	public String HELP_CMD_PLAYER = "Disguise as a player";
-	@LastUpdated(60100)
-	public String HELP_CMD_RANDOM = "Random player disguise";
+	@LastUpdated(60166)
+	public String HELP_CMD_RANDOM = "Disguise with a random name";
 	@LastUpdated(60100)
 	public String HELP_CMD_UNDISGUISE = "Remove your disguise";
 	@LastUpdated(60101)

@@ -18,10 +18,10 @@ import org.bukkit.plugin.Plugin;
 /**
  * Base of the rank and tag menus: both are 6 rows with the same top row (frame, head in the middle)
  * and the same bottom row, so their buttons sit in exactly the same places.
- *   row 1     frame, head (slot 4)
+ *   row 1     frame, head (slot 4, click = another random name)
  *   rows 2-5  ranks / tags (36 slots)
- *   row 6     invisibility (45), player permissions (46), real rank / previous page (48), cancel (49), next page (50),
- *             tags / back to ranks (53)
+ *   row 6     random rank & tag (45), invisibility (46), player permissions (47), real rank / previous page (48),
+ *             cancel (49), next page (50), tags / back to ranks (53)
  * Every click is cancelled; the choice runs on the next tick, only while this menu is still open.
  * The next menu opens straight over this one (never closed first): the 1.8 client keeps the cursor.
  */
@@ -36,8 +36,9 @@ abstract class DisguiseMenu implements InventoryHolder {
 	static final int FIRST = 9;
 	static final int PER_PAGE = 36;
 	static final int HEADER = 4;
-	static final int INVIS = 45;
-	static final int PLAYER_PERMS = 46;
+	static final int RANDOM = 45;
+	static final int INVIS = 46;
+	static final int PLAYER_PERMS = 47;
 	static final int PREVIOUS = 48;
 	static final int REAL_RANK = 48;
 	static final int CANCEL = 49;
@@ -51,12 +52,14 @@ abstract class DisguiseMenu implements InventoryHolder {
 	private final Map<Integer, String> actions = new HashMap<>();
 	private final Choice choice;
 
-	DisguiseMenu(String title, ItemStack header, ItemStack frame, Choice choice) {
+	/** headerClick: clicking the head rolls another random name. */
+	DisguiseMenu(String title, ItemStack header, ItemStack frame, boolean headerClick, Choice choice) {
 		this.choice = choice;
 		// 1.8 menu titles are at most 32 characters.
 		this.inventory = Bukkit.createInventory(this, SIZE, title.length() > 32 ? title.substring(0, 32) : title);
 		for(int slot = 0; slot < 9; slot++) inventory.setItem(slot, frame);
 		inventory.setItem(HEADER, header);
+		if(headerClick) actions.put(HEADER, RankMenu.HEAD_ACTION);
 	}
 
 	/** A clickable item. action null = the real rank. */

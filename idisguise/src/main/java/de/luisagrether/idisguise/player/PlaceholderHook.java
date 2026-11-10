@@ -69,6 +69,7 @@ final class PlaceholderHook extends PlaceholderExpansion implements me.clip.plac
 		if("name".equalsIgnoreCase(params)) return manager.visibleName(player);
 		if("tabprefix".equalsIgnoreCase(params)) return manager.realTabPrefix(player);
 		if("ownerfaction".equalsIgnoreCase(params)) return manager.ownerFaction(player);
+		if("vanishsuffix".equalsIgnoreCase(params)) return manager.vanishSuffix(player);
 		// %idisguise_swap_<placeholder>%: that placeholder with disguised players' real names swapped for
 		// the fake ones, e.g. %idisguise_swap_combatlogx_current_enemy_name%.
 		if(params.length() > 5 && params.regionMatches(true, 0, "swap_", 0, 5)) {

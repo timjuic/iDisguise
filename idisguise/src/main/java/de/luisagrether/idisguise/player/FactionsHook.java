@@ -53,6 +53,41 @@ final class FactionsHook {
 			// older Factions: no text for "no faction"
 		}
 		noFactionText = noFaction;
+		Method bypassing = null;
+		Method setBypassing = null;
+		try {
+			bypassing = fplayer.getMethod("isAdminBypassing");
+			setBypassing = fplayer.getMethod("setIsAdminBypassing", boolean.class);
+		} catch(NoSuchMethodException e) {
+			// other Factions version: /f bypass is left alone
+		}
+		isAdminBypassing = bypassing;
+		setIsAdminBypassing = setBypassing;
+	}
+
+	private final Method isAdminBypassing;
+	private final Method setIsAdminBypassing;
+
+	/** /f bypass (admin mode) of an online player; false when unknown. */
+	boolean bypassing(Player player) {
+		if(isAdminBypassing == null) return false;
+		try {
+			Object fplayer = fplayer(player);
+			return fplayer != null && Boolean.TRUE.equals(isAdminBypassing.invoke(fplayer));
+		} catch(ReflectiveOperationException | RuntimeException e) {
+			return false;
+		}
+	}
+
+	/** Turns /f bypass on or off. */
+	void setBypassing(Player player, boolean on) {
+		if(setIsAdminBypassing == null) return;
+		try {
+			Object fplayer = fplayer(player);
+			if(fplayer != null) setIsAdminBypassing.invoke(fplayer, on);
+		} catch(ReflectiveOperationException | RuntimeException e) {
+			// Factions changed: bypass stays as it is
+		}
 	}
 
 	static FactionsHook create(Logger logger) {

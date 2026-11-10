@@ -32,16 +32,21 @@ final class RankMenu extends DisguiseMenu {
 	static final String INVIS_ACTION = "\u0000invis";
 	/** The "player permissions" button (staff): staff extras off while disguised, on / off. */
 	static final String PERMS_ACTION = "\u0000player-permissions";
+	/** The head on top: another random name. */
+	static final String HEAD_ACTION = "\u0000head";
+	/** The "random rank & tag" button: a random player rank and tag, disguised right away. */
+	static final String RANDOM_ACTION = "\u0000random";
 
-	/** ranks: in menu order. realRank, tag, invis may be null. */
-	RankMenu(String title, ItemStack header, ItemStack frame, List<Entry> ranks, Entry realRank, Entry cancel, Entry tag,
-			ItemStack invis, ItemStack perms, Choice choice) {
-		super(title, header, frame, choice);
+	/** ranks: in menu order. realRank, tag, random, invis, perms may be null. */
+	RankMenu(String title, ItemStack header, boolean headerClick, ItemStack frame, List<Entry> ranks, Entry realRank, Entry cancel, Entry tag,
+			ItemStack random, ItemStack invis, ItemStack perms, Choice choice) {
+		super(title, header, frame, headerClick, choice);
 		if(ranks.size() > PER_PAGE) {
 			org.bukkit.Bukkit.getLogger().warning("[iDisguise] The rank menu has more than " + PER_PAGE + " ranks; some are left out."
 					+ " Use fewer ranks in player-disguise.yml.");
 		}
 		for(int i = 0; i < ranks.size() && i < PER_PAGE; i++) put(FIRST + i, ranks.get(i));
+		put(RANDOM, random, RANDOM_ACTION);
 		put(INVIS, invis, INVIS_ACTION);
 		put(PLAYER_PERMS, perms, PERMS_ACTION);
 		put(REAL_RANK, realRank);

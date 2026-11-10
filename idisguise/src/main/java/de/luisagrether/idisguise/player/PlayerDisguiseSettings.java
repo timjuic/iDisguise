@@ -208,6 +208,7 @@ final class PlayerDisguiseSettings {
 		NEW_MENU_ITEMS.put("no-tag", "EMPTY_MAP");
 		NEW_MENU_ITEMS.put("back", "ARROW");
 		NEW_MENU_ITEMS.put("page", "PAPER");
+		NEW_MENU_ITEMS.put("random", "NETHER_STAR");
 		NEW_MENU_ITEMS.put("invis", "EYE_OF_ENDER");
 		NEW_MENU_ITEMS.put("player-permissions", "IRON_CHESTPLATE");
 	}

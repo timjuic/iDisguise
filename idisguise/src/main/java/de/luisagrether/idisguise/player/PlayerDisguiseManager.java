@@ -110,6 +110,11 @@ public final class PlayerDisguiseManager implements Listener {
 	private org.bukkit.scheduler.BukkitTask revealTask;
 	private TabLook tabLook;
 	private FactionsHook factions;
+	// FactionsUUID, also when real-player-faction is off (/f bypass while disguised). Read once.
+	private FactionsHook factionsApi;
+	private boolean factionsRead;
+	// Staff whose /f bypass was on when a disguise with player permissions turned it off (given back after).
+	private final Set<UUID> bypassTaken = ConcurrentHashMap.newKeySet();
 	private DeluxeTagsHook deluxeTags;
 	public static final String PERM_TAGS = "iDisguise.tags";
 	public static final String PERM_TAGS_ALL = "iDisguise.tags.all";
@@ -141,7 +146,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(!fresh.enabled) return false;
 		settings = fresh;
 		tabLook = new TabLook();
-		factions = settings.realPlayerFaction ? FactionsHook.create(plugin.getLogger()) : null;
+		factions = settings.realPlayerFaction ? factionsApi() : null;
 		for(Player player : Bukkit.getOnlinePlayers()) {
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
 			if(disguise != null) markOnline(player, disguise);
@@ -212,7 +217,7 @@ public final class PlayerDisguiseManager implements Listener {
 		deluxeTags = DeluxeTagsHook.create(plugin.getLogger());
 		hookVanishEvents();
 		tabLook = new TabLook();
-		factions = settings.realPlayerFaction ? FactionsHook.create(plugin.getLogger()) : null;
+		factions = settings.realPlayerFaction ? factionsApi() : null;
 		checkTask = Bukkit.getScheduler().runTaskTimer(plugin, this::check, 600L, 600L);
 		revealTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
 			updateRevealLooks();
@@ -259,7 +264,10 @@ public final class PlayerDisguiseManager implements Listener {
 			log.close();
 		}
 		if(!available) return;
-		for(Player player : Bukkit.getOnlinePlayers()) givePermissionsBack(player);
+		for(Player player : Bukkit.getOnlinePlayers()) {
+			givePermissionsBack(player);
+			giveBypassBack(player);
+		}
 		checkTask.cancel();
 		revealTask.cancel();
 		for(Player player : Bukkit.getOnlinePlayers()) {
@@ -509,6 +517,7 @@ public final class PlayerDisguiseManager implements Listener {
 			}
 			boolean refused = known && blockKnown;
 			Menu menu = new Menu(chooser, target, name, realRank, null, done);
+			menu.ranks = ranks;
 			// The menu opens right away (wither skull on top); the skin comes after it.
 			Bukkit.getScheduler().runTask(plugin, () -> {
 				if(!target.isOnline() || !chooser.isOnline()) return;
@@ -525,6 +534,8 @@ public final class PlayerDisguiseManager implements Listener {
 			// Mojang answers are cached. Clicked before it's here: the disguise looks it up itself.
 			SkinResolver.Skin skin = skins.resolve(name, knownUuid, settings.randomSkins);
 			Bukkit.getScheduler().runTask(plugin, () -> {
+				// The head gave another name meanwhile: that one gets its own skin.
+				if(menu.rerolls != 0) return;
 				menu.skin = skin;
 				// Swapped in the open menu (rank or tag), nothing reopens.
 				if(menu.shown != null && chooser.isOnline() && chooser.getOpenInventory().getTopInventory().getHolder() == menu.shown) {
@@ -538,18 +549,28 @@ public final class PlayerDisguiseManager implements Listener {
 	private static final class Menu {
 		final Player chooser;
 		final Player target;
-		final String name;
-		final String realRank;
-		// null until the lookup is done (main thread only).
+		// The name and what belongs to it; a click on the head swaps them for a random name (main thread only).
+		String name;
+		String realRank;
+		// null until the lookup is done.
 		SkinResolver.Skin skin;
+		// How many random names the head gave: a lookup for an older name is thrown away.
+		int rerolls;
+		// The head says "no new names right now" once.
+		boolean noNames;
+		// The rank menu can be shown (not when the name is someone online, or without rank permission).
+		boolean ranks;
+		// What is open: the rank menu (page -1) or that page of the tag list.
+		int page = -1;
+		boolean tagOnly;
 		// The menu open right now (rank or tag), for swapping the head in when the skin arrives.
 		DisguiseMenu shown;
 		final Consumer<Boolean> done;
 		// Picked so far: the tag (null = default, "" = none) and the invisibility switch.
 		String tag;
 		boolean invis;
-		// "Player permissions": staff extras off while disguised (ON by default).
-		boolean playerPerms = true;
+		// "Player permissions": staff extras off while disguised (OFF by default).
+		boolean playerPerms;
 
 		Menu(Player chooser, Player target, String name, String realRank, SkinResolver.Skin skin, Consumer<Boolean> done) {
 			this.chooser = chooser;
@@ -624,19 +645,119 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 	}
 
-	/** The head on top of both menus: the disguise's skin, the name, and what's picked so far. */
+	/** The head on top of both menus: the disguise's skin and the name; a click gives another random name. */
 	private org.bukkit.inventory.ItemStack menuHeader(Menu menu) {
 		Language language = language();
-		boolean other = menu.chooser != menu.target;
-		List<String> lore = RankMenu.lines(language.RANK_MENU_HEADER_LORE);
+		List<String> lore = new ArrayList<>();
 		// For another player (/odisguise): the menu says so.
-		if(other) lore.add(0, language.RANK_MENU_FOR.replace("%player%", menu.target.getName()));
-		String shownTag = tagPreview(menu.tag);
-		if(!shownTag.isEmpty()) lore.add(language.RANK_MENU_TAG.replace("%tag%", shownTag.trim()));
-		if(menu.invis) lore.add(language.RANK_MENU_HEADER_INVIS);
-		return headerItem(menu.skin,
-				(other ? language.RANK_MENU_HEADER_OTHER.replace("%player%", menu.target.getName()) : language.RANK_MENU_HEADER)
-						.replace("%name%", menu.name), lore);
+		if(menu.chooser != menu.target) lore.add(language.RANK_MENU_FOR.replace("%player%", menu.target.getName()));
+		if(canReroll(menu.chooser)) {
+			if(!lore.isEmpty()) lore.add("");
+			lore.addAll(RankMenu.lines(menu.noNames ? language.RANK_MENU_HEADER_NO_NAMES : language.RANK_MENU_HEADER_REROLL));
+		}
+		return headerItem(menu.skin, language.RANK_MENU_HEADER.replace("%name%", menu.name), lore.isEmpty() ? null : lore);
+	}
+
+	/** The head gives random names: only with iDisguise.random. */
+	private boolean canReroll(Player chooser) {
+		return randomNames != null && has(chooser, PERM_RANDOM);
+	}
+
+	/**
+	 * The head was clicked: another random name (from the names kept ready, so nothing waits). The menu
+	 * opens again over itself with the new name (the cursor stays). The skin is only looked up for the name
+	 * the player stops on, so clicking fast never floods Mojang.
+	 */
+	private void rerollName(Menu menu) {
+		Player chooser = menu.chooser;
+		Player target = menu.target;
+		if(!canReroll(chooser)) return;
+		String current = menu.name;
+		String name = randomNames.take(candidate -> !candidate.equalsIgnoreCase(current) && !plugin.isPlayerNameBlacklisted(candidate)
+				&& nameProblem(chooser, target, candidate) == null && Bukkit.getPlayerExact(candidate) == null
+				&& (luckPerms != null || !hasPlayedBefore(candidate, target)));
+		if(name == null) {
+			menu.noNames = true;
+			if(menu.shown != null) menu.shown.replace(DisguiseMenu.HEADER, menuHeader(menu));
+			menu.noNames = false;
+			return;
+		}
+		menu.name = name;
+		menu.realRank = null;
+		menu.skin = null;
+		int roll = ++menu.rerolls;
+		if(menu.page < 0) {
+			openRankMenu(menu);
+		} else if(menu.tagOnly && canUseRanks(chooser)) {
+			// Tags only because the old name was someone online: the new name can have a rank.
+			menu.ranks = true;
+			openRankMenu(menu);
+		} else {
+			openTagMenu(menu, menu.page, menu.tagOnly);
+		}
+		Bukkit.getScheduler().runTaskLater(plugin, () -> {
+			if(menu.rerolls != roll || !chooser.isOnline()) return;
+			Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+				boolean known = false;
+				if(luckPerms != null) {
+					try {
+						UUID uuid = luckPerms.lookupUniqueId(name).get(10, TimeUnit.SECONDS);
+						known = uuid != null && !uuid.equals(target.getUniqueId());
+					} catch(Exception e) {
+						debug("LuckPerms lookup failed for " + name, e);
+					}
+				}
+				// Has played here after all (a ready name can be older than that): another one.
+				if(known) {
+					Bukkit.getScheduler().runTask(plugin, () -> {
+						if(menu.rerolls == roll && isOpen(menu)) rerollName(menu);
+					});
+					return;
+				}
+				SkinResolver.Skin skin = skins.resolve(name, null, settings.randomSkins);
+				Bukkit.getScheduler().runTask(plugin, () -> {
+					if(menu.rerolls != roll) return;
+					menu.skin = skin;
+					if(isOpen(menu)) menu.shown.replace(DisguiseMenu.HEADER, menuHeader(menu));
+				});
+			});
+		}, 10L);
+	}
+
+	private boolean isOpen(Menu menu) {
+		return menu.shown != null && menu.chooser.isOnline() && menu.chooser.getOpenInventory().getTopInventory().getHolder() == menu.shown;
+	}
+
+	/** The "random rank & tag" button, or null when no rank can be picked in this menu. */
+	private org.bukkit.inventory.ItemStack randomButton(Menu menu) {
+		if(!menu.ranks) return null;
+		Language language = language();
+		boolean tags = !usableTags(menu.chooser).isEmpty();
+		List<String> lore = RankMenu.lines(tags ? language.RANK_MENU_RANDOM_LORE : language.RANK_MENU_RANDOM_RANK_LORE);
+		// Staff see staff ranks in the menu: say that the button never picks one.
+		if(has(menu.chooser, PERM_RANK + "staff")) lore.add(language.RANK_MENU_RANDOM_NO_STAFF);
+		lore.add("");
+		lore.add(language.RANK_MENU_RANDOM_CLICK);
+		return RankMenu.item(settings.menuItem("random"), tags ? language.RANK_MENU_RANDOM : language.RANK_MENU_RANDOM_RANK, lore);
+	}
+
+	/** A random rank the player may use ("no rank" counts as one of them), never a staff rank. */
+	private String randomRank(CommandSender sender) {
+		List<String> choices = new ArrayList<>();
+		for(String usable : usableRanks(sender)) {
+			if(!settings.isStaffRank(usable)) choices.add(usable);
+		}
+		choices.add(NO_RANK);
+		return choices.get(new java.util.Random().nextInt(choices.size()));
+	}
+
+	/** A random tag the player may use ("" = none counts as one), or null = no tags to pick. */
+	private String randomTag(CommandSender sender) {
+		if(!canUseTags(sender)) return null;
+		List<String> tags = new ArrayList<>();
+		tags.add("");
+		for(DeluxeTagsHook.Tag usable : usableTags(sender)) tags.add(usable.id);
+		return tags.get(new java.util.Random().nextInt(tags.size()));
 	}
 
 	private org.bukkit.inventory.ItemStack menuFrame() {
@@ -669,7 +790,6 @@ public final class PlayerDisguiseManager implements Listener {
 	private void switchInvis(Menu menu, DisguiseMenu shown) {
 		menu.invis = !menu.invis;
 		shown.replace(DisguiseMenu.INVIS, invisButton(menu.chooser, menu.invis));
-		shown.replace(DisguiseMenu.HEADER, menuHeader(menu));
 	}
 
 	private void openRankMenu(Menu menu) {
@@ -702,11 +822,17 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		String title = (chooser != target ? language.RANK_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.RANK_MENU_TITLE)
 				.replace("%name%", name);
-		menu.shown = new RankMenu(title, menuHeader(menu), menuFrame(), rankEntries, real, cancel, tagButton, invisButton(chooser, menu.invis),
-				permsButton(menu),
+		menu.page = -1;
+		menu.shown = new RankMenu(title, menuHeader(menu), canReroll(chooser), menuFrame(), rankEntries, real, cancel, tagButton,
+				randomButton(menu), invisButton(chooser, menu.invis), permsButton(menu),
 				(shown, choice) -> {
 					if(RankMenu.TAG.equals(choice)) {
 						openTagMenu(menu, 0, false);
+					} else if(RankMenu.HEAD_ACTION.equals(choice)) {
+						rerollName(menu);
+						return true;
+					} else if(RankMenu.RANDOM_ACTION.equals(choice)) {
+						disguiseFromMenu(menu, randomRank(chooser), randomTag(chooser), menu.invis);
 					} else if(RankMenu.INVIS_ACTION.equals(choice)) {
 						switchInvis(menu, shown);
 						return true;
@@ -762,13 +888,20 @@ public final class PlayerDisguiseManager implements Listener {
 		org.bukkit.inventory.ItemStack next = shownPage < pages - 1 ? RankMenu.item(settings.menuItem("page"), language.TAG_MENU_NEXT, pageLore) : null;
 		String title = (chooser != target ? language.TAG_MENU_TITLE_OTHER.replace("%player%", target.getName()) : language.TAG_MENU_TITLE)
 				.replace("%name%", name);
-		menu.shown = new TagMenu(title, menuHeader(menu), menuFrame(), entries, back, cancelItem(), previous, next, invisButton(chooser, menu.invis),
-				permsButton(menu),
+		menu.page = shownPage;
+		menu.tagOnly = tagOnly;
+		menu.shown = new TagMenu(title, menuHeader(menu), canReroll(chooser), menuFrame(), entries, back, cancelItem(), previous, next,
+				randomButton(menu), invisButton(chooser, menu.invis), permsButton(menu),
 				(shown, choice) -> {
 					if(TagMenu.PREVIOUS_ACTION.equals(choice)) {
 						openTagMenu(menu, shownPage - 1, tagOnly);
 					} else if(TagMenu.NEXT_ACTION.equals(choice)) {
 						openTagMenu(menu, shownPage + 1, tagOnly);
+					} else if(RankMenu.HEAD_ACTION.equals(choice)) {
+						rerollName(menu);
+						return true;
+					} else if(RankMenu.RANDOM_ACTION.equals(choice)) {
+						disguiseFromMenu(menu, randomRank(chooser), randomTag(chooser), menu.invis);
 					} else if(RankMenu.INVIS_ACTION.equals(choice)) {
 						switchInvis(menu, shown);
 						return true;
@@ -792,12 +925,11 @@ public final class PlayerDisguiseManager implements Listener {
 		menu.shown.open(chooser);
 	}
 
-	/** A rank in the menu: named the way others will see you ("[Gold] Notch"). firstLine: optional extra lore line on top. */
-	private org.bukkit.inventory.ItemStack rankItem(String rank, String name, String firstLine) {
+	/** A rank in the menu: named the way others will see you ("[Gold] Notch"). ownLore: lore instead of the usual one. */
+	private org.bukkit.inventory.ItemStack rankItem(String rank, String name, String ownLore) {
 		String prefix = color(luckPerms == null ? null : luckPerms.groupPrefix(rank)).trim();
 		String title = (ChatColor.stripColor(prefix).trim().isEmpty() ? ChatColor.WHITE + rank + " " : prefix + " ") + ChatColor.WHITE + name;
-		List<String> lore = RankMenu.lines(language().RANK_MENU_RANK_LORE);
-		if(firstLine != null) lore.add(0, firstLine);
+		List<String> lore = RankMenu.lines(ownLore != null ? ownLore : language().RANK_MENU_RANK_LORE);
 		return RankMenu.item(settings.menuItem(rank), title, lore);
 	}
 
@@ -824,7 +956,7 @@ public final class PlayerDisguiseManager implements Listener {
 			return;
 		}
 		if(luckPerms == null) {
-			disguiseRandomAs(sender, target, name, done);
+			randomFound(sender, target, name, done);
 			return;
 		}
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -840,29 +972,27 @@ public final class PlayerDisguiseManager implements Listener {
 				if(finalKnown) {
 					pickRandom(sender, target, done, triesLeft - 1);
 				} else {
-					disguiseRandomAs(sender, target, name, done);
+					randomFound(sender, target, name, done);
 				}
 			});
 		});
 	}
 
+	/**
+	 * A random name was found: the disguise menu opens with it (rank, tag, the head for another name),
+	 * like /disguise <name>. Nothing to pick in a menu (or from the console): disguised right away.
+	 */
+	private void randomFound(CommandSender sender, Player target, String name, Consumer<Boolean> done) {
+		if(sender instanceof Player && (canUseRanks(sender) || !usableTags(sender).isEmpty())) {
+			disguiseCommand(sender, target, name, sender == target, done);
+		} else {
+			disguiseRandomAs(sender, target, name, done);
+		}
+	}
+
 	private void disguiseRandomAs(CommandSender sender, Player target, String name, Consumer<Boolean> done) {
-		// Every rank the player may use has the same chance, "no rank" counts as one of them.
-		// Staff ranks are never picked at random (only by hand in the rank menu).
-		List<String> choices = new ArrayList<>();
-		for(String usable : usableRanks(sender)) {
-			if(!settings.isStaffRank(usable)) choices.add(usable);
-		}
-		choices.add(NO_RANK);
-		String rank = choices.get(new java.util.Random().nextInt(choices.size()));
-		String tag = null;
-		if(canUseTags(sender)) {
-			List<String> tags = new ArrayList<>();
-			tags.add("");
-			for(DeluxeTagsHook.Tag usable : usableTags(sender)) tags.add(usable.id);
-			tag = tags.get(new java.util.Random().nextInt(tags.size()));
-		}
-		disguise(sender, target, name, rank, tag, done);
+		// Every rank the player may use has the same chance; staff ranks are never picked at random.
+		disguise(sender, target, name, randomRank(sender), randomTag(sender), done);
 	}
 
 	// ---------------------------------------------------------------- disguise
@@ -1072,6 +1202,9 @@ public final class PlayerDisguiseManager implements Listener {
 		if(disguise.hasPlayerPermissions()) {
 			takePermissions(target);
 			stopFlying(target);
+			stopBypass(target);
+		} else {
+			giveBypassBack(target);
 		}
 
 		applyLook(target, disguise);
@@ -1108,8 +1241,10 @@ public final class PlayerDisguiseManager implements Listener {
 		if(on) {
 			takePermissions(player);
 			stopFlying(player);
+			stopBypass(player);
 		} else {
 			givePermissionsBack(player);
+			giveBypassBack(player);
 		}
 	}
 
@@ -1151,6 +1286,29 @@ public final class PlayerDisguiseManager implements Listener {
 		player.setAllowFlight(false);
 	}
 
+	private FactionsHook factionsApi() {
+		if(!factionsRead) {
+			factionsRead = true;
+			factionsApi = FactionsHook.create(plugin.getLogger());
+		}
+		return factionsApi;
+	}
+
+	/** Disguised with player permissions: /f bypass goes off (noted, so it comes back after only if it was on). */
+	private void stopBypass(Player player) {
+		FactionsHook api = factionsApi();
+		if(api == null || !api.bypassing(player)) return;
+		api.setBypassing(player, false);
+		bypassTaken.add(player.getUniqueId());
+	}
+
+	/** /f bypass back on, only when a disguise turned it off. */
+	private void giveBypassBack(Player player) {
+		if(!bypassTaken.remove(player.getUniqueId())) return;
+		FactionsHook api = factionsApi();
+		if(api != null && player.isOnline()) api.setBypassing(player, true);
+	}
+
 	private void givePermissionsBack(Player player) {
 		List<String> taken = takenPermissions.remove(player.getUniqueId());
 		if(taken == null || luckPerms == null) return;
@@ -1166,6 +1324,7 @@ public final class PlayerDisguiseManager implements Listener {
 		PlayerDisguise disguise = disguises.remove(player.getUniqueId());
 		if(disguise == null) return false;
 		givePermissionsBack(player);
+		giveBypassBack(player);
 		rebuildSnapshots();
 		save();
 		log.end(player.getName(), player.getUniqueId(), "player", disguise.getFakeName());
@@ -1221,6 +1380,12 @@ public final class PlayerDisguiseManager implements Listener {
 						if(player instanceof Player && disguises.containsKey(((Player)player).getUniqueId())) {
 							Bukkit.getScheduler().runTaskLater(plugin, () -> repair((Player)player), 2L);
 							Bukkit.getScheduler().runTaskLater(plugin, () -> repair((Player)player), 20L);
+							// Appearing again with player permissions: PremiumVanish's fly goes off, like for a normal
+							// player (after PremiumVanish has set it). Vanishing keeps whatever it gives.
+							if(event.getClass().getSimpleName().contains("Show")) {
+								Bukkit.getScheduler().runTaskLater(plugin, () -> stopFlyingAfterAppear((Player)player), 2L);
+								Bukkit.getScheduler().runTaskLater(plugin, () -> stopFlyingAfterAppear((Player)player), 10L);
+							}
 						}
 					} catch(ReflectiveOperationException e) {
 						debug("Could not read the vanish event", e);
@@ -1230,6 +1395,16 @@ public final class PlayerDisguiseManager implements Listener {
 				// PremiumVanish isn't installed
 			}
 		}
+	}
+
+	/** Unvanished while disguised with player permissions (and still visible): flight off. */
+	private void stopFlyingAfterAppear(Player player) {
+		PlayerDisguise disguise = disguises.get(player.getUniqueId());
+		if(!player.isOnline() || disguise == null || !disguise.hasPlayerPermissions()) return;
+		for(org.bukkit.metadata.MetadataValue value : player.getMetadata("vanished")) {
+			if(value.asBoolean()) return;
+		}
+		stopFlying(player);
 	}
 
 	/** Other players' clients drop the tab entry the disguise had (it has its own ID). */
@@ -1585,7 +1760,15 @@ public final class PlayerDisguiseManager implements Listener {
 	private String ownTabSuffix(Player player, PlayerDisguise disguise) {
 		if(tabLook == null) return null;
 		String rank = effectiveRank(disguise);
-		return tabLook.ownTabSuffix(rank != null ? rank : settings.defaultRank, player.getWorld().getName());
+		return tabLook.ownTabSuffix(rank != null ? rank : settings.defaultRank, player.getWorld().getName(), placeholderApi);
+	}
+
+	/** %idisguise_vanishsuffix%: the [V] for a disguised player's own tab line ("" when not disguised). */
+	String vanishSuffix(Player player) {
+		PlayerDisguise disguise = player == null ? null : disguises.get(player.getUniqueId());
+		if(disguise == null || tabLook == null) return "";
+		String rank = effectiveRank(disguise);
+		return tabLook.ownVanishSuffix(rank != null ? rank : settings.defaultRank, player);
 	}
 
 	private void resetLook(Player player, PlayerDisguise disguise) {
@@ -1833,7 +2016,10 @@ public final class PlayerDisguiseManager implements Listener {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> {
 				if(joined.isOnline() && disguises.get(joined.getUniqueId()) == disguise) {
 					applyLook(joined, disguise);
-					if(disguise.hasPlayerPermissions()) takePermissions(joined);
+					if(disguise.hasPlayerPermissions()) {
+						takePermissions(joined);
+						stopBypass(joined);
+					}
 				}
 			}, 5L);
 		}
