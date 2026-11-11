@@ -100,6 +100,18 @@ abstract class DisguiseMenu implements InventoryHolder {
 		public void onClick(InventoryClickEvent event) {
 			if(!(event.getView().getTopInventory().getHolder() instanceof DisguiseMenu)) return;
 			event.setCancelled(true);
+			// Spectator mode: the 1.8 game moves the clicked item to its cursor by itself (the server refuses
+			// it) and would drop that ghost item when the menu closes. Cursor and menu are set right again
+			// first, before any action of this click runs.
+			if(event.getWhoClicked() instanceof Player && ((Player)event.getWhoClicked()).getGameMode() == org.bukkit.GameMode.SPECTATOR) {
+				Player spectator = (Player)event.getWhoClicked();
+				spectator.setItemOnCursor(null);
+				Bukkit.getScheduler().runTask(plugin, () -> {
+					if(!spectator.isOnline()) return;
+					spectator.setItemOnCursor(null);
+					spectator.updateInventory();
+				});
+			}
 			DisguiseMenu menu = (DisguiseMenu)event.getView().getTopInventory().getHolder();
 			int slot = event.getRawSlot();
 			if(!menu.actions.containsKey(slot) || !(event.getWhoClicked() instanceof Player)) return;
