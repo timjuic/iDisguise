@@ -257,8 +257,10 @@ final class OwnSkin implements PluginMessageListener {
 	/** False while it waits for another try (the refresh stays planned). */
 	private boolean tryRefresh(Player player, int tries) {
 		if(!isCurrent(player)) return true;
+		// The own inventory counts as no menu: CRAFTING, or CREATIVE for a player in creative mode.
+		InventoryType open = player.getOpenInventory().getType();
 		boolean busy = player.isDead() || player.isSleeping() || player.isInsideVehicle()
-				|| player.getOpenInventory().getType() != InventoryType.CRAFTING;
+				|| (open != InventoryType.CRAFTING && open != InventoryType.CREATIVE);
 		if(busy) {
 			if(tries == 0) manager.debug("Own skin " + player.getName() + ": waiting (dead, sleeping, riding or a menu is open: "
 					+ player.getOpenInventory().getType() + ")");
