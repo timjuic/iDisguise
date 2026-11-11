@@ -87,6 +87,8 @@ public final class PlayerDisguiseManager implements Listener {
 	private PacketRewriter rewriter;
 	// see-own-disguise: the disguise skin on the player's own screen (needs the proxy helper).
 	private OwnSkin ownSkin;
+	// Removes the invisible marker from chat while nobody is disguised (saved texts never show boxes).
+	private MarkerStripper markerStripper;
 	// Fake invisibility: who is invisible, and the listener for armor / sounds / particles (only while one is online).
 	private Invisibility invisibility;
 	private InvisiblePackets invisiblePackets;
@@ -243,6 +245,8 @@ public final class PlayerDisguiseManager implements Listener {
 		rewriter = new PacketRewriter(plugin, this);
 		ownSkin = new OwnSkin(plugin, this);
 		ownSkin.start();
+		markerStripper = new MarkerStripper(plugin, this);
+		markerStripper.register();
 		invisibility = new Invisibility(plugin.getDataFolder(), plugin.getLogger());
 		invisiblePackets = new InvisiblePackets(plugin, this);
 		for(Player player : Bukkit.getOnlinePlayers()) invisibility.online(player);
@@ -288,6 +292,7 @@ public final class PlayerDisguiseManager implements Listener {
 			ownSkin.resetNow(player);
 		}
 		ownSkin.stop();
+		if(markerStripper != null) markerStripper.unregister();
 		checkTask.cancel();
 		revealTask.cancel();
 		for(Player player : Bukkit.getOnlinePlayers()) {
