@@ -1168,7 +1168,8 @@ public final class PlayerDisguiseManager implements Listener {
 	boolean ordinaryName(String name, boolean ownName) {
 		if(name == null) return false;
 		String lower = name.toLowerCase(Locale.ENGLISH);
-		if(lower.length() <= 3 || lower.matches("[0-9_]+")) return true;
+		// Short words, numbers and amounts (100k, 2.5m) are typed in commands all the time.
+		if(lower.length() <= 3 || lower.matches("[0-9_]+") || lower.matches("[0-9]+([.,][0-9]+)?[kmbt]")) return true;
 		if(settings.ordinaryNames.contains(lower) || settings.ranks.contains(lower)) return true;
 		if(command(lower) != null || gameWord(name)) return true;
 		if(ownName) return false;
@@ -2711,13 +2712,16 @@ public final class PlayerDisguiseManager implements Listener {
 		// a player for everyone. Every other word (a faction name, a home, a description, message text) keeps
 		// what was typed: a fake name there is never turned into the real name (it would be saved and shown).
 		int target = targetIndex(parts, label);
+		// name-commands (/home, /warp, /f create, /kit ...): their words are names that get looked up later, so
+		// everything stays exactly as typed (a home called like a disguised player's real name keeps working).
+		if(target <= 0 && listedCommand(settings.nameCommands, parts, label)) return;
 		// Words that stay exactly as typed (not protected below): the player word(s).
 		Set<Integer> playerWords = new HashSet<>();
 		if(target > 0) {
 			playerWords.add(target);
 			if(keyword(label, parts[target])) {
 				// "/tpaccept all", "/msg console": not a player.
-			} else if(translateFakeName(parts, target, label)) {
+			} else if(translateFakeName(parts, target, label, false)) {
 				changed = true;
 			} else if(!staff) {
 				// A disguised player's real name acts like an offline player: otherwise "/msg <real name>" would
@@ -2726,7 +2730,10 @@ public final class PlayerDisguiseManager implements Listener {
 				// - Factions finds players by the exact name only.
 				// - /msg, /tpa ... also take a short name (/msg xen): chosen by the names the sender sees.
 				// - everything else (/pay, /bal, /mail send ...): only a word that can't mean anyone visible.
-				String hidden = FACTION_COMMANDS.contains(label) ? exactRealName(parts[target], sender)
+				// A faction's tag (e.g. named after its disguised leader) means the faction in /f commands.
+				boolean factionTag = FACTION_COMMANDS.contains(label) && factionsApi() != null && factionsApi().isFactionTag(parts[target]);
+				String hidden = factionTag ? null
+						: FACTION_COMMANDS.contains(label) ? exactRealName(parts[target], sender)
 						: looseCommand(label) ? resolveLoose(parts[target], sender, label)
 						: resolveAccount(parts[target], sender, label);
 				if(hidden != null) {
@@ -2734,14 +2741,25 @@ public final class PlayerDisguiseManager implements Listener {
 					changed = true;
 				}
 			}
-		} else if(!MESSAGE_COMMANDS.contains(label) && !textCommand(parts, label)) {
-			// Every other command (/duel, /trade, /ban, plugins added later ...): a word that is exactly a
-			// disguised player's fake name means that player. Not in text-commands, where a name is only text
-			// that gets saved (/f desc, /sethome ...): there it stays as typed.
+		} else if(!MESSAGE_COMMANDS.contains(label) && !listedCommand(settings.textCommands, parts, label)) {
+			// Every other command (/duel, /trade, /ban, plugins added later ...): a word that is a disguised
+			// player's fake name, written exactly as it shows (capitals too), means that player. "public" in
+			// /f c public stays a word even while someone is disguised as "Public". Also "u:<fake name>"
+			// (CoreProtect lookups). Not in text-commands, where a name is only saved text: there it stays.
 			for(int i = 1; i < parts.length; i++) {
-				if(translateFakeName(parts, i, label)) {
+				if(translateFakeName(parts, i, label, true)) {
 					changed = true;
 					playerWords.add(i);
+					continue;
+				}
+				int colon = parts[i].indexOf(':');
+				if(colon > 0 && colon < parts[i].length() - 1) {
+					String[] rest = {parts[i].substring(colon + 1)};
+					if(translateFakeName(rest, 0, label, true)) {
+						parts[i] = parts[i].substring(0, colon + 1) + rest[0];
+						changed = true;
+						playerWords.add(i);
+					}
 				}
 			}
 		}
@@ -2784,6 +2802,9 @@ public final class PlayerDisguiseManager implements Listener {
 		if(changed) event.setMessage("/" + String.join(" ", parts));
 	}
 
+	private static final List<String> STAFF_TARGET_COMMANDS = java.util.Arrays.asList("ban", "tempban", "ipban", "banip", "mute",
+			"tempmute", "kick", "warn", "jail", "freeze", "invsee", "endersee", "history", "checkban", "check");
+
 	/** "/tpaccept all", "/tpdeny *", "/msg console": not a player (unless an online player has that name). */
 	private boolean keyword(String label, String word) {
 		String lower = word.toLowerCase(Locale.ENGLISH);
@@ -2802,6 +2823,10 @@ public final class PlayerDisguiseManager implements Listener {
 	/** real-player-commands (and /tpaccept, /tpdeny), aliases included. */
 	private boolean realPlayerCommand(String label) {
 		if(sameCommand(label, "tpaccept") || sameCommand(label, "tpdeny")) return true;
+		// Punishing and checking a player means the person behind the name, never the real account's owner.
+		for(String name : STAFF_TARGET_COMMANDS) {
+			if(sameCommand(label, name)) return true;
+		}
 		for(String name : settings.realPlayerCommands) {
 			if(sameCommand(label, name)) return true;
 		}
@@ -2863,11 +2888,16 @@ public final class PlayerDisguiseManager implements Listener {
 	private static final Set<String> MESSAGE_COMMANDS = new HashSet<>(java.util.Arrays.asList(
 			"r", "reply", "er", "ereply", "me", "eme", "action", "describe", "emote", "broadcast", "bc", "say"));
 
-	/** parts[i] is a fake name that means the disguised player here: turned into the real name. */
-	private boolean translateFakeName(String[] parts, int i, String label) {
+	/**
+	 * parts[i] is a fake name that means the disguised player here: turned into the real name. exactCase:
+	 * only written exactly as the fake name shows (commands nobody listed, where the word may be an
+	 * ordinary word too).
+	 */
+	private boolean translateFakeName(String[] parts, int i, String label, boolean exactCase) {
 		for(PlayerDisguise disguise : online) {
 			PlayerDisguiseSettings.Profile profile = disguise.getProfile();
-			if(profile == null || !profile.commandsUseFakeName || !parts[i].equalsIgnoreCase(disguise.getFakeName())) continue;
+			if(profile == null || !profile.commandsUseFakeName) continue;
+			if(exactCase ? !parts[i].equals(disguise.getFakeName()) : !parts[i].equalsIgnoreCase(disguise.getFakeName())) continue;
 			// Shows the real player's faction, so /f who <name> means the real player too.
 			if(factionOwner(disguise) != null && FACTION_COMMANDS.contains(label)) continue;
 			// A faction with that tag (made after the disguise): in /f commands the word means the faction.
@@ -2955,9 +2985,9 @@ public final class PlayerDisguiseManager implements Listener {
 		return disguise != null && disguise.getProfile() != null && disguise.getProfile().replaceNameInMessages;
 	}
 
-	/** The command is in text-commands (every word is saved text, e.g. /f desc, /sethome). */
-	private boolean textCommand(String[] parts, String label) {
-		for(String[] entry : settings.textCommands) {
+	/** The command (with its subcommand words) is in that list (text-commands, name-commands). */
+	private boolean listedCommand(List<String[]> list, String[] parts, String label) {
+		for(String[] entry : list) {
 			if(entry.length == 0 || parts.length < entry.length) continue;
 			if(!sameCommand(label, entry[0])) continue;
 			boolean subs = true;

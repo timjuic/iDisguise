@@ -52,6 +52,8 @@ final class PlayerDisguiseSettings {
 	final List<String[]> fakeNameCommands = new ArrayList<>();
 	// Commands where every word is text that gets saved: a fake name there stays as typed.
 	final List<String[]> textCommands = new ArrayList<>();
+	// Commands whose words are names looked up later (homes, warps, factions, kits): left exactly as typed.
+	final List<String[]> nameCommands = new ArrayList<>();
 	// Words that can't be a player disguise name (and real names like them can't disguise).
 	final java.util.Set<String> ordinaryNames = new java.util.HashSet<>();
 	final java.util.Set<String> repairAfterCommands = new java.util.HashSet<>();
@@ -143,6 +145,11 @@ final class PlayerDisguiseSettings {
 			if(command == null) continue;
 			String clean = command.toLowerCase(Locale.ENGLISH).replace("/", "").trim();
 			if(!clean.isEmpty()) textCommands.add(clean.split(" +"));
+		}
+		for(String command : config.getStringList("name-commands")) {
+			if(command == null) continue;
+			String clean = command.toLowerCase(Locale.ENGLISH).replace("/", "").trim();
+			if(!clean.isEmpty()) nameCommands.add(clean.split(" +"));
 		}
 		for(String word : config.getStringList("ordinary-names")) {
 			if(word != null && !word.trim().isEmpty()) ordinaryNames.add(word.trim().toLowerCase(Locale.ENGLISH));

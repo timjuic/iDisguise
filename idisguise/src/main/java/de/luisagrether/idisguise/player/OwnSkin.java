@@ -72,7 +72,8 @@ final class OwnSkin implements PluginMessageListener {
 			plugin.getLogger().warning("Players can't see their own disguise skin (plugin channel): " + e);
 			return;
 		}
-		dimensionListener = new PacketAdapter(plugin, ListenerPriority.MONITOR, PacketType.Play.Server.LOGIN, PacketType.Play.Server.RESPAWN) {
+		dimensionListener = new PacketAdapter(PacketAdapter.params(plugin, PacketType.Play.Server.LOGIN, PacketType.Play.Server.RESPAWN)
+				.listenerPriority(ListenerPriority.MONITOR).optionAsync()) {
 			@Override
 			public void onPacketSending(PacketEvent event) {
 				try {

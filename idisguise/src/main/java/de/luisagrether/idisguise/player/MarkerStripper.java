@@ -26,7 +26,7 @@ final class MarkerStripper extends PacketAdapter {
 	private final PlayerDisguiseManager manager;
 
 	MarkerStripper(Plugin plugin, PlayerDisguiseManager manager) {
-		super(plugin, ListenerPriority.HIGHEST, PacketType.Play.Server.CHAT);
+		super(PacketAdapter.params(plugin, PacketType.Play.Server.CHAT).listenerPriority(ListenerPriority.HIGHEST).optionAsync());
 		this.manager = manager;
 	}
 

@@ -45,7 +45,9 @@ final class PacketRewriter extends PacketAdapter {
 	private final PlayerDisguiseManager manager;
 
 	PacketRewriter(Plugin plugin, PlayerDisguiseManager manager) {
-		super(plugin, ListenerPriority.HIGHEST,
+		// optionAsync: packets other plugins send from their own threads (TAB ...) are handled right there,
+		// instead of ProtocolLib moving them to the main thread first. Everything here is made for that.
+		super(PacketAdapter.params(plugin,
 				PacketType.Play.Server.PLAYER_INFO,
 				PacketType.Play.Server.CHAT,
 				PacketType.Play.Server.TAB_COMPLETE,
@@ -58,7 +60,7 @@ final class PacketRewriter extends PacketAdapter {
 				PacketType.Play.Server.SPAWN_ENTITY_LIVING,
 				PacketType.Play.Server.UPDATE_SIGN,
 
-				PacketType.Play.Client.TAB_COMPLETE);
+				PacketType.Play.Client.TAB_COMPLETE).listenerPriority(ListenerPriority.HIGHEST).optionAsync());
 		this.manager = manager;
 	}
 

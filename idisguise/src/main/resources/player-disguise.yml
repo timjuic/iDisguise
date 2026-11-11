@@ -219,31 +219,43 @@ fake-name-commands:
 - give
 - jobs stats
 
-# Commands where every word is text that gets saved (descriptions, names of homes / warps / factions): a fake
-# name there stays exactly as typed, so the real name is never saved. Add a command of a new plugin here when
-# a name typed in it should stay as it is.
+# Commands where the words are free text that gets saved or shown (descriptions, titles, staff chat): a fake
+# name stays exactly as typed (the real name is never saved), and a disguised player's real name typed there
+# stays as it is too (never turned into the fake name). Add a command of a new plugin when it fits.
 text-commands:
 - f desc
 - f description
-- f create
-- f tag
-- f rename
-- f setwarp
-- f delwarp
-- f warp
-- sethome
-- delhome
-- home
-- setwarp
-- delwarp
-- warp
-- nick
-- nickname
-- enick
 - helpop
 - me
 - broadcast
 - say
+- ac
+- sc
+- staffchat
+- adminchat
+- shout
+- ticket
+
+# Commands whose words are names that get looked up later (homes, warps, factions, kits, items): everything
+# stays exactly as typed, so they always work, also with a name like a disguised player's real name.
+# Add a command of a new plugin that works with such names.
+name-commands:
+- home
+- sethome
+- delhome
+- warp
+- setwarp
+- delwarp
+- pwarp
+- f create
+- f tag
+- f rename
+- f warp
+- f setwarp
+- f delwarp
+- nick
+- nickname
+- enick
 - kit
 - kits
 - sell
@@ -251,7 +263,6 @@ text-commands:
 - recipe
 - i
 - item
-- give
 - shop
 - ah
 - spawner
@@ -262,13 +273,6 @@ text-commands:
 - rename
 - itemname
 - ren
-- ac
-- sc
-- staffchat
-- adminchat
-- shout
-- ticket
-- pwarp
 
 # Names that can't be used for a player disguise because they are ordinary words here (a player whose real
 # name is one of them can't use player disguises either). Names of 3 characters or less, only numbers, ranks,
@@ -380,6 +384,47 @@ ordinary-names:
 - gapple
 - godapple
 - pearl
+- public
+- faction
+- ally
+- truce
+- enemy
+- neutral
+- unclaim
+- unclaimall
+- stuck
+- disband
+- read
+- journal
+- chat
+- member
+- recruit
+- normal
+- coleader
+- leader
+- title
+- invite
+- kick
+- promote
+- demote
+- show
+- who
+- map
+- sethome
+- unban
+- online
+- offline
+- global
+- local
+- party
+- team
+- clan
+- stats
+- reset
+- start
+- stop
+- yes
+- no
 
 # Disguised as a REAL player (one who has played here): only these commands typed with that name reach
 # the disguised player. Every other command (/pay, /f, /mail ...) means the real account, so money and
