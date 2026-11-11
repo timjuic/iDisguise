@@ -1,0 +1,68 @@
+iDisguise - changes in OTHER plugins for player disguises
+==========================================================
+This file is written again on every server start (edits here are lost). It lists what other
+plugins' configs need so a disguised player never shows their real name, and what to undo if you
+ever remove iDisguise (otherwise players see raw %idisguise_...% text).
+
+Placeholders iDisguise gives (PlaceholderAPI):
+  %idisguise_name%                the name other players see (fake name while disguised, else the real one)
+  %idisguise_tabprefix%           the TAB tab prefix of the rank others see (disguise rank while disguised)
+  %idisguise_swap_<placeholder>%  another plugin's placeholder with disguised players' real names swapped
+                                  for the fake ones, e.g. %idisguise_swap_combatlogx_current_enemy_name%
+
+
+1. TAB - plugins/TAB/config.yml
+--------------------------------
+  Where                                         Use                                          Instead of
+  Tab footer / sidebar: the player's own name   %idisguise_name%                             %player% / %player_name%
+  Tab footer / sidebar: the player's own rank   %idisguise_tabprefix%                        %tab_tabprefix%
+  Sidebar lines with OTHER players' names       %idisguise_swap_<placeholder>%               %<placeholder>%
+    e.g. KOTH capper                            %idisguise_swap_roidkoth_capper%             %roidkoth_capper%
+    e.g. combat enemy (in a condition)          %idisguise_swap_combatlogx_current_enemy_name%  %combatlogx_current_enemy_name%
+  scoreboard-teams > sorting-types (A to Z)     PLACEHOLDER_A_TO_Z:%idisguise_name%          PLACEHOLDER_A_TO_Z:%player%
+
+  Sidebar names can't be swapped in the packets (1.8 sidebar lines are split into pieces), so every
+  sidebar line that shows a player's name needs one of these placeholders.
+
+
+2. InteractiveChat - plugins/InteractiveChat/config.yml
+--------------------------------------------------------
+  Every %player_name% that other players see becomes %idisguise_name%: the click on a chat name
+  (/msg ... and /pay ...), the mention title, the item / inventory / ender chest titles and texts,
+  the skull name and the balance texts.
+  InteractiveChat sends its chat lines past other plugins, so iDisguise can't swap names there.
+
+
+3. Factions (FactionsUUID) - plugins/Factions/config/main.conf
+--------------------------------------------------------------
+  The player tooltip line with {group} is commented out: it would show the real rank of a disguised
+  player.
+
+
+Permissions to give (not a change to other plugins)
+---------------------------------------------------
+  iDisguise permissions go to your groups (LuckPerms or another permission plugin). They only count with
+  use-permission-nodes: true in iDisguise's config.yml (otherwise only operators can disguise).
+  In game: /disguise permissions lists them all.
+
+
+Recommended
+-----------
+  BungeeCord /glist (permission bungeecord.command.list) lists every player by their REAL name on the
+  proxy, where iDisguise can't change anything. Take it away from players.
+
+  Optional: iDisguiseProxy-<version>.jar in the proxy's plugins folder (restart the proxy) lets a disguised
+  player see the disguise skin on themselves too (see-own-disguise in player-disguise.yml). No config, no
+  folder. Without it, others still see the disguise; only the player's own F5 shows the real skin.
+
+
+Not changed (works as it is)
+----------------------------
+  EssentialsX (chat format, /msg, /list ...), DeluxeTags, CombatLogX, SkinsRestorer, PremiumVanish,
+  LuckPerms, ProtocolLib.
+
+
+Removing iDisguise?
+-------------------
+  Undo 1, 2 and 3 above (back to %player%, %player_name%, %tab_tabprefix%, the plain placeholders and the
+  {group} line), then reload / restart those plugins.

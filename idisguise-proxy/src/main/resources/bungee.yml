@@ -1,0 +1,5 @@
+name: iDisguiseProxy
+main: de.luisagrether.idisguise.proxy.IDisguiseProxy
+version: '${project.version}'
+author: Dany
+description: Lets a disguised player see their own disguise skin (needs iDisguise on the game server).

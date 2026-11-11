@@ -6,14 +6,14 @@ author: LuisaGrether
 description: Disguise as a mob or other player.
 website: https://www.spigotmc.org/resources/idisguise.5509/
 loadbefore: [MinecraftTrainSimulator]
-softdepend: [WorldGuard]
+softdepend: [WorldGuard, ProtocolLib, LuckPerms, TAB, SkinsRestorer, PlaceholderAPI, Essentials, EssentialsChat, DeluxeTags, Factions, InteractiveChat]
 commands:
    disguise:
       description: Disguise yourself as a mob or other player.
-      aliases: [d]
+      aliases: [d, dis]
    odisguise:
       description: Disguise another player as a mob or other player.
       aliases: [od]
    undisguise:
       description: Undisguise yourself or another player.
-      aliases: [ud]
+      aliases: [ud, undis]

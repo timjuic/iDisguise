@@ -22,7 +22,6 @@ public class Config {
 	/* Configuration options start here */
     public static final String DISGUISE_TYPE_BLACKLIST_PATH = "disguise.disguise-type-blacklist";
 	public static final String PLAYER_DISGUISE_BLACKLIST_PATH = "disguise.player-disguise-blacklist";
-	public static final String PLAYER_DISGUISE_VIEWSELF_PATH = "disguise.player-disguise-viewself";
 	public static final String KEEP_TAB_LIST_WHEN_DISGUISED_PATH = "disguise.keep-tab-list-when-disguised";
 	public static final String DEBUG_MODE_PATH = "disguise.debug-mode";
 	public static final String PERSIST_DISGUISE_ON_QUIT_PATH = "disguise.persist-on-quit";
@@ -50,7 +49,6 @@ public class Config {
 	));
 	@LastUpdated(60002)
 	public List<String> PLAYER_DISGUISE_BLACKLIST = Arrays.asList("put player name here");
-	public boolean PLAYER_DISGUISE_VIEWSELF = true;
 	public boolean KEEP_TAB_LIST_WHEN_DISGUISED = true;
 	public boolean DEBUG_MODE = false;
 	public boolean PERSIST_DISGUISE_ON_QUIT = true;

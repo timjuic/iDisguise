@@ -1,0 +1,539 @@
+# Player disguises: /disguise <name> (rank and tag are picked in a menu, only what the player may use)
+# Other players see you as <name>: skin, name above the head, tab list, chat and commands.
+# Needs ProtocolLib and only works on Minecraft 1.8.8. Mob disguises are not affected by this file.
+#
+# Permissions (with commands.use-permission-nodes: true in config.yml):
+#   iDisguise.disguise.PLAYER   use player disguises
+#   iDisguise.random            /disguise random (a real Minecraft account's name and skin, random rank)
+#   iDisguise.rank.players      fake ranks: every rank in player-ranks
+#   iDisguise.rank.staff        fake ranks: every rank in staff-ranks
+#   iDisguise.tags              pick a DeluxeTags tag for a disguise (only tags you own)
+#   iDisguise.tags.all          pick any DeluxeTags tag for a disguise (staff can always pick any)
+#   iDisguise.invis             fake invisibility: /disguise invis, /disguise <name> -i (only ESP / tracer cheats see you)
+#   iDisguise.player.anyname    use names of players who are online or have played here before
+#   iDisguise.player.staff      get the "staff" settings below, stay hidden in /disguise list, Player permissions button
+#   iDisguise.listplayers       see who is disguised as whom in /disguise list (staff stay hidden)
+#   iDisguise.reveal            /disguise reveal players: see through player disguises (only on your screen)
+#   iDisguise.whois             /disguise whois <name> and /disguise history <player> (disguise-log.txt)
+#   iDisguise.admin             see everyone in /disguise list (staff too), the plugin version and /disguise permissions
+# In game: /disguise permissions lists every permission (admins).
+
+# Turn player disguises on or off.
+enabled: true
+
+# Player ranks that can be faked: picked in the menu after /disguise <name>.
+# A rank looks exactly like your LuckPerms group (chat prefix) and TAB group (tab list and nametag) of the same name.
+player-ranks:
+- gold
+- emerald
+- diamond
+- obsidian
+- wither
+- blaze
+- herobrine
+- ludnica
+- ludnica+
+
+# Staff ranks that can be faked (iDisguise.rank.staff).
+staff-ranks:
+- trialmod
+- mod
+- srmod
+- admin
+- sradmin
+- vlasnik
+
+# Items in the rank menu after /disguise <name>: MATERIAL or MATERIAL:data (Minecraft 1.8 names).
+# no-rank, cancel, header (top middle) and frame (top row) are the other buttons.
+menu-items:
+  gold: GOLD_NUGGET
+  emerald: EMERALD
+  diamond: DIAMOND
+  obsidian: OBSIDIAN
+  wither: SOUL_SAND
+  blaze: BLAZE_ROD
+  herobrine: REDSTONE
+  ludnica: GOLD_INGOT
+  ludnica+: GOLD_BLOCK
+  trialmod: STAINED_CLAY:4
+  mod: STAINED_CLAY:3
+  srmod: STAINED_CLAY:11
+  admin: STAINED_CLAY:6
+  sradmin: STAINED_CLAY:14
+  vlasnik: STAINED_CLAY:1
+  no-rank: STAINED_CLAY:8
+  cancel: BARRIER
+  header: SKULL_ITEM:1
+  frame: STAINED_GLASS_PANE:7
+  # Tag button in the rank menu, the tags in the tag list, "no tag", back, and the page arrows.
+  tag: NAME_TAG
+  tag-entry: NAME_TAG
+  no-tag: EMPTY_MAP
+  back: ARROW
+  page: PAPER
+  # "Random rank & tag" button, bottom left of the rank / tag menu: a random player rank and tag, disguised right away.
+  random: NETHER_STAR
+  # Invisibility button in the rank / tag menu (only for players with iDisguise.invis).
+  invis: EYE_OF_ENDER
+  # "Player permissions" button in the rank / tag menu (only for staff: iDisguise.player.staff).
+  player-permissions: IRON_CHESTPLATE
+
+# Rank used when no rank is given (and none can be copied). Use the group of players without a rank.
+default-rank: default
+
+# Disguising as a player who has played here before, without giving a rank, copies that player's real rank.
+copy-real-rank: true
+
+# Players without iDisguise.player.anyname can't use names of players who have played here before.
+# false = they can (names of players who are online are always blocked for them).
+block-known-names-for-players: true
+
+# Seconds a player waits between two player disguises of their own (/disguise <name>, random, the menu).
+# Staff (iDisguise.player.staff) and admins don't wait. 0 = no cooldown.
+cooldown-seconds: 5
+
+# Disguised as a real player (one who has played here): chat, nametag and tab show THAT player's faction
+# (live, also while they are offline) instead of your own, and /f commands with the name mean that player.
+# Needs FactionsUUID. Your own faction is not shown, but you are still in it (claims, PvP, /f chat).
+real-player-faction: true
+
+# /disguise random uses names of real Minecraft accounts (found through Mojang, never players of this server).
+# How many such names are kept ready, so the command is instant.
+random-name-pool: 40
+
+# Other plugins (e.g. CombatLogX, which removes disguises in combat) also see player disguises.
+# false = they only see mob disguises, so player disguises stay on in combat (see remove-in-combat below).
+visible-to-other-plugins: false
+
+# A disguised player also sees the disguise skin on themselves (F5, inventory). Needs the iDisguiseProxy jar
+# in the plugins folder of the BungeeCord proxy; without it this does nothing. Your own game reloads you once
+# on /disguise and /undisguise (no loading screen). false = you see your real skin on yourself (others never do).
+see-own-disguise: true
+
+# Where else a disguised player's real name is swapped for the fake one (chat, tab and nametags always are).
+# Turn one off if it ever causes trouble with another plugin.
+name-swap:
+  # Menu titles, item names and lore, and player heads (they show the disguise skin), e.g. /stats.
+  menus: true
+  # Big titles and subtitles on screen.
+  titles: true
+  # Holograms and other floating names.
+  holograms: true
+  # Text on signs. Off by default: signs are mostly written by players, and a sign with a disguised
+  # player's real name would show the fake name and tell who it is.
+  signs: false
+  # Sidebar lines are not swapped here: use %idisguise_name% and %idisguise_swap_<placeholder>% in TAB.
+
+# Commands a player can't use while player-disguised (mob disguises are not affected).
+blocked-while-disguised:
+- skin
+- skins
+- nick
+- enick
+- nickname
+- enickname
+
+# Vanish commands. A vanish plugin may hide / show a player with its own packets, which iDisguise doesn't see.
+# When a disguised player uses one, their disguise is rebuilt for everyone a moment later (PremiumVanish is detected by itself).
+vanish-commands:
+- v
+- vanish
+- pv
+- premiumvanish
+
+# Commands where a disguise name is NOT changed into the real name (e.g. LuckPerms, so /lp user <name>
+# always means the real account with that name).
+commands-not-translated:
+- lp
+- luckperms
+- lpb
+- perm
+- perms
+- permission
+- permissions
+
+# A word that is exactly a disguised player's fake name means that player in every command (/duel, /trade,
+# /ban ... also of plugins added later), except in text-commands below.
+# fake-name-commands: commands with a player word AND text after it (/msg <player> <text>): only the player
+# word is meant, the text stays as typed. One command per line, aliases count by themselves (msg covers /m,
+# /tell, /w ...). A subcommand is written with it ("f who"), its aliases need their own line ("f show").
+# /disguise reload after a change.
+fake-name-commands:
+- msg
+- tpa
+- tpahere
+- tpaccept
+- tpdeny
+- pay
+- balance
+- seen
+- mail send
+- ignore
+- f who
+- f show
+- f f
+- f invite
+- f inv
+- f deinvite
+- f deinv
+- f uninvite
+- f uninv
+- f kick
+- f mod
+- f setmod
+- f officer
+- f setofficer
+- f coleader
+- f setcoleader
+- f cl
+- f setcl
+- f leader
+- f setleader
+- f admin
+- f setadmin
+- f promote
+- f demote
+- f ban
+- f unban
+- f power
+- f pow
+- f title
+- f join
+- f owner
+- f pardon
+- f promo
+- f mute
+- f unmute
+- f ahome
+- f modifypower
+- f modpower
+- f pm
+- f mp
+- f alts invite
+- f alts inv
+- f alts deinvite
+- f alts deinv
+- f alts kick
+- stats
+- report
+- give
+- jobs stats
+
+# Commands where the words are free text that gets saved or shown (descriptions, titles, staff chat): a fake
+# name stays exactly as typed (the real name is never saved), and a disguised player's real name typed there
+# stays as it is too (never turned into the fake name). Add a command of a new plugin when it fits.
+text-commands:
+- f desc
+- f description
+- helpop
+- me
+- broadcast
+- say
+- ac
+- sc
+- staffchat
+- adminchat
+- shout
+- ticket
+- f create
+- f tag
+- f rename
+- setwarp
+- pwarp
+- nick
+- nickname
+- enick
+
+# Commands whose words are names that get looked up later (homes, warps, factions, kits, items): everything
+# stays exactly as typed, so they always work, also with a name like a disguised player's real name.
+# Add a command of a new plugin that works with such names.
+name-commands:
+- home
+- sethome
+- delhome
+- warp
+- delwarp
+- f warp
+- f setwarp
+- f delwarp
+- kit
+- kits
+- sell
+- worth
+- recipe
+- i
+- item
+- shop
+- ah
+- spawner
+- ss
+- jobs
+- crate
+- enchant
+- rename
+- itemname
+- ren
+
+# Names that can't be used for a player disguise because they are ordinary words here (a player whose real
+# name is one of them can't use player disguises either). Names of 3 characters or less, only numbers, ranks,
+# commands and faction names are refused anyway.
+ordinary-names:
+- all
+- gold
+- iron
+- diamond
+- emerald
+- stone
+- home
+- farm
+- shop
+- kit
+- daily
+- weekly
+- money
+- tokens
+- souls
+- boss
+- king
+- kralj
+- admin
+- owner
+- staff
+- server
+- console
+- player
+- spawn
+- warp
+- pvp
+- raid
+- base
+- koth
+- envoy
+- crate
+- coins
+- vote
+- help
+- rules
+- discord
+- store
+- nobody
+- someone
+- everyone
+- accept
+- deny
+- confirm
+- cancel
+- create
+- join
+- leave
+- list
+- info
+- hand
+- inventory
+- toggle
+- buy
+- sell
+- open
+- claim
+- top
+- reward
+- rewards
+- miner
+- farmer
+- hunter
+- builder
+- fisher
+- warrior
+- lumberjack
+- shadow
+- alpha
+- lucky
+- sharpness
+- protection
+- unbreaking
+- fortune
+- looting
+- efficiency
+- power
+- punch
+- flame
+- infinity
+- smite
+- knockback
+- thorns
+- respiration
+- silktouch
+- featherfalling
+- depthstrider
+- lure
+- strength
+- haste
+- resistance
+- nausea
+- regeneration
+- speed
+- slowness
+- weakness
+- poison
+- absorption
+- saturation
+- invisibility
+- blindness
+- hunger
+- steak
+- gapple
+- godapple
+- pearl
+- public
+- faction
+- ally
+- truce
+- enemy
+- neutral
+- unclaim
+- unclaimall
+- stuck
+- disband
+- read
+- journal
+- chat
+- member
+- recruit
+- normal
+- coleader
+- leader
+- title
+- invite
+- kick
+- promote
+- demote
+- show
+- who
+- map
+- sethome
+- unban
+- online
+- offline
+- global
+- local
+- party
+- team
+- clan
+- stats
+- reset
+- start
+- stop
+- yes
+- no
+
+# Disguised as a REAL player (one who has played here): only these commands typed with that name reach
+# the disguised player. Every other command (/pay, /f, /mail ...) means the real account, so money and
+# items sent to that name always reach the real player.
+real-player-commands:
+- msg
+- tell
+- w
+- whisper
+- m
+- t
+- pm
+- emsg
+- etell
+- ewhisper
+- tpa
+- tpahere
+- etpa
+- etpahere
+- call
+- ecall
+
+# Skins used when the name has no skin of its own (not a player of this server and no Minecraft account).
+# One is picked at random. Use names of real Minecraft accounts.
+random-skins:
+- Notch
+- jeb_
+- Technoblade
+- Dream
+- Skeppy
+- BadBoyHalo
+- Sapnap
+- GeorgeNotFound
+- Ph1LzA
+- TommyInnit
+
+# EssentialsX config with the chat formats. A fake rank also chats in that rank's message colour (chat.group-formats).
+essentials-config: plugins/Essentials/config.yml
+
+# What a disguise hides. "staff" = players with iDisguise.player.staff, "players" = everyone else.
+profiles:
+
+  staff:
+
+    # Swap the real name for the fake one in chat messages, death messages, /f who and other plugins' texts.
+    replace-name-in-messages: true
+
+    # Commands typed with the fake name (/msg, /tpa, /pay, /f who ...) reach the disguised player.
+    commands-use-fake-name: true
+
+    # Chat shows the fake rank's prefix and message colour instead of the real ones.
+    fake-rank-in-chat: true
+
+    # Chat shows the DeluxeTags tag of the player whose name you use instead of your own (none for a made-up name).
+    hide-chat-tag: true
+
+    # Show this player in /disguise list (admins always see everyone).
+    show-in-list: false
+
+    # Remove the disguise when hitting or getting hit by a player.
+    remove-in-combat: false
+
+  players:
+
+    # Swap the real name for the fake one in chat messages, death messages, /f who and other plugins' texts.
+    replace-name-in-messages: true
+
+    # Commands typed with the fake name (/msg, /tpa, /pay, /f who ...) reach the disguised player.
+    commands-use-fake-name: true
+
+    # Chat shows the fake rank's prefix and message colour instead of the real ones.
+    fake-rank-in-chat: true
+
+    # Chat shows the DeluxeTags tag of the player whose name you use instead of your own (none for a made-up name).
+    hide-chat-tag: true
+
+    # Show this player in /disguise list (admins always see everyone).
+    show-in-list: true
+
+    # Remove the disguise when hitting or getting hit by a player.
+    remove-in-combat: false
+
+# Staff (iDisguise.player.staff) with the "Player permissions" button ON (in the disguise menu, OFF by
+# default) lose these permissions while disguised, so nothing gives them away. Needs LuckPerms. Nothing is
+# saved: they come back when you undisguise, log out or the server restarts. "x.*" also takes away
+# every x.<something> the player has. Permissions of plugins you don't have do nothing.
+# roidstaff.staff: RoidStaff keeps a staff member's items on death; while disguised you are a normal player there.
+player-permissions:
+- essentials.keepinv
+- essentials.keepxp
+- essentials.teleport.timer.bypass
+- essentials.teleport.timer.move
+- essentials.teleport.cooldown.bypass
+- essentials.teleport.cooldown.bypass.*
+- essentials.commandcooldowns.bypass
+- essentials.commandcooldowns.bypass.*
+- essentials.near.exclude
+- essentials.chat.color
+- essentials.chat.format
+- essentials.chat.magic
+- essentials.chat.url
+- combatlogx.bypass
+- combatlogx.bypass.*
+- factions.fly.auto
+- factions.teleport.instant
+- worldguard.region.bypass.*
+- silkspawners.destroydrop.*
+- staff.freezechat.bypass
+- staff.slowmode.bypass
+- roidstaff.chatmoderation.bypass
+- woodcutting.pvpzone.instant
+- roidstaff.staff
