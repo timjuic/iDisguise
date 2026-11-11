@@ -216,6 +216,8 @@ fake-name-commands:
 - f alts kick
 - stats
 - report
+- give
+- jobs stats
 
 # Commands where every word is text that gets saved (descriptions, names of homes / warps / factions): a fake
 # name there stays exactly as typed, so the real name is never saved. Add a command of a new plugin here when
@@ -342,6 +344,42 @@ ordinary-names:
 - shadow
 - alpha
 - lucky
+- sharpness
+- protection
+- unbreaking
+- fortune
+- looting
+- efficiency
+- power
+- punch
+- flame
+- infinity
+- smite
+- knockback
+- thorns
+- respiration
+- silktouch
+- featherfalling
+- depthstrider
+- lure
+- strength
+- haste
+- resistance
+- nausea
+- regeneration
+- speed
+- slowness
+- weakness
+- poison
+- absorption
+- saturation
+- invisibility
+- blindness
+- hunger
+- steak
+- gapple
+- godapple
+- pearl
 
 # Disguised as a REAL player (one who has played here): only these commands typed with that name reach
 # the disguised player. Every other command (/pay, /f, /mail ...) means the real account, so money and

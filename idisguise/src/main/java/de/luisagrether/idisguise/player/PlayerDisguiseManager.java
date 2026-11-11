@@ -131,6 +131,9 @@ public final class PlayerDisguiseManager implements Listener {
 	public static final String PERM_TAGS_ALL = "iDisguise.tags.all";
 	private static final String NO_TAG = "none";
 	private static final Set<String> FACTION_COMMANDS = new HashSet<>(java.util.Arrays.asList("f", "faction", "factions"));
+	// /f subcommands whose word may be a faction's tag (/f who <faction>, /f ally <faction> ...).
+	private static final Set<String> FACTION_TAG_SUBCOMMANDS = new HashSet<>(java.util.Arrays.asList(
+			"who", "show", "f", "join", "ally", "enemy", "neutral", "truce"));
 	// disguised player -> viewer -> tab line last sent by the keeper
 	private final Map<UUID, Map<UUID, String>> tabLines = new ConcurrentHashMap<>();
 	// player -> when they last put on a player disguise themselves (cooldown)
@@ -1181,6 +1184,10 @@ public final class PlayerDisguiseManager implements Listener {
 			if(org.bukkit.Material.matchMaterial(name) != null) return true;
 		} catch(RuntimeException ignored) {
 		}
+		String plain = name.replace("_", "");
+		for(org.bukkit.Material material : org.bukkit.Material.values()) {
+			if(material.name().replace("_", "").equalsIgnoreCase(plain)) return true;
+		}
 		try {
 			if(org.bukkit.entity.EntityType.fromName(name) != null) return true;
 		} catch(RuntimeException ignored) {
@@ -1307,6 +1314,7 @@ public final class PlayerDisguiseManager implements Listener {
 			stopBypass(target);
 		} else {
 			giveBypassBack(target);
+			giveFlightBack(target);
 		}
 
 		applyLook(target, disguise);
@@ -2122,15 +2130,19 @@ public final class PlayerDisguiseManager implements Listener {
 			disguises.remove(joined.getUniqueId());
 			save();
 			log.end(joined.getName(), joined.getUniqueId(), "player", disguise.getFakeName());
+			rebuildSnapshots();
 			Bukkit.getScheduler().runTaskLater(plugin, () -> send(joined, language().UNDISGUISED_NO_ACCESS), 20L);
 			return;
 		}
 		// Saved before a name like that was refused (an ordinary word): the disguise ends.
-		if(ordinaryName(disguise.getFakeName(), false) || ordinaryName(joined.getName(), true)) {
+		boolean ownOrdinary = ordinaryName(joined.getName(), true);
+		if(ownOrdinary || ordinaryName(disguise.getFakeName(), false)) {
 			disguises.remove(joined.getUniqueId());
 			save();
+			rebuildSnapshots();
 			log.end(joined.getName(), joined.getUniqueId(), "player", disguise.getFakeName());
-			Bukkit.getScheduler().runTaskLater(plugin, () -> send(joined, language().PLAYER_DISGUISE_NAME_ORDINARY), 20L);
+			Bukkit.getScheduler().runTaskLater(plugin, () -> send(joined, ownOrdinary
+					? language().PLAYER_DISGUISE_OWN_NAME_ORDINARY : language().PLAYER_DISGUISE_NAME_ORDINARY), 20L);
 			return;
 		}
 		markOnline(joined, disguise);
@@ -2859,7 +2871,8 @@ public final class PlayerDisguiseManager implements Listener {
 			// Shows the real player's faction, so /f who <name> means the real player too.
 			if(factionOwner(disguise) != null && FACTION_COMMANDS.contains(label)) continue;
 			// A faction with that tag (made after the disguise): in /f commands the word means the faction.
-			if(FACTION_COMMANDS.contains(label) && factionsApi() != null && factionsApi().isFactionTag(parts[i])) continue;
+			if(FACTION_COMMANDS.contains(label) && parts.length > 1 && FACTION_TAG_SUBCOMMANDS.contains(parts[1].toLowerCase(Locale.ENGLISH))
+					&& factionsApi() != null && factionsApi().isFactionTag(parts[i])) continue;
 			// The name of a real account: only messages and teleport requests reach the disguise; /pay,
 			// /mail ... go to the real player (never money or items to the wrong person).
 			if(disguise.getOwnerUuid() != null && !realPlayerCommand(label)) continue;
