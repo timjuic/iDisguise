@@ -116,6 +116,8 @@ public final class PlayerDisguiseManager implements Listener {
 	private org.bukkit.scheduler.BukkitTask tabTask;
 	private int tabTick;
 	private final Map<UUID, String> sharedTabLines = new java.util.HashMap<>();
+	// Disguised players whose tab line failed (warned once).
+	private final Set<UUID> tabLineErrors = ConcurrentHashMap.newKeySet();
 	private TabLook tabLook;
 	private FactionsHook factions;
 	// FactionsUUID, also when real-player-faction is off (/f bypass while disguised). Read once.
@@ -299,6 +301,8 @@ public final class PlayerDisguiseManager implements Listener {
 			givePermissionsBack(player);
 			giveBypassBack(player);
 			ownSkin.resetNow(player);
+			// Arrows hit invisible players again when iDisguise stops (they are visible then).
+			if(isInvisible(player)) invisibleRules(player, false);
 		}
 		ownSkin.stop();
 		if(markerStripper != null) markerStripper.unregister();
@@ -2228,6 +2232,10 @@ public final class PlayerDisguiseManager implements Listener {
 			if(disguise.isStaff()) {
 				disguise.setHiddenFromTab(true);
 				disguise.setOwnerRank(realRankOf(owner));
+				// That player's nametag team would float above an invisible body: invisibility ends.
+				if(isInvisible(joined)) Bukkit.getScheduler().runTaskLater(plugin, () -> {
+					if(joined.isOnline() && isInvisible(joined)) setInvisible(joined, joined, false);
+				}, 20L);
 			} else {
 				disguises.remove(joined.getUniqueId());
 				save();
@@ -2570,7 +2578,9 @@ public final class PlayerDisguiseManager implements Listener {
 					sharedTabLines.put(disguise.getUniqueId(), shared);
 				}
 			} catch(RuntimeException e) {
-				debug("Could not build the tab line of " + target.getName(), e);
+				if(tabLineErrors.add(disguise.getUniqueId())) {
+					plugin.getLogger().warning("Could not build the tab line of " + target.getName() + " (shown without rank until fixed): " + e);
+				}
 				continue;
 			}
 			for(int i = slice; i < viewers.size(); i += 20) {
@@ -2598,6 +2608,8 @@ public final class PlayerDisguiseManager implements Listener {
 		PlayerDisguise disguise = disguises.get(uuid);
 		if(disguise != null && disguise.getProfile() != null) {
 			applyLook(player, disguise);
+			// TAB takes the disguise name for the nametag team from the player's own tab entry: send it again.
+			resendOwnEntry(player);
 			Map<UUID, String> sent = tabLines.get(uuid);
 			if(sent != null) sent.clear();
 			sharedTabLines.remove(uuid);

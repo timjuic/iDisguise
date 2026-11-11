@@ -120,7 +120,7 @@ final class TabHook {
 				// older TAB: a reload is repaired by the 30-second check
 			}
 		} catch(Throwable t) {
-			plugin.getLogger().fine("TAB events not available: " + t);
+			plugin.getLogger().info("TAB events not available (a /tab reload is repaired within 30 seconds instead): " + t);
 		}
 	}
 
