@@ -452,6 +452,13 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	
 	public iDisguise() { INSTANCE = this; }
 	
+	/** Registers a permission unless it already exists (a reload by PlugMan keeps the old ones). */
+	private static void addPermissionOnce(Permission permission) {
+		if(Bukkit.getPluginManager().getPermission(permission.getName()) == null) {
+			Bukkit.getPluginManager().addPermission(permission);
+		}
+	}
+
 	public void onEnable() {
 		if(MINECRAFT_VERSION == null) {
 			getLogger().severe("This Minecraft server version is not supported (1)!");
@@ -603,16 +610,16 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 		}
 
 		if(config.USE_PERMISSION_NODES) {
-			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.*", PermissionDefault.OP));
-			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.admin", PermissionDefault.OP));
-			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.disguise.*", PermissionDefault.OP));
-			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.others", PermissionDefault.OP));
-			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.sound", PermissionDefault.TRUE));
-			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.bypass.regions", PermissionDefault.OP));
-			Bukkit.getPluginManager().addPermission(new Permission("iDisguise.see", PermissionDefault.OP));
+			addPermissionOnce(new Permission("iDisguise.*", PermissionDefault.OP));
+			addPermissionOnce(new Permission("iDisguise.admin", PermissionDefault.OP));
+			addPermissionOnce(new Permission("iDisguise.disguise.*", PermissionDefault.OP));
+			addPermissionOnce(new Permission("iDisguise.others", PermissionDefault.OP));
+			addPermissionOnce(new Permission("iDisguise.sound", PermissionDefault.TRUE));
+			addPermissionOnce(new Permission("iDisguise.bypass.regions", PermissionDefault.OP));
+			addPermissionOnce(new Permission("iDisguise.see", PermissionDefault.OP));
 			for(EntityType type : EntityType.values()) {
 				if(config.DISGUISE_TYPE_BLACKLIST.contains(type.name())) continue;
-				Bukkit.getPluginManager().addPermission(new Permission("iDisguise.disguise." + type.name(), PermissionDefault.OP));
+				addPermissionOnce(new Permission("iDisguise.disguise." + type.name(), PermissionDefault.OP));
 			}
 		}
 

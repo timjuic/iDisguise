@@ -268,6 +268,12 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	public void disable() {
+		if(placeholderApi) {
+			try {
+				PlaceholderHook.unregisterNow();
+			} catch(Throwable ignored) {
+			}
+		}
 		if(log != null) {
 			// Given with /odisguise: not saved, so the stop ends them.
 			for(PlayerDisguise disguise : online) {

@@ -22,8 +22,28 @@ final class PlaceholderHook extends PlaceholderExpansion implements me.clip.plac
 		this.manager = manager;
 	}
 
+	private static PlaceholderHook registered;
+
 	static void register(PlayerDisguiseManager manager) {
-		new PlaceholderHook(manager).register();
+		// After a reload (PlugMan) the old copy may still be registered: it goes first.
+		try {
+			java.util.Optional<PlaceholderExpansion> old = me.clip.placeholderapi.PlaceholderAPIPlugin.getInstance()
+					.getLocalExpansionManager().findExpansionByIdentifier("idisguise");
+			if(old.isPresent()) old.get().unregister();
+		} catch(Throwable ignored) {
+		}
+		registered = new PlaceholderHook(manager);
+		registered.register();
+	}
+
+	/** The plugin stops: the placeholders go with it (a reload registers them again). */
+	static void unregisterNow() {
+		if(registered == null) return;
+		try {
+			registered.unregister();
+		} catch(Throwable ignored) {
+		}
+		registered = null;
 	}
 
 	/** The DeluxeTags tag as it appears in chat, or null. */
