@@ -115,7 +115,7 @@ final class TextSwap {
 			// Index 2 is the custom name. A new object: the old one belongs to the server's entity.
 			if(value != null && value.getIndex() == 2 && value.getValue() instanceof String) {
 				String name = (String)value.getValue();
-				String replaced = NameReplacer.replace(name, disguises);
+				String replaced = pluginText(name) ? NameReplacer.replace(name, disguises) : name;
 				if(!replaced.equals(name)) {
 					result.add(new WrappedWatchableObject(2, replaced));
 					changed = true;
@@ -134,7 +134,7 @@ final class TextSwap {
 		WrappedDataWatcher watcher = event.getPacket().getDataWatcherModifier().readSafely(0);
 		if(watcher == null) return;
 		Object name = watcher.getObject(2);
-		if(!(name instanceof String)) return;
+		if(!(name instanceof String) || !pluginText((String)name)) return;
 		String replaced = NameReplacer.replace((String)name, disguises);
 		if(replaced.equals(name)) return;
 		// A brand-new watcher with copied values: a clone shares its values with the real entity on 1.8,
@@ -184,13 +184,22 @@ final class TextSwap {
 		event.setPacket(copy);
 	}
 
+	/**
+	 * Text a plugin made (menus, holograms, leaderboards): those always carry colour codes. Text a player
+	 * typed (an anvil rename, a name tag on a mob) never can, and stays as typed: otherwise renaming
+	 * something to a suspected real name would show the fake name and tell who it is.
+	 */
+	static boolean pluginText(String text) {
+		return text != null && text.indexOf('§') >= 0;
+	}
+
 	/** A changed copy of the item, or null when nothing needs to change. */
 	@SuppressWarnings("deprecation")
 	private static ItemStack item(ItemStack item, Collection<PlayerDisguise> disguises) {
 		if(item == null || !item.hasItemMeta()) return null;
 		ItemMeta meta = item.getItemMeta();
 		boolean changed = false;
-		if(meta.hasDisplayName()) {
+		if(meta.hasDisplayName() && pluginText(meta.getDisplayName())) {
 			String replaced = NameReplacer.replace(meta.getDisplayName(), disguises);
 			if(!replaced.equals(meta.getDisplayName())) {
 				meta.setDisplayName(replaced);
@@ -201,7 +210,7 @@ final class TextSwap {
 			List<String> lore = new ArrayList<>();
 			boolean loreChanged = false;
 			for(String line : meta.getLore()) {
-				String replaced = NameReplacer.replace(line, disguises);
+				String replaced = pluginText(line) ? NameReplacer.replace(line, disguises) : line;
 				lore.add(replaced);
 				if(!replaced.equals(line)) loreChanged = true;
 			}

@@ -152,6 +152,37 @@ commands-not-translated:
 - permission
 - permissions
 
+# Commands whose next word is a player: there a fake name means the disguised player (/msg <fake name>
+# reaches them). Everywhere else a fake name stays as typed (faction names, homes, descriptions, mail text).
+# One command per line, aliases count by themselves (msg covers /m, /tell, /w ...). A subcommand is written
+# with it ("f who") and its aliases need their own line ("f show"). /disguise reload after a change.
+fake-name-commands:
+- msg
+- tpa
+- tpahere
+- tpaccept
+- tpdeny
+- pay
+- balance
+- seen
+- mail send
+- ignore
+- f who
+- f show
+- f invite
+- f inv
+- f deinvite
+- f deinv
+- f kick
+- f mod
+- f coleader
+- f leader
+- f promote
+- f demote
+- f ban
+- f unban
+- stats
+
 # Disguised as a REAL player (one who has played here): only these commands typed with that name reach
 # the disguised player. Every other command (/pay, /f, /mail ...) means the real account, so money and
 # items sent to that name always reach the real player.

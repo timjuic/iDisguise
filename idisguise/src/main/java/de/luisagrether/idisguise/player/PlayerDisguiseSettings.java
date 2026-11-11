@@ -48,6 +48,8 @@ final class PlayerDisguiseSettings {
 	final boolean seeOwnDisguise;
 	final java.util.Set<String> commandsNotTranslated = new java.util.HashSet<>();
 	final java.util.Set<String> realPlayerCommands = new java.util.HashSet<>();
+	// Commands whose next word is a player ("msg", "f who"): split into words, lower case.
+	final List<String[]> fakeNameCommands = new ArrayList<>();
 	final java.util.Set<String> repairAfterCommands = new java.util.HashSet<>();
 	final java.util.Set<String> blockedCommands = new java.util.HashSet<>();
 	final boolean swapInMenus;
@@ -107,6 +109,11 @@ final class PlayerDisguiseSettings {
 		}
 		for(String command : config.getStringList("real-player-commands")) {
 			realPlayerCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
+		}
+		for(String command : config.getStringList("fake-name-commands")) {
+			if(command == null) continue;
+			String clean = command.toLowerCase(Locale.ENGLISH).replace("/", "").trim();
+			if(!clean.isEmpty()) fakeNameCommands.add(clean.split(" +"));
 		}
 		ConfigurationSection items = config.getConfigurationSection("menu-items");
 		if(items != null) {

@@ -117,6 +117,9 @@ public final class PlayerDisguiseManager implements Listener {
 	private boolean factionsRead;
 	// Staff whose /f bypass was on when a disguise with player permissions turned it off (given back after).
 	private final Set<UUID> bypassTaken = ConcurrentHashMap.newKeySet();
+	// Flight a disguise with player permissions turned off (player -> was flying): given back when the
+	// menu's button ends up OFF.
+	private final Map<UUID, Boolean> flightTaken = new ConcurrentHashMap<>();
 	private DeluxeTagsHook deluxeTags;
 	public static final String PERM_TAGS = "iDisguise.tags";
 	public static final String PERM_TAGS_ALL = "iDisguise.tags.all";
@@ -1122,7 +1125,10 @@ public final class PlayerDisguiseManager implements Listener {
 	private String nameProblem(CommandSender sender, Player target, String name) {
 		for(PlayerDisguise other : disguises.values()) {
 			if(other.getUniqueId().equals(target.getUniqueId())) continue;
-			if(other.getFakeName().equalsIgnoreCase(name)) return language().PLAYER_DISGUISE_NAME_TAKEN;
+			// Players get the usual "is online" text: "someone is disguised as" would tell it's a disguise.
+			if(other.getFakeName().equalsIgnoreCase(name)) {
+				return has(sender, PERM_REVEAL) || has(sender, PERM_ADMIN) ? language().PLAYER_DISGUISE_NAME_TAKEN : language().PLAYER_DISGUISE_NAME_ONLINE;
+			}
 			// The real name of someone who is disguised right now: names would get mixed up. The message
 			// must not tell that this player is disguised: players get the usual "has played here" one.
 			if(other.getProfile() != null && other.getRealName().equalsIgnoreCase(name)) {
@@ -1212,6 +1218,7 @@ public final class PlayerDisguiseManager implements Listener {
 		save();
 		if(disguise.hasPlayerPermissions()) {
 			takePermissions(target);
+			rememberFlight(target);
 			stopFlying(target);
 			stopBypass(target);
 		} else {
@@ -1252,11 +1259,13 @@ public final class PlayerDisguiseManager implements Listener {
 		save();
 		if(on) {
 			takePermissions(player);
+			rememberFlight(player);
 			stopFlying(player);
 			stopBypass(player);
 		} else {
 			givePermissionsBack(player);
 			giveBypassBack(player);
+			giveFlightBack(player);
 		}
 	}
 
@@ -1291,6 +1300,20 @@ public final class PlayerDisguiseManager implements Listener {
 	 * Disguised with player permissions: flight that was on (/fly) goes off, like for a normal player.
 	 * Not in creative or spectator, where flying is part of the game mode.
 	 */
+	private void rememberFlight(Player player) {
+		org.bukkit.GameMode mode = player.getGameMode();
+		if(mode == org.bukkit.GameMode.CREATIVE || mode == org.bukkit.GameMode.SPECTATOR) return;
+		if(player.getAllowFlight()) flightTaken.put(player.getUniqueId(), player.isFlying());
+	}
+
+	/** Player permissions OFF again (the menu's button): flight back as it was. */
+	private void giveFlightBack(Player player) {
+		Boolean flying = flightTaken.remove(player.getUniqueId());
+		if(flying == null || !player.isOnline()) return;
+		player.setAllowFlight(true);
+		if(flying) player.setFlying(true);
+	}
+
 	private static void stopFlying(Player player) {
 		org.bukkit.GameMode mode = player.getGameMode();
 		if(mode == org.bukkit.GameMode.CREATIVE || mode == org.bukkit.GameMode.SPECTATOR) return;
@@ -1337,6 +1360,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(disguise == null) return false;
 		givePermissionsBack(player);
 		giveBypassBack(player);
+		flightTaken.remove(player.getUniqueId());
 		rebuildSnapshots();
 		save();
 		log.end(player.getName(), player.getUniqueId(), "player", disguise.getFakeName());
@@ -1346,7 +1370,10 @@ public final class PlayerDisguiseManager implements Listener {
 		if(player.isOnline()) {
 			resetLook(player, disguise);
 			removeDisguiseEntry(player, disguise);
-			refresh(player);
+			// The proxy holds the disguise skin for the player's own view: it gets the real skin back FIRST,
+			// and only then others see the player again (else they'd get the real name with the disguise skin).
+			if(!ownSkin.resetThen(player, () -> refreshViewers(player))) refreshViewers(player);
+			resendOwnEntry(player);
 			ownSkin.update(player);
 		}
 		return true;
@@ -1814,12 +1841,18 @@ public final class PlayerDisguiseManager implements Listener {
 	 * Players who can't see this player (vanish) are skipped, so a vanished player stays vanished.
 	 */
 	private void refresh(Player player) {
+		refreshViewers(player);
+		resendOwnEntry(player);
+	}
+
+	/** Every other client fetches the player again (vanished stays vanished). */
+	void refreshViewers(Player player) {
+		if(!player.isOnline()) return;
 		for(Player viewer : Bukkit.getOnlinePlayers()) {
 			if(viewer == player || !viewer.canSee(player)) continue;
 			viewer.hidePlayer(player);
 			viewer.showPlayer(player);
 		}
-		resendOwnEntry(player);
 	}
 
 	/** The player's own tab entry again (through the rewriter, which decides the name in it). */
@@ -2055,6 +2088,7 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		lastTabInput.remove(quit.getUniqueId());
 		if(ownSkin != null) ownSkin.quit(quit);
+		flightTaken.remove(quit.getUniqueId());
 		// LuckPerms forgets temporary permissions on logout; taken again on join while still disguised.
 		takenPermissions.remove(quit.getUniqueId());
 		revealPlayers.remove(quit.getUniqueId());
@@ -2567,14 +2601,15 @@ public final class PlayerDisguiseManager implements Listener {
 		Player sender = event.getPlayer();
 		boolean staff = has(sender, PERM_REVEAL) || has(sender, PERM_ADMIN);
 		boolean changed = false;
-		// Staff: the first player name is the command's target and works as typed (/tp <real name>);
-		// a real name later on (message text) is marked like for everyone else, so it isn't swapped.
-		boolean staffTargetSeen = false;
-		for(int i = 1; i < parts.length; i++) {
+		// Only the player word of a listed command (fake-name-commands: /msg <player>, /f who <player>) means
+		// a player. Every other word (a faction name, a home, a description, message text) stays as typed:
+		// a fake name there is never turned into the real name (it would be saved and shown later).
+		int target = targetIndex(parts, label);
+		if(target > 0) {
 			boolean translated = false;
 			for(PlayerDisguise disguise : online) {
 				PlayerDisguiseSettings.Profile profile = disguise.getProfile();
-				if(profile == null || !profile.commandsUseFakeName || !parts[i].equalsIgnoreCase(disguise.getFakeName())) continue;
+				if(profile == null || !profile.commandsUseFakeName || !parts[target].equalsIgnoreCase(disguise.getFakeName())) continue;
 				// Shows the real player's faction, so /f who <name> means the real player too.
 				if(factionOwner(disguise) != null && FACTION_COMMANDS.contains(label)) continue;
 				// The name of a real account: only messages and teleport requests reach the disguise; /pay,
@@ -2582,34 +2617,78 @@ public final class PlayerDisguiseManager implements Listener {
 				if(disguise.getOwnerUuid() != null && !settings.realPlayerCommands.contains(label)) continue;
 				// While the real player is online, the name means the real player.
 				if(Bukkit.getPlayerExact(disguise.getFakeName()) != null) continue;
-				parts[i] = disguise.getRealName();
+				parts[target] = disguise.getRealName();
 				changed = true;
 				translated = true;
 				break;
 			}
-			if(translated) {
-				staffTargetSeen = true;
-				continue;
-			}
-			// The real name (or the start of it, which many plugins accept) of a disguised player acts
-			// like an offline player for everyone else: otherwise "/msg <real name>" would reach the
-			// disguised player and tell who they are. An invisible marker INSIDE the name makes the lookup
-			// fail; it is removed from everything players see (NameReplacer.MARKER), and keeps the name swap
-			// from turning the reply ("Dann1e not found") into the fake name.
-			Player match = matchingPlayer(parts[i]);
-			if(staff && match != null && !staffTargetSeen) {
-				staffTargetSeen = true;
-				continue;
-			}
+			// The real name (or the start of it, which many plugins accept) of a disguised player acts like an
+			// offline player for everyone else: otherwise "/msg <real name>" would reach the disguised player and
+			// tell who they are. An invisible marker INSIDE the name makes the lookup fail; it is removed from
+			// everything players see (NameReplacer.MARKER). Staff: the player word works as typed (/tp <real name>).
+			Player match = translated || staff ? null : matchingPlayer(parts[target]);
 			if(match != null && match != sender) {
 				PlayerDisguise disguise = disguises.get(match.getUniqueId());
 				if(disguise != null && disguise.getProfile() != null && disguise.getProfile().replaceNameInMessages) {
-					parts[i] = NameReplacer.mark(parts[i]);
+					parts[target] = NameReplacer.mark(parts[target]);
+					changed = true;
+				}
+			}
+		}
+		// Real names typed anywhere else ("/msg Bob Danny?", "/f desc Danny") stay exactly as typed, like in
+		// chat: the name swap would otherwise show the fake name and tell who it is. Not the sender's own name.
+		List<PlayerDisguise> others = new ArrayList<>();
+		for(PlayerDisguise disguise : online) {
+			if(disguise.getUniqueId().equals(sender.getUniqueId())) continue;
+			if(disguise.getProfile() != null && disguise.getProfile().replaceNameInMessages) others.add(disguise);
+		}
+		// Staff type real names on purpose (/invsee, /tp <real name>): theirs work as typed.
+		if(!others.isEmpty() && !staff) {
+			for(int i = 1; i < parts.length; i++) {
+				if(i == target) continue;
+				String marked = NameReplacer.markTyped(parts[i], others);
+				if(!marked.equals(parts[i])) {
+					parts[i] = marked;
 					changed = true;
 				}
 			}
 		}
 		if(changed) event.setMessage("/" + String.join(" ", parts));
+	}
+
+	/**
+	 * Index of the player word in a typed command (parts[0] = the command), or -1 when the command isn't in
+	 * fake-name-commands. Aliases count as their command (/m, /tell, /essentials:msg = msg).
+	 */
+	private int targetIndex(String[] parts, String label) {
+		org.bukkit.command.Command typed = command(label);
+		for(String[] entry : settings.fakeNameCommands) {
+			if(entry.length == 0 || parts.length <= entry.length) continue;
+			boolean same = entry[0].equals(label);
+			if(!same && typed != null) same = command(entry[0]) == typed;
+			if(!same) continue;
+			boolean subs = true;
+			for(int i = 1; i < entry.length && subs; i++) subs = entry[i].equalsIgnoreCase(parts[i]);
+			if(subs) return entry.length;
+		}
+		return -1;
+	}
+
+	private Object commandMap;
+	private boolean commandMapRead;
+
+	/** The command behind a name or alias, or null. */
+	private org.bukkit.command.Command command(String name) {
+		try {
+			if(!commandMapRead) {
+				commandMapRead = true;
+				commandMap = Bukkit.getServer().getClass().getMethod("getCommandMap").invoke(Bukkit.getServer());
+			}
+			if(commandMap instanceof org.bukkit.command.CommandMap) return ((org.bukkit.command.CommandMap)commandMap).getCommand(name);
+		} catch(Throwable t) {
+			debug("Could not read the server's commands", t);
+		}
+		return Bukkit.getPluginCommand(name);
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

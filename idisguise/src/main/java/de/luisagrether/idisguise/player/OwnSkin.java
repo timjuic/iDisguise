@@ -52,6 +52,8 @@ final class OwnSkin implements PluginMessageListener {
 	// shortly after asking (a modded game can't trigger refreshes by sending answers itself).
 	private final Map<UUID, Long> lastAsked = new ConcurrentHashMap<>();
 	private final Map<UUID, Integer> openAnswers = new ConcurrentHashMap<>();
+	// Undisguise: others see the player again only once the proxy gave the real skin back.
+	private final Map<UUID, Runnable> afterReset = new ConcurrentHashMap<>();
 	// A refresh is already planned (several answers in a row give one refresh).
 	private final java.util.Set<UUID> refreshPlanned = ConcurrentHashMap.newKeySet();
 	private PacketAdapter dimensionListener;
@@ -113,6 +115,7 @@ final class OwnSkin implements PluginMessageListener {
 		requested.remove(player.getUniqueId());
 		lastAsked.remove(player.getUniqueId());
 		openAnswers.remove(player.getUniqueId());
+		afterReset.remove(player.getUniqueId());
 		refreshPlanned.remove(player.getUniqueId());
 		dimensions.remove(player.getUniqueId());
 	}
@@ -140,6 +143,24 @@ final class OwnSkin implements PluginMessageListener {
 		} catch(Throwable e) {
 			manager.debug("Could not ask the proxy for the own skin of " + player.getName(), e);
 		}
+	}
+
+	/**
+	 * Undisguise while the proxy holds the disguise skin: asks for the real skin back and runs the given
+	 * task (others see the player again) once the proxy answered, at the latest after a second. False when
+	 * the proxy doesn't hold the disguise skin (the caller runs the task right away).
+	 */
+	boolean resetThen(Player player, Runnable task) {
+		UUID id = player.getUniqueId();
+		if(!requested.containsKey(id)) return false;
+		requested.remove(id);
+		if(!send(player, new byte[] {VERSION, RESET})) return false;
+		afterReset.put(id, task);
+		Bukkit.getScheduler().runTaskLater(plugin, () -> {
+			Runnable left = afterReset.remove(id);
+			if(left != null) left.run();
+		}, 20L);
+		return true;
 	}
 
 	/** False when it could not go out (no helper on the proxy, or not announced yet). */
@@ -180,6 +201,12 @@ final class OwnSkin implements PluginMessageListener {
 		// Only an answer to what is wanted now counts (an older answer after a quick /d + /ud is skipped).
 		boolean disguisedSkin = requested.containsKey(player.getUniqueId());
 		if(action == SET ? !disguisedSkin : action == RESET ? disguisedSkin : true) return;
+		if(action == RESET) {
+			// The real skin is back on the proxy: now others may see the player (again, if the second passed).
+			Runnable waiting = afterReset.remove(player.getUniqueId());
+			if(waiting != null) waiting.run();
+			else manager.refreshViewers(player);
+		}
 		// A tick later: several answers in a row give one refresh.
 		if(refreshPlanned.add(player.getUniqueId())) {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> refreshWhenFree(player, 0), 2L);
