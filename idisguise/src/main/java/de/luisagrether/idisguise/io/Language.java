@@ -308,6 +308,12 @@ public class Language {
 	public String PERMISSIONS_NODES_OFF = ChatColor.RED + "use-permission-nodes is false in config.yml: permissions are ignored, only operators can disguise.";
 	@LastUpdated(60106)
 	public String PLAYER_DISGUISE_NAME_UNAVAILABLE = c("%prefix%&cYou can't use that name right now.");
+	@LastUpdated(60177)
+	public String PLAYER_DISGUISE_NAME_ORDINARY = c("%prefix%&cThat name can't be used for a disguise (a common word, a command, a rank or a faction).");
+	@LastUpdated(60177)
+	public String PLAYER_DISGUISE_OWN_NAME_ORDINARY = c("%prefix%&cYour own name is a common word, so player disguises can't hide it.");
+	@LastUpdated(60177)
+	public String PLAYER_DISGUISE_CHECK_FAILED = c("%prefix%&cCouldn't check that name right now, try again in a moment.");
 	@LastUpdated(60106)
 	public String UNDISGUISED_NO_ACCESS = c("%prefix%&cYour player disguise was removed because you no longer have access to it.");
 	@LastUpdated(60106)

@@ -50,6 +50,10 @@ final class PlayerDisguiseSettings {
 	final java.util.Set<String> realPlayerCommands = new java.util.HashSet<>();
 	// Commands whose next word is a player ("msg", "f who"): split into words, lower case.
 	final List<String[]> fakeNameCommands = new ArrayList<>();
+	// Commands where every word is text that gets saved: a fake name there stays as typed.
+	final List<String[]> textCommands = new ArrayList<>();
+	// Words that can't be a player disguise name (and real names like them can't disguise).
+	final java.util.Set<String> ordinaryNames = new java.util.HashSet<>();
 	final java.util.Set<String> repairAfterCommands = new java.util.HashSet<>();
 	final java.util.Set<String> blockedCommands = new java.util.HashSet<>();
 	final boolean swapInMenus;
@@ -135,6 +139,14 @@ final class PlayerDisguiseSettings {
 		}
 		// The longest entry wins ("mail send" before "mail").
 		fakeNameCommands.sort((a, b) -> b.length - a.length);
+		for(String command : config.getStringList("text-commands")) {
+			if(command == null) continue;
+			String clean = command.toLowerCase(Locale.ENGLISH).replace("/", "").trim();
+			if(!clean.isEmpty()) textCommands.add(clean.split(" +"));
+		}
+		for(String word : config.getStringList("ordinary-names")) {
+			if(word != null && !word.trim().isEmpty()) ordinaryNames.add(word.trim().toLowerCase(Locale.ENGLISH));
+		}
 		ConfigurationSection items = config.getConfigurationSection("menu-items");
 		if(items != null) {
 			for(String key : items.getKeys(false)) {

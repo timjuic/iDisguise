@@ -152,10 +152,12 @@ commands-not-translated:
 - permission
 - permissions
 
-# Commands whose next word is a player: there a fake name means the disguised player (/msg <fake name>
-# reaches them). Everywhere else a fake name stays as typed (faction names, homes, descriptions, mail text).
-# One command per line, aliases count by themselves (msg covers /m, /tell, /w ...). A subcommand is written
-# with it ("f who") and its aliases need their own line ("f show"). /disguise reload after a change.
+# A word that is exactly a disguised player's fake name means that player in every command (/duel, /trade,
+# /ban ... also of plugins added later), except in text-commands below.
+# fake-name-commands: commands with a player word AND text after it (/msg <player> <text>): only the player
+# word is meant, the text stays as typed. One command per line, aliases count by themselves (msg covers /m,
+# /tell, /w ...). A subcommand is written with it ("f who"), its aliases need their own line ("f show").
+# /disguise reload after a change.
 fake-name-commands:
 - msg
 - tpa
@@ -214,6 +216,78 @@ fake-name-commands:
 - f alts kick
 - stats
 - report
+
+# Commands where every word is text that gets saved (descriptions, names of homes / warps / factions): a fake
+# name there stays exactly as typed, so the real name is never saved. Add a command of a new plugin here when
+# a name typed in it should stay as it is.
+text-commands:
+- f desc
+- f description
+- f create
+- f tag
+- f rename
+- f setwarp
+- f delwarp
+- f warp
+- sethome
+- delhome
+- home
+- setwarp
+- delwarp
+- warp
+- nick
+- nickname
+- enick
+- helpop
+- me
+- broadcast
+- say
+
+# Names that can't be used for a player disguise because they are ordinary words here (a player whose real
+# name is one of them can't use player disguises either). Names of 3 characters or less, only numbers, ranks,
+# commands and faction names are refused anyway.
+ordinary-names:
+- all
+- gold
+- iron
+- diamond
+- emerald
+- stone
+- home
+- farm
+- shop
+- kit
+- daily
+- weekly
+- money
+- tokens
+- souls
+- boss
+- king
+- kralj
+- admin
+- owner
+- staff
+- server
+- console
+- player
+- spawn
+- warp
+- pvp
+- raid
+- base
+- koth
+- envoy
+- crate
+- coins
+- vote
+- help
+- rules
+- discord
+- store
+- nobody
+- someone
+- everyone
 
 # Disguised as a REAL player (one who has played here): only these commands typed with that name reach
 # the disguised player. Every other command (/pay, /f, /mail ...) means the real account, so money and

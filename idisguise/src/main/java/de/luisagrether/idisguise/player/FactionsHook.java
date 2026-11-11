@@ -68,6 +68,26 @@ final class FactionsHook {
 	private final Method isAdminBypassing;
 	private final Method setIsAdminBypassing;
 
+	private Method factionsInstance;
+	private Method factionByTag;
+	private boolean tagLookupRead;
+
+	/** A faction with exactly this tag exists (case-insensitive in FactionsUUID). False when unsure. */
+	boolean isFactionTag(String tag) {
+		try {
+			if(!tagLookupRead) {
+				tagLookupRead = true;
+				Class<?> factionsClass = Class.forName("com.massivecraft.factions.Factions");
+				factionsInstance = factionsClass.getMethod("getInstance");
+				factionByTag = factionsClass.getMethod("getByTag", String.class);
+			}
+			if(factionByTag == null) return false;
+			return factionByTag.invoke(factionsInstance.invoke(null), tag) != null;
+		} catch(Throwable t) {
+			return false;
+		}
+	}
+
 	/** /f bypass (admin mode) of an online player; false when unknown. */
 	boolean bypassing(Player player) {
 		if(isAdminBypassing == null) return false;

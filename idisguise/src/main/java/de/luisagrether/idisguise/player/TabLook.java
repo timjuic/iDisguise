@@ -142,6 +142,56 @@ final class TabLook {
 				fill(owner(property(group, world, "tagsuffix"), viewer, factions, owner), viewer, target));
 	}
 
+	/**
+	 * The tab line in two steps, so it isn't built from scratch for every viewer: shared() once per player
+	 * (everything that is the same for all viewers), then forViewer() per viewer (only the viewer-dependent
+	 * %rel_...% placeholders, e.g. the faction relation colour). Same result as look().tabLine.
+	 */
+	String shared(Player target, String group, FactionsHook factions, java.util.UUID owner) {
+		String world = target.getWorld().getName();
+		String name = property(group, world, "customtabname");
+		if(name.isEmpty()) name = target.getName();
+		String tabSuffix = property(group, world, "tabsuffix");
+		boolean addVanish = !tabSuffix.contains("premiumvanish") && isVanished(target);
+		String text = property(group, world, "tabprefix") + name + tabSuffix;
+		if(factions != null && owner != null && text.contains("%factionsuuid_faction_name%")) {
+			text = text.replace("%factionsuuid_faction_name%", factions.factionName(owner));
+		}
+		text = fillTarget(text, target);
+		if(addVanish) text = join(text, fillTarget("%premiumvanish_vanishsuffix%", target));
+		return text;
+	}
+
+	String forViewer(String shared, Player viewer, Player target, FactionsHook factions, java.util.UUID owner) {
+		String text = shared;
+		if(factions != null && owner != null && text.contains("%rel_factionsuuid_relation_color%")) {
+			text = text.replace("%rel_factionsuuid_relation_color%", factions.relationColor(viewer, owner));
+		}
+		if(text.contains("%rel_") && Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+			try {
+				text = Placeholders.relational(text, viewer, target);
+			} catch(Throwable t) {
+				// PlaceholderAPI broken: as it is
+			}
+		}
+		return ChatColor.translateAlternateColorCodes('&', text);
+	}
+
+	/** Like fill(), without the viewer-dependent (relational) placeholders and without colours yet. */
+	private String fillTarget(String text, Player target) {
+		if(text.isEmpty()) return text;
+		text = text.replace("%vault-prefix%", "%vault_prefix%").replace("%vault-suffix%", "%vault_suffix%")
+				.replace("%player%", target.getName()).replace("%world%", target.getWorld().getName());
+		if(Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+			try {
+				text = Placeholders.target(text, target, replacements);
+			} catch(Throwable t) {
+				// PlaceholderAPI missing or broken: show the text without placeholders
+			}
+		}
+		return text;
+	}
+
 	private static String owner(String text, Player viewer, FactionsHook factions, java.util.UUID owner) {
 		if(factions == null || owner == null || !text.contains("factionsuuid_")) return text;
 		if(text.contains("%rel_factionsuuid_relation_color%")) text = text.replace("%rel_factionsuuid_relation_color%", factions.relationColor(viewer, owner));
@@ -207,6 +257,21 @@ final class TabLook {
 			}
 			text = me.clip.placeholderapi.PlaceholderAPI.setRelationalPlaceholders(viewer, target, text);
 			return me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(target, text);
+		}
+
+		/** Everything except relational placeholders (%rel_...% stays for forViewer). */
+		static String target(String text, Player target, Map<String, Map<String, String>> replacements) {
+			for(Map.Entry<String, Map<String, String>> entry : replacements.entrySet()) {
+				if(!text.contains(entry.getKey())) continue;
+				String value = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(target, entry.getKey());
+				String replaced = entry.getValue().get(value);
+				text = text.replace(entry.getKey(), replaced != null ? replaced : value);
+			}
+			return me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(target, text);
+		}
+
+		static String relational(String text, Player viewer, Player target) {
+			return me.clip.placeholderapi.PlaceholderAPI.setRelationalPlaceholders(viewer, target, text);
 		}
 	}
 

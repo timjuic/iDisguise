@@ -112,6 +112,10 @@ public final class PlayerDisguiseManager implements Listener {
 	private final Set<UUID> revealPlayers = ConcurrentHashMap.newKeySet();
 	private org.bukkit.scheduler.BukkitTask checkTask;
 	private org.bukkit.scheduler.BukkitTask revealTask;
+	// Tab lines of disguised players: a slice of the viewers every tick (each viewer once a second).
+	private org.bukkit.scheduler.BukkitTask tabTask;
+	private int tabTick;
+	private final Map<UUID, String> sharedTabLines = new java.util.HashMap<>();
 	private TabLook tabLook;
 	private FactionsHook factions;
 	// FactionsUUID, also when real-player-faction is off (/f bypass while disguised). Read once.
@@ -237,9 +241,9 @@ public final class PlayerDisguiseManager implements Listener {
 		tabLook = new TabLook();
 		factions = settings.realPlayerFaction ? factionsApi() : null;
 		checkTask = Bukkit.getScheduler().runTaskTimer(plugin, this::check, 600L, 600L);
+		tabTask = Bukkit.getScheduler().runTaskTimer(plugin, this::keepTabLines, 20L, 1L);
 		revealTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
 			updateRevealLooks();
-			keepTabLines();
 			keepLeaving();
 		}, 20L, 20L);
 		rewriter = new PacketRewriter(plugin, this);
@@ -295,6 +299,7 @@ public final class PlayerDisguiseManager implements Listener {
 		if(markerStripper != null) markerStripper.unregister();
 		checkTask.cancel();
 		revealTask.cancel();
+		if(tabTask != null) tabTask.cancel();
 		for(Player player : Bukkit.getOnlinePlayers()) {
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
 			if(disguise != null) resetLook(player, disguise);
@@ -539,6 +544,8 @@ public final class PlayerDisguiseManager implements Listener {
 				}
 			} catch(Exception e) {
 				debug("LuckPerms lookup failed for " + name, e);
+				// Unsure whether that name has played here: no menu, the disguise itself checks again.
+				if(blockKnown) known = true;
 			}
 			boolean refused = known && blockKnown;
 			Menu menu = new Menu(chooser, target, name, realRank, null, done);
@@ -730,6 +737,7 @@ public final class PlayerDisguiseManager implements Listener {
 						known = uuid != null && !uuid.equals(target.getUniqueId());
 					} catch(Exception e) {
 						debug("LuckPerms lookup failed for " + name, e);
+						known = true; // unsure: another name
 					}
 				}
 				// Has played here after all (a ready name can be older than that): another one.
@@ -1105,6 +1113,7 @@ public final class PlayerDisguiseManager implements Listener {
 		Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 			UUID knownUuid = null;
 			String rank = rankArgument;
+			boolean lookupFailed = false;
 			try {
 				if(luckPerms != null) {
 					knownUuid = luckPerms.lookupUniqueId(name).get(10, TimeUnit.SECONDS);
@@ -1115,6 +1124,15 @@ public final class PlayerDisguiseManager implements Listener {
 				}
 			} catch(Exception e) {
 				debug("LuckPerms lookup failed for " + name, e);
+				lookupFailed = true;
+			}
+			// Unsure whether the name belongs to a player of this server: never risk it for players.
+			if(lookupFailed && blockKnown) {
+				Bukkit.getScheduler().runTask(plugin, () -> {
+					send(sender, language.PLAYER_DISGUISE_CHECK_FAILED);
+					finish(done, false);
+				});
+				return;
 			}
 			boolean joined = joinedWithoutLuckPerms || (knownUuid != null && !knownUuid.equals(target.getUniqueId()));
 			if(joined && blockKnown) {
@@ -1132,8 +1150,26 @@ public final class PlayerDisguiseManager implements Listener {
 		});
 	}
 
+	/**
+	 * A name that is also an ordinary word on this server: 3 characters or less, only digits, on the
+	 * ordinary-names list, a rank, a command, or a faction's tag.
+	 */
+	boolean ordinaryName(String name) {
+		if(name == null) return false;
+		String lower = name.toLowerCase(Locale.ENGLISH);
+		if(lower.length() <= 3 || lower.matches("[0-9_]+")) return true;
+		if(settings.ordinaryNames.contains(lower) || settings.ranks.contains(lower)) return true;
+		if(command(lower) != null) return true;
+		FactionsHook api = factionsApi();
+		return api != null && api.isFactionTag(lower);
+	}
+
 	/** Why this name can't be used right now, or null. */
 	private String nameProblem(CommandSender sender, Player target, String name) {
+		// A real or fake name that is also an ordinary word: the name swap would change that word in every
+		// text and break other players' commands with it.
+		if(ordinaryName(target.getName())) return language().PLAYER_DISGUISE_OWN_NAME_ORDINARY;
+		if(ordinaryName(name)) return language().PLAYER_DISGUISE_NAME_ORDINARY;
 		for(PlayerDisguise other : disguises.values()) {
 			if(other.getUniqueId().equals(target.getUniqueId())) continue;
 			// Players get the usual "is online" text: "someone is disguised as" would tell it's a disguise.
@@ -2377,24 +2413,44 @@ public final class PlayerDisguiseManager implements Listener {
 	 * disguise's tab entry (it has its own ID), so without this a rank or faction change, or a TAB update
 	 * that came too early, would stay wrong for other players.
 	 */
+	/**
+	 * TAB can't update the tab line of a disguised player (it has its own ID), so iDisguise does: every viewer
+	 * once a second, spread over 20 ticks (1/20 of the viewers each tick). The part that is the same for
+	 * all viewers is built once per second per disguised player; per viewer only the viewer-dependent
+	 * placeholders (faction relation colour). Sent only when the line changed.
+	 */
 	private void keepTabLines() {
+		int slice = tabTick++ % 20;
+		if(slice == 0) sharedTabLines.clear();
 		if(tabLook == null || online.isEmpty()) return;
+		List<Player> viewers = new ArrayList<>(Bukkit.getOnlinePlayers());
 		for(PlayerDisguise disguise : online) {
 			Player target = Bukkit.getPlayer(disguise.getUniqueId());
 			if(target == null || disguise.isHiddenFromTab()) continue;
 			Map<UUID, String> sent = tabLines.computeIfAbsent(disguise.getUniqueId(), id -> new ConcurrentHashMap<>());
-			for(Player viewer : Bukkit.getOnlinePlayers()) {
+			UUID owner = factionOwner(disguise);
+			String shared;
+			try {
+				shared = sharedTabLines.get(disguise.getUniqueId());
+				if(shared == null) {
+					shared = tabLook.shared(target, effectiveRank(disguise), factions, owner);
+					sharedTabLines.put(disguise.getUniqueId(), shared);
+				}
+			} catch(RuntimeException e) {
+				debug("Could not build the tab line of " + target.getName(), e);
+				continue;
+			}
+			for(int i = slice; i < viewers.size(); i += 20) {
+				Player viewer = viewers.get(i);
 				if(viewer == target || !viewer.canSee(target) || revealPlayers.contains(viewer.getUniqueId())
 						|| disguise.getRemovedFor().contains(viewer.getUniqueId())) continue;
-				UUID owner = factionOwner(disguise);
-				TabLook.Look look;
+				String line;
 				try {
-					look = tabLook.look(viewer, target, effectiveRank(disguise), factions, owner);
+					line = NameReplacer.replace(tabLook.forViewer(shared, viewer, target, factions, owner), replacing);
 				} catch(RuntimeException e) {
-					debug("Could not build the tab line of " + target.getName(), e);
-					return;
+					debug("Could not build the tab line of " + target.getName() + " for " + viewer.getName(), e);
+					continue;
 				}
-				String line = NameReplacer.replace(look.tabLine, replacing);
 				if(line.equals(sent.get(viewer.getUniqueId()))) continue;
 				sent.put(viewer.getUniqueId(), line);
 				sendRaw(viewer, PacketRewriter.displayName(disguise.getFakeUniqueId(), disguise.getFakeName(), target, line));
@@ -2622,11 +2678,15 @@ public final class PlayerDisguiseManager implements Listener {
 					changed = true;
 				}
 			}
-		} else if(staff && !MESSAGE_COMMANDS.contains(label) && !FACTION_COMMANDS.contains(label)) {
-			// Staff in other commands (/tp, /invsee, /ban ...): a fake name in the first two words means the
-			// disguised player. (Not in /f: a faction description would keep the real name.)
-			for(int i = 1; i < parts.length && i <= 2; i++) {
-				if(translateFakeName(parts, i, label)) changed = true;
+		} else if(!MESSAGE_COMMANDS.contains(label) && !textCommand(parts, label)) {
+			// Every other command (/duel, /trade, /ban, plugins added later ...): a word that is exactly a
+			// disguised player's fake name means that player. Not in text-commands, where a name is only text
+			// that gets saved (/f desc, /sethome ...): there it stays as typed.
+			for(int i = 1; i < parts.length; i++) {
+				if(translateFakeName(parts, i, label)) {
+					changed = true;
+					playerWords.add(i);
+				}
 			}
 		}
 		// Staff: names are only protected where the rest is message text (/msg, /mail send, /report, /r, /me ...).
@@ -2834,6 +2894,18 @@ public final class PlayerDisguiseManager implements Listener {
 		if(player == sender) return false;
 		PlayerDisguise disguise = disguises.get(player.getUniqueId());
 		return disguise != null && disguise.getProfile() != null && disguise.getProfile().replaceNameInMessages;
+	}
+
+	/** The command is in text-commands (every word is saved text, e.g. /f desc, /sethome). */
+	private boolean textCommand(String[] parts, String label) {
+		for(String[] entry : settings.textCommands) {
+			if(entry.length == 0 || parts.length < entry.length) continue;
+			if(!sameCommand(label, entry[0])) continue;
+			boolean subs = true;
+			for(int i = 1; i < entry.length && subs; i++) subs = entry[i].equalsIgnoreCase(parts[i]);
+			if(subs) return true;
+		}
+		return false;
 	}
 
 	/**
