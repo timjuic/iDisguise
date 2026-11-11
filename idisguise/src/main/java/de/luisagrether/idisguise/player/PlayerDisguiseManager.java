@@ -736,8 +736,8 @@ public final class PlayerDisguiseManager implements Listener {
 						UUID uuid = luckPerms.lookupUniqueId(name).get(10, TimeUnit.SECONDS);
 						known = uuid != null && !uuid.equals(target.getUniqueId());
 					} catch(Exception e) {
+						// Unsure: the name stays (the disguise itself checks again and refuses when still unsure).
 						debug("LuckPerms lookup failed for " + name, e);
-						known = true; // unsure: another name
 					}
 				}
 				// Has played here after all (a ready name can be older than that): another one.
@@ -973,6 +973,12 @@ public final class PlayerDisguiseManager implements Listener {
 			finish(done, false);
 			return;
 		}
+		// The own name can't be hidden: say so instead of searching the whole pool for nothing.
+		if(ordinaryName(target.getName(), true)) {
+			send(sender, language().PLAYER_DISGUISE_OWN_NAME_ORDINARY);
+			finish(done, false);
+			return;
+		}
 		pickRandom(sender, target, done, 5);
 	}
 
@@ -1152,24 +1158,53 @@ public final class PlayerDisguiseManager implements Listener {
 
 	/**
 	 * A name that is also an ordinary word on this server: 3 characters or less, only digits, on the
-	 * ordinary-names list, a rank, a command, or a faction's tag.
+	 * ordinary-names list, a rank, a command, a Minecraft item / mob / enchantment / effect, or (for a fake
+	 * name) a faction's tag. A player's own name may be a faction's tag (many factions are named after
+	 * their leader).
 	 */
-	boolean ordinaryName(String name) {
+	boolean ordinaryName(String name, boolean ownName) {
 		if(name == null) return false;
 		String lower = name.toLowerCase(Locale.ENGLISH);
 		if(lower.length() <= 3 || lower.matches("[0-9_]+")) return true;
 		if(settings.ordinaryNames.contains(lower) || settings.ranks.contains(lower)) return true;
-		if(command(lower) != null) return true;
+		if(command(lower) != null || gameWord(name)) return true;
+		if(ownName) return false;
 		FactionsHook api = factionsApi();
 		return api != null && api.isFactionTag(lower);
+	}
+
+	/** The name of a Minecraft item, mob, enchantment or potion effect (players type those in commands). */
+	@SuppressWarnings("deprecation")
+	private static boolean gameWord(String name) {
+		String upper = name.toUpperCase(Locale.ENGLISH);
+		try {
+			if(org.bukkit.Material.matchMaterial(name) != null) return true;
+		} catch(RuntimeException ignored) {
+		}
+		try {
+			if(org.bukkit.entity.EntityType.fromName(name) != null) return true;
+		} catch(RuntimeException ignored) {
+		}
+		for(org.bukkit.entity.EntityType type : org.bukkit.entity.EntityType.values()) {
+			if(type.name().replace("_", "").equalsIgnoreCase(name.replace("_", ""))) return true;
+		}
+		try {
+			if(org.bukkit.enchantments.Enchantment.getByName(upper) != null) return true;
+		} catch(RuntimeException ignored) {
+		}
+		try {
+			if(org.bukkit.potion.PotionEffectType.getByName(upper) != null) return true;
+		} catch(RuntimeException ignored) {
+		}
+		return false;
 	}
 
 	/** Why this name can't be used right now, or null. */
 	private String nameProblem(CommandSender sender, Player target, String name) {
 		// A real or fake name that is also an ordinary word: the name swap would change that word in every
 		// text and break other players' commands with it.
-		if(ordinaryName(target.getName())) return language().PLAYER_DISGUISE_OWN_NAME_ORDINARY;
-		if(ordinaryName(name)) return language().PLAYER_DISGUISE_NAME_ORDINARY;
+		if(ordinaryName(target.getName(), true)) return language().PLAYER_DISGUISE_OWN_NAME_ORDINARY;
+		if(ordinaryName(name, false)) return language().PLAYER_DISGUISE_NAME_ORDINARY;
 		for(PlayerDisguise other : disguises.values()) {
 			if(other.getUniqueId().equals(target.getUniqueId())) continue;
 			// Players get the usual "is online" text: "someone is disguised as" would tell it's a disguise.
@@ -1260,8 +1295,8 @@ public final class PlayerDisguiseManager implements Listener {
 			disguise.setHiddenFromTab(true);
 			disguise.setOwnerRank(realRankOf(owner));
 		}
-		// Staff play like a normal player while disguised, unless the menu's button says otherwise.
-		disguise.setPlayerPermissions(luckPerms != null && has(target, PERM_STAFF));
+		// Player permissions: OFF unless the menu's button turns them on (also /disguise <name> <rank>, /odisguise).
+		disguise.setPlayerPermissions(false);
 		disguises.put(target.getUniqueId(), disguise);
 		rebuildSnapshots();
 		save();
@@ -2090,6 +2125,14 @@ public final class PlayerDisguiseManager implements Listener {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> send(joined, language().UNDISGUISED_NO_ACCESS), 20L);
 			return;
 		}
+		// Saved before a name like that was refused (an ordinary word): the disguise ends.
+		if(ordinaryName(disguise.getFakeName(), false) || ordinaryName(joined.getName(), true)) {
+			disguises.remove(joined.getUniqueId());
+			save();
+			log.end(joined.getName(), joined.getUniqueId(), "player", disguise.getFakeName());
+			Bukkit.getScheduler().runTaskLater(plugin, () -> send(joined, language().PLAYER_DISGUISE_NAME_ORDINARY), 20L);
+			return;
+		}
 		markOnline(joined, disguise);
 		findOwner(disguise);
 		Player owner = Bukkit.getPlayerExact(disguise.getFakeName());
@@ -2420,7 +2463,7 @@ public final class PlayerDisguiseManager implements Listener {
 	 * placeholders (faction relation colour). Sent only when the line changed.
 	 */
 	private void keepTabLines() {
-		int slice = tabTick++ % 20;
+		int slice = Math.floorMod(tabTick++, 20);
 		if(slice == 0) sharedTabLines.clear();
 		if(tabLook == null || online.isEmpty()) return;
 		List<Player> viewers = new ArrayList<>(Bukkit.getOnlinePlayers());
@@ -2433,7 +2476,8 @@ public final class PlayerDisguiseManager implements Listener {
 			try {
 				shared = sharedTabLines.get(disguise.getUniqueId());
 				if(shared == null) {
-					shared = tabLook.shared(target, effectiveRank(disguise), factions, owner);
+					// Real names swapped once here, not for every viewer (the per-viewer part adds no names).
+					shared = NameReplacer.replace(tabLook.shared(target, effectiveRank(disguise), factions, owner), replacing);
 					sharedTabLines.put(disguise.getUniqueId(), shared);
 				}
 			} catch(RuntimeException e) {
@@ -2446,7 +2490,7 @@ public final class PlayerDisguiseManager implements Listener {
 						|| disguise.getRemovedFor().contains(viewer.getUniqueId())) continue;
 				String line;
 				try {
-					line = NameReplacer.replace(tabLook.forViewer(shared, viewer, target, factions, owner), replacing);
+					line = tabLook.forViewer(shared, viewer, target, factions, owner);
 				} catch(RuntimeException e) {
 					debug("Could not build the tab line of " + target.getName() + " for " + viewer.getName(), e);
 					continue;
@@ -2814,6 +2858,8 @@ public final class PlayerDisguiseManager implements Listener {
 			if(profile == null || !profile.commandsUseFakeName || !parts[i].equalsIgnoreCase(disguise.getFakeName())) continue;
 			// Shows the real player's faction, so /f who <name> means the real player too.
 			if(factionOwner(disguise) != null && FACTION_COMMANDS.contains(label)) continue;
+			// A faction with that tag (made after the disguise): in /f commands the word means the faction.
+			if(FACTION_COMMANDS.contains(label) && factionsApi() != null && factionsApi().isFactionTag(parts[i])) continue;
 			// The name of a real account: only messages and teleport requests reach the disguise; /pay,
 			// /mail ... go to the real player (never money or items to the wrong person).
 			if(disguise.getOwnerUuid() != null && !realPlayerCommand(label)) continue;

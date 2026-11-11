@@ -242,6 +242,31 @@ text-commands:
 - me
 - broadcast
 - say
+- kit
+- kits
+- sell
+- worth
+- recipe
+- i
+- item
+- give
+- shop
+- ah
+- spawner
+- ss
+- jobs
+- crate
+- enchant
+- rename
+- itemname
+- ren
+- ac
+- sc
+- staffchat
+- adminchat
+- shout
+- ticket
+- pwarp
 
 # Names that can't be used for a player disguise because they are ordinary words here (a player whose real
 # name is one of them can't use player disguises either). Names of 3 characters or less, only numbers, ranks,
@@ -288,6 +313,35 @@ ordinary-names:
 - nobody
 - someone
 - everyone
+- accept
+- deny
+- confirm
+- cancel
+- create
+- join
+- leave
+- list
+- info
+- hand
+- inventory
+- toggle
+- buy
+- sell
+- open
+- claim
+- top
+- reward
+- rewards
+- miner
+- farmer
+- hunter
+- builder
+- fisher
+- warrior
+- lumberjack
+- shadow
+- alpha
+- lucky
 
 # Disguised as a REAL player (one who has played here): only these commands typed with that name reach
 # the disguised player. Every other command (/pay, /f, /mail ...) means the real account, so money and

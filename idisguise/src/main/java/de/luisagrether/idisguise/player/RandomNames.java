@@ -125,7 +125,7 @@ final class RandomNames {
 	private String candidate() {
 		String a = part();
 		switch(random.nextInt(7)) {
-			case 0: return a;
+			case 0: return a + part(); // never a single plain word (Potato, Dragon ...): it would be an item or mob too
 			case 1: return a + part();
 			case 2: return a + (1 + random.nextInt(99));
 			case 3: return a + "_" + part();

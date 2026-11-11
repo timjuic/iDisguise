@@ -189,7 +189,8 @@ final class TabLook {
 				// PlaceholderAPI missing or broken: show the text without placeholders
 			}
 		}
-		return text;
+		// Colours now, so join() sees the real text (forViewer translating again changes nothing).
+		return ChatColor.translateAlternateColorCodes('&', text);
 	}
 
 	private static String owner(String text, Player viewer, FactionsHook factions, java.util.UUID owner) {
