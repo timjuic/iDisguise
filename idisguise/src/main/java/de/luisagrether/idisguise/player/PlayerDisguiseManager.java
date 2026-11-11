@@ -1962,12 +1962,16 @@ public final class PlayerDisguiseManager implements Listener {
 	// ---------------------------------------------------------------- tab entry of hidden staff
 
 	void scheduleTabRemoval(PlayerDisguise disguise, Player viewer) {
-		Bukkit.getScheduler().runTaskLater(plugin, () -> {
-			if(!viewer.isOnline() || !disguise.isHiddenFromTab() || disguises.get(disguise.getUniqueId()) != disguise) return;
-			sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,
-					new WrappedGameProfile(disguise.getFakeUniqueId(), disguise.getFakeName())));
-			disguise.getRemovedFor().add(viewer.getUniqueId());
-		}, isNear(viewer, disguise) ? 60L : 1L);
+		// Decided on the main thread (this may be called from a packet thread, where positions aren't safe).
+		Bukkit.getScheduler().runTask(plugin, () -> {
+			if(!viewer.isOnline()) return;
+			Bukkit.getScheduler().runTaskLater(plugin, () -> {
+				if(!viewer.isOnline() || !disguise.isHiddenFromTab() || disguises.get(disguise.getUniqueId()) != disguise) return;
+				sendRaw(viewer, PacketRewriter.playerInfo(PlayerInfoAction.REMOVE_PLAYER, disguise,
+						new WrappedGameProfile(disguise.getFakeUniqueId(), disguise.getFakeName())));
+				disguise.getRemovedFor().add(viewer.getUniqueId());
+			}, isNear(viewer, disguise) ? 59L : 1L);
+		});
 	}
 
 	/** Close enough that the viewer's game shows the player's body (it needs the tab entry for the skin). */
@@ -2731,7 +2735,9 @@ public final class PlayerDisguiseManager implements Listener {
 				// - /msg, /tpa ... also take a short name (/msg xen): chosen by the names the sender sees.
 				// - everything else (/pay, /bal, /mail send ...): only a word that can't mean anyone visible.
 				// A faction's tag (e.g. named after its disguised leader) means the faction in /f commands.
-				boolean factionTag = FACTION_COMMANDS.contains(label) && factionsApi() != null && factionsApi().isFactionTag(parts[target]);
+				boolean factionTag = FACTION_COMMANDS.contains(label) && parts.length > 1
+						&& FACTION_TAG_SUBCOMMANDS.contains(parts[1].toLowerCase(Locale.ENGLISH))
+						&& factionsApi() != null && factionsApi().isFactionTag(parts[target]);
 				String hidden = factionTag ? null
 						: FACTION_COMMANDS.contains(label) ? exactRealName(parts[target], sender)
 						: looseCommand(label) ? resolveLoose(parts[target], sender, label)
@@ -2747,7 +2753,9 @@ public final class PlayerDisguiseManager implements Listener {
 			// /f c public stays a word even while someone is disguised as "Public". Also "u:<fake name>"
 			// (CoreProtect lookups). Not in text-commands, where a name is only saved text: there it stays.
 			for(int i = 1; i < parts.length; i++) {
-				if(translateFakeName(parts, i, label, true)) {
+				// Exact capitals only in /f, where words are often subcommands (/f c public); else like typed.
+				boolean exact = FACTION_COMMANDS.contains(label);
+				if(translateFakeName(parts, i, label, exact)) {
 					changed = true;
 					playerWords.add(i);
 					continue;
@@ -2755,7 +2763,7 @@ public final class PlayerDisguiseManager implements Listener {
 				int colon = parts[i].indexOf(':');
 				if(colon > 0 && colon < parts[i].length() - 1) {
 					String[] rest = {parts[i].substring(colon + 1)};
-					if(translateFakeName(rest, 0, label, true)) {
+					if(translateFakeName(rest, 0, label, exact)) {
 						parts[i] = parts[i].substring(0, colon + 1) + rest[0];
 						changed = true;
 						playerWords.add(i);
@@ -2803,7 +2811,7 @@ public final class PlayerDisguiseManager implements Listener {
 	}
 
 	private static final List<String> STAFF_TARGET_COMMANDS = java.util.Arrays.asList("ban", "tempban", "ipban", "banip", "mute",
-			"tempmute", "kick", "warn", "jail", "freeze", "invsee", "endersee", "history", "checkban", "check");
+			"tempmute", "kick", "warn", "jail", "freeze", "invsee", "endersee", "checkban");
 
 	/** "/tpaccept all", "/tpdeny *", "/msg console": not a player (unless an online player has that name). */
 	private boolean keyword(String label, String word) {

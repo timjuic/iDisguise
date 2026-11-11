@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
@@ -302,8 +303,18 @@ final class PacketRewriter extends PacketAdapter {
 		spawn.getUUIDs().write(0, disguise.getFakeUniqueId());
 		if(disguise.getRemovedFor().contains(viewer.getUniqueId())) {
 			event.setCancelled(true);
-			manager.sendTabAdd(viewer, disguise);
-			manager.sendRaw(viewer, spawn);
+			// Tab entry first, then the body (1.8 draws a player only with its tab entry). On the main thread,
+			// so both go out in this order even when another plugin's listener waits for the main thread.
+			if(Bukkit.isPrimaryThread()) {
+				manager.sendTabAdd(viewer, disguise);
+				manager.sendRaw(viewer, spawn);
+			} else {
+				Bukkit.getScheduler().runTask(plugin, () -> {
+					if(!viewer.isOnline()) return;
+					manager.sendTabAdd(viewer, disguise);
+					manager.sendRaw(viewer, spawn);
+				});
+			}
 			return;
 		}
 		event.setPacket(spawn);
