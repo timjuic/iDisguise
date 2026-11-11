@@ -111,13 +111,21 @@ final class PlayerDisguiseSettings {
 			realPlayerCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
 		}
 		List<String> commands = new ArrayList<>(config.getStringList("fake-name-commands"));
-		// The first list (6.1.71) missed many Factions aliases. A list that still has every entry of it (the
-		// server only added some) also gets the newer defaults; one where entries were removed stays as it is.
+		// The first list (6.1.71) missed many Factions aliases. A list that still has every entry of it and none
+		// of the newer ones (nobody touched it since) gets the newer defaults. Once the server's list has any of
+		// them, it is left as it is (an entry the server removed stays removed).
 		java.util.Set<String> have = new java.util.HashSet<>();
 		for(String command : commands) if(command != null) have.add(command.toLowerCase(Locale.ENGLISH).trim());
 		if(have.containsAll(FIRST_FAKE_NAME_COMMANDS) && config.getDefaults() != null) {
+			List<String> newer = new ArrayList<>();
 			for(String command : config.getDefaults().getStringList("fake-name-commands")) {
-				if(have.add(command.toLowerCase(Locale.ENGLISH).trim())) commands.add(command);
+				String clean = command.toLowerCase(Locale.ENGLISH).trim();
+				if(!FIRST_FAKE_NAME_COMMANDS.contains(clean)) newer.add(clean);
+			}
+			boolean anyNewer = false;
+			for(String command : newer) if(have.contains(command)) anyNewer = true;
+			if(!anyNewer) {
+				for(String command : newer) if(have.add(command)) commands.add(command);
 			}
 		}
 		for(String command : commands) {

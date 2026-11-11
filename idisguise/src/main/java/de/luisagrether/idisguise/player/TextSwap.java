@@ -175,9 +175,11 @@ final class TextSwap {
 		if(items == null) return;
 		ItemStack[] result = new ItemStack[items.length];
 		boolean changed = false;
+		// A chest, menu ... also sends the player's own 36 slots last: those stay like in the own inventory.
+		int ownFrom = window <= 0 ? 0 : Math.max(0, items.length - 36);
 		for(int i = 0; i < items.length; i++) {
-			// The own inventory (window 0): only the invisible marker comes out, names stay as they are.
-			ItemStack replaced = window <= 0 ? markerFree(items[i]) : item(items[i], disguises);
+			// The own inventory: only the invisible marker comes out, names stay as they are.
+			ItemStack replaced = i >= ownFrom ? markerFree(items[i]) : item(items[i], disguises);
 			result[i] = replaced != null ? replaced : items[i];
 			if(replaced != null) changed = true;
 		}
@@ -192,7 +194,18 @@ final class TextSwap {
 		Integer window = event.getPacket().getIntegers().readSafely(0);
 		if(window == null) return;
 		ItemStack item = event.getPacket().getItemModifier().readSafely(0);
-		ItemStack replaced = window <= 0 ? markerFree(item) : item(item, disguises);
+		boolean own = window <= 0;
+		if(!own) {
+			// A slot below the chest / menu part is the player's own inventory.
+			Integer slot = event.getPacket().getIntegers().readSafely(1);
+			try {
+				int top = event.getPlayer().getOpenInventory().getTopInventory().getSize();
+				own = slot != null && slot >= top;
+			} catch(RuntimeException unsure) {
+				own = false;
+			}
+		}
+		ItemStack replaced = own ? markerFree(item) : item(item, disguises);
 		if(replaced == null) return;
 		PacketContainer copy = event.getPacket().shallowClone();
 		copy.getItemModifier().write(0, replaced);
