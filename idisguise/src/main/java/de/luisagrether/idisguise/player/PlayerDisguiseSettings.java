@@ -110,11 +110,18 @@ final class PlayerDisguiseSettings {
 		for(String command : config.getStringList("real-player-commands")) {
 			realPlayerCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
 		}
-		for(String command : config.getStringList("fake-name-commands")) {
+		List<String> commands = config.getStringList("fake-name-commands");
+		// Still exactly the first list (6.1.71), which missed many Factions aliases: the current defaults.
+		if(new java.util.HashSet<>(commands).equals(new java.util.HashSet<>(FIRST_FAKE_NAME_COMMANDS)) && config.getDefaults() != null) {
+			commands = config.getDefaults().getStringList("fake-name-commands");
+		}
+		for(String command : commands) {
 			if(command == null) continue;
 			String clean = command.toLowerCase(Locale.ENGLISH).replace("/", "").trim();
 			if(!clean.isEmpty()) fakeNameCommands.add(clean.split(" +"));
 		}
+		// The longest entry wins ("mail send" before "mail").
+		fakeNameCommands.sort((a, b) -> b.length - a.length);
 		ConfigurationSection items = config.getConfigurationSection("menu-items");
 		if(items != null) {
 			for(String key : items.getKeys(false)) {
@@ -134,6 +141,10 @@ final class PlayerDisguiseSettings {
 		staff = new Profile(section(config, "profiles.staff"));
 		players = new Profile(section(config, "profiles.players"));
 	}
+
+	private static final List<String> FIRST_FAKE_NAME_COMMANDS = java.util.Arrays.asList("msg", "tpa", "tpahere", "tpaccept",
+			"tpdeny", "pay", "balance", "seen", "mail send", "ignore", "f who", "f show", "f invite", "f inv", "f deinvite", "f deinv",
+			"f kick", "f mod", "f coleader", "f leader", "f promote", "f demote", "f ban", "f unban", "stats");
 
 	private static List<String> lowerCase(List<String> list) {
 		List<String> result = new ArrayList<>();

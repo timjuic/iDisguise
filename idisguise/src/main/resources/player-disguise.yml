@@ -169,19 +169,36 @@ fake-name-commands:
 - ignore
 - f who
 - f show
+- f f
 - f invite
 - f inv
 - f deinvite
 - f deinv
+- f uninvite
+- f uninv
 - f kick
 - f mod
+- f setmod
+- f officer
+- f setofficer
 - f coleader
+- f setcoleader
+- f cl
+- f setcl
 - f leader
+- f setleader
+- f admin
+- f setadmin
 - f promote
 - f demote
 - f ban
 - f unban
+- f power
+- f pow
+- f title
+- f join
 - stats
+- report
 
 # Disguised as a REAL player (one who has played here): only these commands typed with that name reach
 # the disguised player. Every other command (/pay, /f, /mail ...) means the real account, so money and

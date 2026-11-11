@@ -93,6 +93,14 @@ final class OwnSkin implements PluginMessageListener {
 	}
 
 	void stop() {
+		// Undisguised in the last second: others get to see the player before everything stops.
+		for(Runnable waiting : new java.util.ArrayList<>(afterReset.values())) {
+			try {
+				waiting.run();
+			} catch(Throwable ignored) {
+			}
+		}
+		afterReset.clear();
 		try {
 			Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, CHANNEL);
 			Bukkit.getMessenger().unregisterIncomingPluginChannel(plugin, CHANNEL, this);

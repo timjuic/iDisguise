@@ -34,6 +34,9 @@ final class TextSwap {
 
 	private TextSwap() {}
 
+	// Armor stands seen being spawned (holograms): their names are always plugin text, coloured or not.
+	private static final java.util.Set<Integer> ARMOR_STANDS = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
 	static void rewrite(PacketEvent event, PlayerDisguiseManager manager) {
 		Collection<PlayerDisguise> disguises = manager.replacingNames();
 		if(disguises.isEmpty()) return;
@@ -109,13 +112,15 @@ final class TextSwap {
 	private static void metadata(PacketEvent event, Collection<PlayerDisguise> disguises) {
 		List<WrappedWatchableObject> values = event.getPacket().getWatchableCollectionModifier().readSafely(0);
 		if(values == null || values.isEmpty()) return;
+		Integer entity = event.getPacket().getIntegers().readSafely(0);
+		boolean hologram = entity != null && ARMOR_STANDS.contains(entity);
 		List<WrappedWatchableObject> result = new ArrayList<>(values.size());
 		boolean changed = false;
 		for(WrappedWatchableObject value : values) {
 			// Index 2 is the custom name. A new object: the old one belongs to the server's entity.
 			if(value != null && value.getIndex() == 2 && value.getValue() instanceof String) {
 				String name = (String)value.getValue();
-				String replaced = pluginText(name) ? NameReplacer.replace(name, disguises) : name;
+				String replaced = hologram || pluginText(name) ? NameReplacer.replace(name, disguises) : stripMarker(name);
 				if(!replaced.equals(name)) {
 					result.add(new WrappedWatchableObject(2, replaced));
 					changed = true;
@@ -131,11 +136,20 @@ final class TextSwap {
 	}
 
 	private static void spawnLiving(PacketEvent event, Collection<PlayerDisguise> disguises) {
+		// 1.8: the second number is the mob type, 30 = armor stand (holograms; a name tag can't go on one).
+		Integer entity = event.getPacket().getIntegers().readSafely(0);
+		Integer mobType = event.getPacket().getIntegers().readSafely(1);
+		boolean hologram = mobType != null && mobType == 30;
+		if(hologram && entity != null) {
+			if(ARMOR_STANDS.size() > 20000) ARMOR_STANDS.clear();
+			ARMOR_STANDS.add(entity);
+		}
 		WrappedDataWatcher watcher = event.getPacket().getDataWatcherModifier().readSafely(0);
 		if(watcher == null) return;
 		Object name = watcher.getObject(2);
-		if(!(name instanceof String) || !pluginText((String)name)) return;
-		String replaced = NameReplacer.replace((String)name, disguises);
+		if(!(name instanceof String)) return;
+		// A mob a player named with a name tag keeps the typed name (only plugin text has colour codes).
+		String replaced = hologram || pluginText((String)name) ? NameReplacer.replace((String)name, disguises) : stripMarker((String)name);
 		if(replaced.equals(name)) return;
 		// A brand-new watcher with copied values: a clone shares its values with the real entity on 1.8,
 		// and changing it would rename the mob / armor stand on the server for real.
@@ -185,12 +199,22 @@ final class TextSwap {
 	}
 
 	/**
-	 * Text a plugin made (menus, holograms, leaderboards): those always carry colour codes. Text a player
-	 * typed (an anvil rename, a name tag on a mob) never can, and stays as typed: otherwise renaming
-	 * something to a suspected real name would show the fake name and tell who it is.
+	 * A mob's name a plugin gave it: those carry colour codes. A name tag a player typed never can, and
+	 * stays as typed: otherwise naming a mob after a suspected real name would show the fake name.
 	 */
 	static boolean pluginText(String text) {
 		return text != null && text.indexOf('§') >= 0;
+	}
+
+	/** The invisible marker never stays in text a player sees, even where no name is swapped. */
+	private static String stripMarker(String text) {
+		return text == null ? null : text.replace(NameReplacer.MARKER, "");
+	}
+
+	/** Renamed in an anvil (a player typed the name, colour perks included): the name stays as typed. */
+	private static boolean anvilRenamed(ItemMeta meta) {
+		return meta instanceof org.bukkit.inventory.meta.Repairable && ((org.bukkit.inventory.meta.Repairable)meta).hasRepairCost()
+				&& ((org.bukkit.inventory.meta.Repairable)meta).getRepairCost() > 0;
 	}
 
 	/** A changed copy of the item, or null when nothing needs to change. */
@@ -199,8 +223,8 @@ final class TextSwap {
 		if(item == null || !item.hasItemMeta()) return null;
 		ItemMeta meta = item.getItemMeta();
 		boolean changed = false;
-		if(meta.hasDisplayName() && pluginText(meta.getDisplayName())) {
-			String replaced = NameReplacer.replace(meta.getDisplayName(), disguises);
+		if(meta.hasDisplayName()) {
+			String replaced = anvilRenamed(meta) ? stripMarker(meta.getDisplayName()) : NameReplacer.replace(meta.getDisplayName(), disguises);
 			if(!replaced.equals(meta.getDisplayName())) {
 				meta.setDisplayName(replaced);
 				changed = true;
@@ -210,7 +234,7 @@ final class TextSwap {
 			List<String> lore = new ArrayList<>();
 			boolean loreChanged = false;
 			for(String line : meta.getLore()) {
-				String replaced = pluginText(line) ? NameReplacer.replace(line, disguises) : line;
+				String replaced = NameReplacer.replace(line, disguises);
 				lore.add(replaced);
 				if(!replaced.equals(line)) loreChanged = true;
 			}
