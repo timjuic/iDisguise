@@ -86,6 +86,18 @@ final class PacketRewriter extends PacketAdapter {
 			try {
 				if(event.getPacketType() == PacketType.Play.Server.PLAYER_INFO) {
 					revealPlayerInfo(event);
+				} else if(event.getPacketType() == PacketType.Play.Server.CHAT) {
+					// Real names stay, but the invisible marker never shows (some games draw it as a box).
+					WrappedChatComponent message = event.getPacket().getChatComponents().readSafely(0);
+					String json = message == null ? null : message.getJson();
+					// The marker as it is, or written out as JSON escapes.
+					String escaped = "\\" + "u200b" + "\\" + "u2060";
+					if(json != null && (json.contains(NameReplacer.MARKER) || json.contains(escaped))) {
+						PacketContainer copy = event.getPacket().shallowClone();
+						copy.getChatComponents().write(0, WrappedChatComponent.fromJson(
+								json.replace(NameReplacer.MARKER, "").replace(escaped, "")));
+						event.setPacket(copy);
+					}
 				}
 			} catch(RuntimeException e) {
 				manager.packetError(event.getPacketType().name(), e);

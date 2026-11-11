@@ -110,10 +110,15 @@ final class PlayerDisguiseSettings {
 		for(String command : config.getStringList("real-player-commands")) {
 			realPlayerCommands.add(command.toLowerCase(Locale.ENGLISH).replace("/", ""));
 		}
-		List<String> commands = config.getStringList("fake-name-commands");
-		// Still exactly the first list (6.1.71), which missed many Factions aliases: the current defaults.
-		if(new java.util.HashSet<>(commands).equals(new java.util.HashSet<>(FIRST_FAKE_NAME_COMMANDS)) && config.getDefaults() != null) {
-			commands = config.getDefaults().getStringList("fake-name-commands");
+		List<String> commands = new ArrayList<>(config.getStringList("fake-name-commands"));
+		// The first list (6.1.71) missed many Factions aliases. A list that still has every entry of it (the
+		// server only added some) also gets the newer defaults; one where entries were removed stays as it is.
+		java.util.Set<String> have = new java.util.HashSet<>();
+		for(String command : commands) if(command != null) have.add(command.toLowerCase(Locale.ENGLISH).trim());
+		if(have.containsAll(FIRST_FAKE_NAME_COMMANDS) && config.getDefaults() != null) {
+			for(String command : config.getDefaults().getStringList("fake-name-commands")) {
+				if(have.add(command.toLowerCase(Locale.ENGLISH).trim())) commands.add(command);
+			}
 		}
 		for(String command : commands) {
 			if(command == null) continue;

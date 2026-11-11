@@ -2595,26 +2595,25 @@ public final class PlayerDisguiseManager implements Listener {
 			if(translateFakeName(parts, target, label)) {
 				changed = true;
 			} else if(!staff) {
-				// A disguised player's real name, or a part of it that would find them, acts like an offline
-				// player: otherwise "/msg <real name>" would reach the disguised player and tell who they are.
-				String hidden = hideRealName(parts[target], sender);
+				// A disguised player's real name acts like an offline player: otherwise "/msg <real name>" would
+				// reach the disguised player and tell who they are. Commands that also take a short name
+				// (/msg xen) choose by the names the sender sees; all others only by the exact name.
+				String hidden = looseCommand(label) ? resolveLoose(parts[target], sender, label) : exactRealName(parts[target], sender);
 				if(hidden != null) {
 					parts[target] = hidden;
 					changed = true;
 				}
 			}
-		} else if(staff && !MESSAGE_COMMANDS.contains(label)) {
-			// Staff in other commands (/tp, /invsee, /ban ...): a fake name means the disguised player, and real
-			// names in the first two words work as typed (/tp <name> <name>).
+		} else if(staff && !MESSAGE_COMMANDS.contains(label) && !FACTION_COMMANDS.contains(label)) {
+			// Staff in other commands (/tp, /invsee, /ban ...): a fake name in the first two words means the
+			// disguised player. (Not in /f: a faction description would keep the real name.)
 			for(int i = 1; i < parts.length && i <= 2; i++) {
-				if(translateFakeName(parts, i, label)) {
-					changed = true;
-					playerWords.add(i);
-				} else if(Bukkit.getPlayerExact(parts[i]) != null) {
-					playerWords.add(i);
-				}
+				if(translateFakeName(parts, i, label)) changed = true;
 			}
 		}
+		// Staff: names are only protected where everything else is message text (/msg, /mail send, /r, /me ...).
+		// In their other commands every name works as typed (/ban, /co lookup u:<name>, /rg addmember ...).
+		boolean protect = !staff || target > 0 || MESSAGE_COMMANDS.contains(label);
 		// Real names typed anywhere else ("/msg Bob Danny?", "/f desc Danny") stay exactly as typed, like in
 		// chat: the name swap would otherwise show the fake name and tell who it is. Staff too. Includes players
 		// who just left (their name is still swapped for a few seconds). Not the sender's own name.
@@ -2623,7 +2622,7 @@ public final class PlayerDisguiseManager implements Listener {
 			if(disguise.getUniqueId().equals(sender.getUniqueId())) continue;
 			if(disguise.getProfile() == null || disguise.getProfile().replaceNameInMessages) others.add(disguise);
 		}
-		if(!others.isEmpty()) {
+		if(protect && !others.isEmpty()) {
 			for(int i = 1; i < parts.length; i++) {
 				if(playerWords.contains(i)) continue;
 				String marked = NameReplacer.markTyped(parts[i], others);
@@ -2658,46 +2657,67 @@ public final class PlayerDisguiseManager implements Listener {
 		return false;
 	}
 
+	/** Commands that find a player by a short name too (Essentials: /msg xen reaches xental). */
+	private static final List<String> LOOSE_COMMANDS = java.util.Arrays.asList("msg", "tpa", "tpahere", "tpaccept", "tpdeny", "pay");
+
+	private boolean looseCommand(String label) {
+		org.bukkit.command.Command typed = command(label);
+		for(String name : LOOSE_COMMANDS) {
+			if(name.equals(label) || (typed != null && command(name) == typed)) return true;
+		}
+		return false;
+	}
+
+	/** Exactly a disguised player's real name: made unfindable (an invisible marker inside). Else null. */
+	private String exactRealName(String word, Player sender) {
+		for(Player player : Bukkit.getOnlinePlayers()) {
+			if(player.getName().equalsIgnoreCase(word) && hiddenFrom(player, sender)) return NameReplacer.mark(word);
+		}
+		return null;
+	}
+
 	/**
-	 * The player word as it must be sent so a disguised player can't be found by their real name, or null
-	 * when it can stay. Plugins find players by the exact name, the start of a name (the closest one wins)
-	 * or a part of it. When that would be a disguised player: the player who'd be found if the disguised one
-	 * were offline (their exact name), or an invisible marker so nobody is found. A word that fits another
-	 * player first stays as it is (/msg xen still reaches xental).
+	 * /msg, /tpa, /pay ... with a short name: the player is chosen the way Essentials would choose if every
+	 * disguised player really had their fake name (closest start of a name, else a part of it), by the names
+	 * the sender sees. The word is sent as that player's exact name, so the command can't pick anyone else
+	 * (never money to someone the sender didn't mean). A disguised player's real name finds nobody.
 	 */
-	private String hideRealName(String word, Player sender) {
-		if(word.length() < 2 || !word.matches("[A-Za-z0-9_]+")) return null;
+	private String resolveLoose(String word, Player sender, String label) {
+		if(word.isEmpty() || !word.matches("[A-Za-z0-9_]+")) return null;
 		String lower = word.toLowerCase(Locale.ENGLISH);
 		Player best = null;
 		int bestDelta = Integer.MAX_VALUE;
-		Player bestVisible = null;
-		int bestVisibleDelta = Integer.MAX_VALUE;
-		boolean hiddenContains = false;
-		boolean visibleContains = false;
+		Player firstPart = null;
+		boolean hiddenReal = false;
 		for(Player player : Bukkit.getOnlinePlayers()) {
-			String name = player.getName().toLowerCase(Locale.ENGLISH);
 			boolean hidden = hiddenFrom(player, sender);
-			if(name.equals(lower)) return hidden ? NameReplacer.mark(word) : null;
-			if(name.startsWith(lower)) {
-				int delta = name.length() - lower.length();
+			String shown = (hidden ? disguises.get(player.getUniqueId()).getFakeName() : player.getName()).toLowerCase(Locale.ENGLISH);
+			if(hidden && player.getName().toLowerCase(Locale.ENGLISH).contains(lower)) hiddenReal = true;
+			if(shown.equals(lower)) {
+				best = player;
+				bestDelta = -1;
+				break;
+			}
+			if(shown.startsWith(lower)) {
+				int delta = shown.length() - lower.length();
 				if(delta < bestDelta) {
 					best = player;
 					bestDelta = delta;
 				}
-				if(!hidden && delta < bestVisibleDelta) {
-					bestVisible = player;
-					bestVisibleDelta = delta;
-				}
-			} else if(name.contains(lower)) {
-				if(hidden) hiddenContains = true;
-				else visibleContains = true;
+			} else if(firstPart == null && shown.contains(lower)) {
+				firstPart = player;
 			}
 		}
-		if(best != null) {
-			if(!hiddenFrom(best, sender)) return null;
-			return bestVisible != null ? bestVisible.getName() : NameReplacer.mark(word);
-		}
-		return hiddenContains && !visibleContains ? NameReplacer.mark(word) : null;
+		if(best == null) best = firstPart;
+		if(best == null) return hiddenReal ? NameReplacer.mark(word) : null;
+		if(!hiddenFrom(best, sender)) return hiddenReal ? best.getName() : null;
+		// A disguised player by the name the sender sees: like typing the fake name out.
+		PlayerDisguise disguise = disguises.get(best.getUniqueId());
+		if(!disguise.getProfile().commandsUseFakeName) return NameReplacer.mark(word);
+		// The name of a real account (not a message / teleport request) or that player is online: it means them.
+		boolean realAccount = disguise.getOwnerUuid() != null && !settings.realPlayerCommands.contains(label);
+		if(realAccount || Bukkit.getPlayerExact(disguise.getFakeName()) != null) return disguise.getFakeName();
+		return disguise.getRealName();
 	}
 
 	/** This player is disguised, and their real name must not lead to them for the sender. */

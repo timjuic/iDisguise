@@ -170,13 +170,14 @@ final class TextSwap {
 		// The player's own inventory: items they renamed themselves stay as they are (an item named
 		// after a disguised player would otherwise show the fake name and tell who it is).
 		Integer window = event.getPacket().getIntegers().readSafely(0);
-		if(window == null || window <= 0) return;
+		if(window == null) return;
 		ItemStack[] items = event.getPacket().getItemArrayModifier().readSafely(0);
 		if(items == null) return;
 		ItemStack[] result = new ItemStack[items.length];
 		boolean changed = false;
 		for(int i = 0; i < items.length; i++) {
-			ItemStack replaced = item(items[i], disguises);
+			// The own inventory (window 0): only the invisible marker comes out, names stay as they are.
+			ItemStack replaced = window <= 0 ? markerFree(items[i]) : item(items[i], disguises);
 			result[i] = replaced != null ? replaced : items[i];
 			if(replaced != null) changed = true;
 		}
@@ -189,9 +190,9 @@ final class TextSwap {
 	private static void setSlot(PacketEvent event, Collection<PlayerDisguise> disguises) {
 		if(event.getPlayer().getGameMode() == GameMode.CREATIVE) return;
 		Integer window = event.getPacket().getIntegers().readSafely(0);
-		if(window == null || window <= 0) return;
+		if(window == null) return;
 		ItemStack item = event.getPacket().getItemModifier().readSafely(0);
-		ItemStack replaced = item(item, disguises);
+		ItemStack replaced = window <= 0 ? markerFree(item) : item(item, disguises);
 		if(replaced == null) return;
 		PacketContainer copy = event.getPacket().shallowClone();
 		copy.getItemModifier().write(0, replaced);
@@ -207,8 +208,31 @@ final class TextSwap {
 	}
 
 	/** The invisible marker never stays in text a player sees, even where no name is swapped. */
-	private static String stripMarker(String text) {
+	static String stripMarker(String text) {
 		return text == null ? null : text.replace(NameReplacer.MARKER, "");
+	}
+
+	/** A copy without the invisible marker in name and lore, or null when it has none. */
+	private static ItemStack markerFree(ItemStack item) {
+		if(item == null || !item.hasItemMeta()) return null;
+		ItemMeta meta = item.getItemMeta();
+		boolean changed = false;
+		if(meta.hasDisplayName() && meta.getDisplayName().contains(NameReplacer.MARKER)) {
+			meta.setDisplayName(stripMarker(meta.getDisplayName()));
+			changed = true;
+		}
+		if(meta.hasLore()) {
+			List<String> lore = new ArrayList<>();
+			for(String line : meta.getLore()) {
+				if(line != null && line.contains(NameReplacer.MARKER)) changed = true;
+				lore.add(stripMarker(line));
+			}
+			if(changed) meta.setLore(lore);
+		}
+		if(!changed) return null;
+		ItemStack copy = item.clone();
+		copy.setItemMeta(meta);
+		return copy;
 	}
 
 	/** Renamed in an anvil (a player typed the name, colour perks included): the name stays as typed. */

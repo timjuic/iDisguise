@@ -197,6 +197,21 @@ fake-name-commands:
 - f pow
 - f title
 - f join
+- f owner
+- f pardon
+- f promo
+- f mute
+- f unmute
+- f ahome
+- f modifypower
+- f modpower
+- f pm
+- f mp
+- f alts invite
+- f alts inv
+- f alts deinvite
+- f alts deinv
+- f alts kick
 - stats
 - report
 
