@@ -16,14 +16,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.events.ListenerPriority;
-import com.comphenix.protocol.events.PacketAdapter;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.events.PacketEvent;
-import com.comphenix.protocol.wrappers.EnumWrappers;
-import com.comphenix.protocol.wrappers.EnumWrappers.NativeGameMode;
 
 import de.luisagrether.idisguise.iDisguise;
 
@@ -44,8 +36,6 @@ final class OwnSkin implements PluginMessageListener {
 
 	private final iDisguise plugin;
 	private final PlayerDisguiseManager manager;
-	// The dimension each player's game has now (from the login and respawn packets).
-	private final Map<UUID, Integer> dimensions = new ConcurrentHashMap<>();
 	// The skin the proxy was asked to use (null: real skin).
 	private final Map<UUID, String> requested = new ConcurrentHashMap<>();
 	// When the proxy was last asked, and how many answers are still open: one answer per question, and only
@@ -56,7 +46,6 @@ final class OwnSkin implements PluginMessageListener {
 	private final Map<UUID, Runnable> afterReset = new ConcurrentHashMap<>();
 	// A refresh is already planned (several answers in a row give one refresh).
 	private final java.util.Set<UUID> refreshPlanned = ConcurrentHashMap.newKeySet();
-	private PacketAdapter dimensionListener;
 	private boolean refreshBroken;
 
 	OwnSkin(iDisguise plugin, PlayerDisguiseManager manager) {
@@ -71,25 +60,6 @@ final class OwnSkin implements PluginMessageListener {
 		} catch(Throwable e) {
 			plugin.getLogger().warning("Players can't see their own disguise skin (plugin channel): " + e);
 			return;
-		}
-		dimensionListener = new PacketAdapter(PacketAdapter.params(plugin, PacketType.Play.Server.LOGIN, PacketType.Play.Server.RESPAWN)
-				.listenerPriority(ListenerPriority.MONITOR).optionAsync()) {
-			@Override
-			public void onPacketSending(PacketEvent event) {
-				try {
-					int index = event.getPacketType() == PacketType.Play.Server.LOGIN ? 1 : 0;
-					Integer dimension = event.getPacket().getIntegers().readSafely(index);
-					if(dimension != null && event.getPlayer() != null) dimensions.put(event.getPlayer().getUniqueId(), dimension);
-				} catch(RuntimeException ignored) {
-				}
-			}
-		};
-		try {
-			ProtocolLibrary.getProtocolManager().addPacketListener(dimensionListener);
-		} catch(Throwable t) {
-			// Never stops the rest of the plugin: without it, players just see their real skin on themselves.
-			dimensionListener = null;
-			plugin.getLogger().warning("Players can't see their own disguise skin (packet listener): " + t);
 		}
 	}
 
@@ -107,8 +77,6 @@ final class OwnSkin implements PluginMessageListener {
 			Bukkit.getMessenger().unregisterIncomingPluginChannel(plugin, CHANNEL, this);
 		} catch(RuntimeException ignored) {
 		}
-		if(dimensionListener != null) ProtocolLibrary.getProtocolManager().removePacketListener(dimensionListener);
-		dimensionListener = null;
 	}
 
 	/** The plugin stops: the proxy gives the real skin data back (no refresh, nobody listens any more). */
@@ -126,7 +94,6 @@ final class OwnSkin implements PluginMessageListener {
 		openAnswers.remove(player.getUniqueId());
 		afterReset.remove(player.getUniqueId());
 		refreshPlanned.remove(player.getUniqueId());
-		dimensions.remove(player.getUniqueId());
 	}
 
 	/** Asks the proxy for the skin the player should see on themselves now (after disguise, undisguise, join, reload). */
@@ -286,12 +253,13 @@ final class OwnSkin implements PluginMessageListener {
 	 * clears on the player's side: position, inventory, held slot, flight, health, XP, potion effects.
 	 */
 	private void refresh(Player player) {
-		Integer dimension = dimensions.get(player.getUniqueId());
-		// A respawn into another dimension than the game has would leave it in an empty world: only when the
-		// tracked one is the world's own, and only for 1.8 games (newer games rebuild their world on a respawn).
-		if(refreshBroken || dimension == null || dimension != player.getWorld().getEnvironment().getId() || !isOneEightGame(player)) {
-			manager.debug("Own skin " + player.getName() + ": no respawn, only the tab entry (broken " + refreshBroken + ", dimension "
-					+ dimension + ", world " + player.getWorld().getName() + " environment " + player.getWorld().getEnvironment().getId()
+		// The dimension the game has now: on 1.8 the server always sends the world's environment id (overworld 0,
+		// nether -1, end 1). Read from the world, not from the server's packets: listening to the respawn
+		// packet broke other plugins' world changes (RoidReplay with packetevents).
+		int dimension = player.getWorld().getEnvironment().getId();
+		// Only for 1.8 games (newer games rebuild their world on a respawn).
+		if(refreshBroken || !isOneEightGame(player)) {
+			manager.debug("Own skin " + player.getName() + ": no respawn, only the tab entry (broken " + refreshBroken
 					+ ", 1.8 game " + isOneEightGame(player) + ")");
 			manager.resendOwnEntry(player);
 			return;
