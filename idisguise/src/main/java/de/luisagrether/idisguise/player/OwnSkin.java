@@ -144,10 +144,13 @@ final class OwnSkin implements PluginMessageListener {
 				out.writeUTF(disguise.getSkinValue());
 				out.writeUTF(disguise.getSkinSignature() == null ? "" : disguise.getSkinSignature());
 				// Only noted when it really went out (the proxy may not have announced the helper yet).
-				if(send(player, bytes.toByteArray())) requested.put(player.getUniqueId(), disguise.getSkinValue());
+				if(send(player, bytes.toByteArray())) {
+					requested.put(player.getUniqueId(), disguise.getSkinValue());
+					planRefresh(player);
+				}
 			} else if(!want && now != null) {
 				requested.remove(player.getUniqueId());
-				send(player, new byte[] {VERSION, RESET});
+				if(send(player, new byte[] {VERSION, RESET})) planRefresh(player);
 			}
 		} catch(Throwable e) {
 			manager.debug("Could not ask the proxy for the own skin of " + player.getName(), e);
@@ -165,6 +168,7 @@ final class OwnSkin implements PluginMessageListener {
 		requested.remove(id);
 		if(!send(player, new byte[] {VERSION, RESET})) return false;
 		afterReset.put(id, task);
+		planRefresh(player);
 		Bukkit.getScheduler().runTaskLater(plugin, () -> {
 			Runnable left = afterReset.remove(id);
 			if(left != null) left.run();
@@ -216,7 +220,16 @@ final class OwnSkin implements PluginMessageListener {
 			if(waiting != null) waiting.run();
 			else manager.refreshViewers(player);
 		}
-		// A tick later: several answers in a row give one refresh.
+		// The own view was already refreshed when asking (see planRefresh): an answer adds no second blink.
+	}
+
+	/**
+	 * The own view is refreshed a moment after asking the proxy, without waiting for its answer (an
+	 * anticheat may drop that answer): the request and the refresh travel to the proxy on the same
+	 * connection, in this order, so the proxy always has the new skin data before the refresh passes it.
+	 * Several requests or answers in a row give one refresh.
+	 */
+	private void planRefresh(Player player) {
 		if(refreshPlanned.add(player.getUniqueId())) {
 			Bukkit.getScheduler().runTaskLater(plugin, () -> refreshWhenFree(player, 0), 2L);
 		}
