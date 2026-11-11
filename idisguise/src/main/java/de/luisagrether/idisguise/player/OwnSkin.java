@@ -135,6 +135,9 @@ final class OwnSkin implements PluginMessageListener {
 		PlayerDisguise disguise = manager.get(player.getUniqueId());
 		boolean want = manager.settings().seeOwnDisguise && disguise != null && disguise.hasSkin();
 		String now = requested.get(player.getUniqueId());
+		manager.debug("Own skin " + player.getName() + ": wanted " + want + " (see-own-disguise " + manager.settings().seeOwnDisguise
+				+ ", disguised " + (disguise != null) + ", skin " + (disguise != null && disguise.hasSkin()) + "), already asked "
+				+ (now != null) + (want && now != null ? (disguise.getSkinValue().equals(now) ? " (same skin)" : " (other skin)") : ""));
 		try {
 			if(want && !disguise.getSkinValue().equals(now)) {
 				ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -179,8 +182,13 @@ final class OwnSkin implements PluginMessageListener {
 	/** False when it could not go out (no helper on the proxy, or not announced yet). */
 	private boolean send(Player player, byte[] data) {
 		// Bukkit only sends it when the proxy registered the channel, i.e. when the helper is there.
-		if(!player.getListeningPluginChannels().contains(CHANNEL)) return false;
+		if(!player.getListeningPluginChannels().contains(CHANNEL)) {
+			manager.debug("Own skin " + player.getName() + ": not sent, the proxy didn't announce the helper (channels: "
+					+ player.getListeningPluginChannels() + ")");
+			return false;
+		}
 		player.sendPluginMessage(plugin, CHANNEL, data);
+		manager.debug("Own skin " + player.getName() + ": " + (data.length > 2 && data[1] == SET ? "disguise skin" : "real skin") + " asked from the proxy");
 		UUID id = player.getUniqueId();
 		Long before = lastAsked.put(id, System.currentTimeMillis());
 		// Answers from long ago never came: start counting again.
@@ -197,6 +205,7 @@ final class OwnSkin implements PluginMessageListener {
 	@Override
 	public void onPluginMessageReceived(String channel, Player player, byte[] message) {
 		if(!CHANNEL.equals(channel) || player == null) return;
+		manager.debug("Own skin " + player.getName() + ": answer from the proxy");
 		Long asked = lastAsked.get(player.getUniqueId());
 		if(asked == null || System.currentTimeMillis() - asked > 30000L) return; // not asked for
 		Integer open = openAnswers.get(player.getUniqueId());
@@ -251,6 +260,8 @@ final class OwnSkin implements PluginMessageListener {
 		boolean busy = player.isDead() || player.isSleeping() || player.isInsideVehicle()
 				|| player.getOpenInventory().getType() != InventoryType.CRAFTING;
 		if(busy) {
+			if(tries == 0) manager.debug("Own skin " + player.getName() + ": waiting (dead, sleeping, riding or a menu is open: "
+					+ player.getOpenInventory().getType() + ")");
 			if(tries >= 30) return true;
 			Bukkit.getScheduler().runTaskLater(plugin, () -> refreshWhenFree(player, tries + 1), 10L);
 			return false;
@@ -269,9 +280,13 @@ final class OwnSkin implements PluginMessageListener {
 		// A respawn into another dimension than the game has would leave it in an empty world: only when the
 		// tracked one is the world's own, and only for 1.8 games (newer games rebuild their world on a respawn).
 		if(refreshBroken || dimension == null || dimension != player.getWorld().getEnvironment().getId() || !isOneEightGame(player)) {
+			manager.debug("Own skin " + player.getName() + ": no respawn, only the tab entry (broken " + refreshBroken + ", dimension "
+					+ dimension + ", world " + player.getWorld().getName() + " environment " + player.getWorld().getEnvironment().getId()
+					+ ", 1.8 game " + isOneEightGame(player) + ")");
 			manager.resendOwnEntry(player);
 			return;
 		}
+		manager.debug("Own skin " + player.getName() + ": refreshing the own view (dimension " + dimension + ")");
 		// Everything is prepared first: if anything is missing, the respawn is never sent.
 		// The server's own respawn packet with the server's own values (difficulty, world type, game mode),
 		// exactly what the server sends on a real respawn. An empty value would break the packet on its way
