@@ -2965,10 +2965,21 @@ public final class PlayerDisguiseManager implements Listener {
 		if(!hiddenReal) return null;
 		// An account with exactly this name (offline): Essentials takes that one first.
 		if(essentialsAccount(word)) return null;
+		// Like Essentials: a visible player whose name starts with the word, else one whose name contains it.
+		Player chosen = null;
 		for(Player player : Bukkit.getOnlinePlayers()) {
+			if(!sender.canSee(player)) continue;
 			boolean hidden = hiddenFrom(player, sender);
 			String shown = (hidden ? disguises.get(player.getUniqueId()).getFakeName() : player.getName()).toLowerCase(Locale.ENGLISH);
-			if(!shown.contains(lower)) continue;
+			if(shown.startsWith(lower)) {
+				chosen = player;
+				break;
+			}
+			if(chosen == null && shown.contains(lower)) chosen = player;
+		}
+		if(chosen != null) {
+			Player player = chosen;
+			boolean hidden = hiddenFrom(player, sender);
 			if(!hidden) return player.getName();
 			PlayerDisguise disguise = disguises.get(player.getUniqueId());
 			boolean realAccount = disguise.getOwnerUuid() != null && !realPlayerCommand(label);
@@ -3064,6 +3075,8 @@ public final class PlayerDisguiseManager implements Listener {
 			boolean hidden = hiddenFrom(player, sender);
 			String shown = (hidden ? disguises.get(player.getUniqueId()).getFakeName() : player.getName()).toLowerCase(Locale.ENGLISH);
 			if(hidden && player.getName().toLowerCase(Locale.ENGLISH).contains(lower)) hiddenReal = true;
+			// A vanished player is never chosen (Essentials skips them too).
+			if(!sender.canSee(player)) continue;
 			if(shown.equals(lower)) {
 				best = player;
 				bestDelta = -1;

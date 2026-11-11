@@ -474,6 +474,9 @@ final class PacketRewriter extends PacketAdapter {
 		if(!token.isEmpty()) {
 			for(PlayerDisguise disguise : disguises) {
 				String fake = disguise.getFakeName();
+				// Only players this viewer can see (a vanished disguised player stays unknown, like in /tab).
+				Player shown = Bukkit.getPlayer(disguise.getUniqueId());
+				if(shown == null || !event.getPlayer().canSee(shown)) continue;
 				if(fake.toLowerCase(Locale.ENGLISH).startsWith(token) && !containsIgnoreCase(result, fake)) {
 					result.add(fake);
 					changed = true;

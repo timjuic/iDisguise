@@ -235,6 +235,14 @@ text-commands:
 - adminchat
 - shout
 - ticket
+- f create
+- f tag
+- f rename
+- setwarp
+- pwarp
+- nick
+- nickname
+- enick
 
 # Commands whose words are names that get looked up later (homes, warps, factions, kits, items): everything
 # stays exactly as typed, so they always work, also with a name like a disguised player's real name.
@@ -244,18 +252,10 @@ name-commands:
 - sethome
 - delhome
 - warp
-- setwarp
 - delwarp
-- pwarp
-- f create
-- f tag
-- f rename
 - f warp
 - f setwarp
 - f delwarp
-- nick
-- nickname
-- enick
 - kit
 - kits
 - sell
