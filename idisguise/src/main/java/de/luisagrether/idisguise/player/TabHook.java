@@ -88,6 +88,78 @@ final class TabHook {
 		showNameTag = show;
 	}
 
+	private final java.util.List<Object> listeners = new java.util.ArrayList<>();
+
+	/**
+	 * TAB's own events: a player loaded (join) and a reload. Both arrive on TAB's thread and are passed to
+	 * the main thread. Nothing happens when this TAB version has no such events.
+	 */
+	void listen(java.util.function.Consumer<UUID> playerLoaded, Runnable reloaded) {
+		try {
+			Class<?> tabApi = Class.forName("me.neznamy.tab.api.TabAPI");
+			Object bus = tabApi.getMethod("getEventBus").invoke(getInstance.invoke(null));
+			if(bus == null) return;
+			Class<?> busType = Class.forName("me.neznamy.tab.api.event.EventBus");
+			Class<?> handlerType = Class.forName("me.neznamy.tab.api.event.EventHandler");
+			Method register = busType.getMethod("register", Class.class, handlerType);
+			Class<?> loadEvent = Class.forName("me.neznamy.tab.api.event.player.PlayerLoadEvent");
+			Method eventPlayer = loadEvent.getMethod("getPlayer");
+			Method playerId = Class.forName("me.neznamy.tab.api.TabPlayer").getMethod("getUniqueId");
+			Object onLoad = handler(handlerType, event -> {
+				UUID id = (UUID)playerId.invoke(eventPlayer.invoke(event));
+				Bukkit.getScheduler().runTask(plugin, () -> playerLoaded.accept(id));
+			});
+			register.invoke(bus, loadEvent, onLoad);
+			listeners.add(onLoad);
+			try {
+				Class<?> reloadEvent = Class.forName("me.neznamy.tab.api.event.plugin.TabLoadEvent");
+				Object onReload = handler(handlerType, event -> Bukkit.getScheduler().runTask(plugin, reloaded));
+				register.invoke(bus, reloadEvent, onReload);
+				listeners.add(onReload);
+			} catch(ClassNotFoundException e) {
+				// older TAB: a reload is repaired by the 30-second check
+			}
+		} catch(Throwable t) {
+			plugin.getLogger().fine("TAB events not available: " + t);
+		}
+	}
+
+	/** iDisguise stops: its TAB event handlers go. */
+	void unlisten() {
+		try {
+			Object bus = Class.forName("me.neznamy.tab.api.TabAPI").getMethod("getEventBus").invoke(getInstance.invoke(null));
+			if(bus == null) return;
+			Class<?> handlerType = Class.forName("me.neznamy.tab.api.event.EventHandler");
+			Method unregister = Class.forName("me.neznamy.tab.api.event.EventBus").getMethod("unregister", handlerType);
+			for(Object listener : listeners) unregister.invoke(bus, listener);
+		} catch(Throwable ignored) {
+		}
+		listeners.clear();
+	}
+
+	private interface EventAction {
+		void run(Object event) throws Exception;
+	}
+
+	/** An implementation of TAB's EventHandler interface (TAB's classes are only known at runtime). */
+	private Object handler(Class<?> handlerType, EventAction action) {
+		return java.lang.reflect.Proxy.newProxyInstance(handlerType.getClassLoader(), new Class<?>[] {handlerType}, (proxy, method, args) -> {
+			if(method.getDeclaringClass() == Object.class) {
+				if(method.getName().equals("equals")) return proxy == args[0];
+				if(method.getName().equals("hashCode")) return System.identityHashCode(proxy);
+				return "iDisguise TAB handler";
+			}
+			if(args != null && args.length == 1) {
+				try {
+					action.run(args[0]);
+				} catch(Throwable t) {
+					// never into TAB
+				}
+			}
+			return null;
+		});
+	}
+
 	static TabHook create(Plugin plugin) {
 		if(Bukkit.getPluginManager().getPlugin("TAB") == null) return null;
 		try {

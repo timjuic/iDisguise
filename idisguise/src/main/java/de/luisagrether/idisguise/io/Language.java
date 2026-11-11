@@ -129,6 +129,8 @@ public class Language {
 	public String INVISIBLE_OFF_OTHER = c("%prefix%&e%player% &7is &evisible&7 again.");
 	@LastUpdated(60147)
 	public String INVISIBLE_NOT_WITH_MOB = c("%prefix%&cNot possible with a mob disguise.");
+	@LastUpdated(60183)
+	public String INVISIBLE_NOT_WITH_ONLINE_NAME = c("%prefix%&cNot possible while disguised as a player who is online (their nametag would show).");
 	@LastUpdated(60167)
 	public String INVISIBLE_OFF_FOR_MOB = c("%prefix%&7Invisibility doesn't work with a mob disguise, so it was turned off.");
 	@LastUpdated(60151)
@@ -314,6 +316,8 @@ public class Language {
 	public String PLAYER_DISGUISE_OWN_NAME_ORDINARY = c("%prefix%&cYour own name is a common word, so player disguises can't hide it.");
 	@LastUpdated(60177)
 	public String PLAYER_DISGUISE_CHECK_FAILED = c("%prefix%&cCouldn't check that name right now, try again in a moment.");
+	@LastUpdated(60183)
+	public String PLAYER_DISGUISE_NO_SKIN = c("%prefix%&cThe skin for &e%name% &ccouldn't be loaded right now, try again in a moment.");
 	@LastUpdated(60106)
 	public String UNDISGUISED_NO_ACCESS = c("%prefix%&cYour player disguise was removed because you no longer have access to it.");
 	@LastUpdated(60106)

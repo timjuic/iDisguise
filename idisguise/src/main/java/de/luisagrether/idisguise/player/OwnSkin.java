@@ -149,11 +149,17 @@ final class OwnSkin implements PluginMessageListener {
 				// Only noted when it really went out (the proxy may not have announced the helper yet).
 				if(send(player, bytes.toByteArray())) {
 					requested.put(player.getUniqueId(), disguise.getSkinValue());
+					// The own tab entry right after (same connection: the proxy already has the new skin), so
+					// any later respawn (death, world change) shows it too, even if the blink must wait.
+					manager.resendOwnEntry(player);
 					planRefresh(player);
 				}
 			} else if(!want && now != null) {
 				requested.remove(player.getUniqueId());
-				if(send(player, new byte[] {VERSION, RESET})) planRefresh(player);
+				if(send(player, new byte[] {VERSION, RESET})) {
+					manager.resendOwnEntry(player);
+					planRefresh(player);
+				}
 			}
 		} catch(Throwable e) {
 			manager.debug("Could not ask the proxy for the own skin of " + player.getName(), e);
@@ -171,6 +177,7 @@ final class OwnSkin implements PluginMessageListener {
 		requested.remove(id);
 		if(!send(player, new byte[] {VERSION, RESET})) return false;
 		afterReset.put(id, task);
+		manager.resendOwnEntry(player);
 		planRefresh(player);
 		Bukkit.getScheduler().runTaskLater(plugin, () -> {
 			Runnable left = afterReset.remove(id);
@@ -253,7 +260,7 @@ final class OwnSkin implements PluginMessageListener {
 		refreshPlanned.remove(player.getUniqueId());
 	}
 
-	/** Not while a menu or chest is open, not while riding, sleeping or dead: waits (at most 15 seconds). */
+	/** Not while a menu or chest is open, not while riding, sleeping or dead: waits until free. */
 	/** False while it waits for another try (the refresh stays planned). */
 	private boolean tryRefresh(Player player, int tries) {
 		if(!isCurrent(player)) return true;
@@ -264,7 +271,8 @@ final class OwnSkin implements PluginMessageListener {
 		if(busy) {
 			if(tries == 0) manager.debug("Own skin " + player.getName() + ": waiting (dead, sleeping, riding or a menu is open: "
 					+ player.getOpenInventory().getType() + ")");
-			if(tries >= 30) return true;
+			// Waits as long as needed (up to 10 minutes): the own view must end up like what others see.
+			if(tries >= 1200) return true;
 			Bukkit.getScheduler().runTaskLater(plugin, () -> refreshWhenFree(player, tries + 1), 10L);
 			return false;
 		}

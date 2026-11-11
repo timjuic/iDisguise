@@ -43,6 +43,29 @@ final class SkinResolver {
 
 	private static final Skin NONE = new Skin(null, null);
 
+	// Skins players of this server joined with (their SkinsRestorer skin, forwarded by the proxy).
+	private static final java.util.Map<UUID, Skin> JOINED = new java.util.concurrent.ConcurrentHashMap<>();
+
+	/** A player joined with this skin: a disguise as them later shows exactly it. */
+	static void remember(UUID uuid, String value, String signature) {
+		if(uuid != null && value != null && !value.isEmpty()) JOINED.put(uuid, new Skin(value, signature));
+	}
+
+	/** The skin of a player of this server: their current one when online, else the one they last joined with. */
+	private static Skin serverSkin(UUID uuid) {
+		try {
+			org.bukkit.entity.Player online = org.bukkit.Bukkit.getPlayer(uuid);
+			if(online != null) {
+				for(com.comphenix.protocol.wrappers.WrappedSignedProperty property
+						: com.comphenix.protocol.wrappers.WrappedGameProfile.fromPlayer(online).getProperties().get("textures")) {
+					if(property.getValue() != null && !property.getValue().isEmpty()) return new Skin(property.getValue(), property.getSignature());
+				}
+			}
+		} catch(Throwable ignored) {
+		}
+		return JOINED.get(uuid);
+	}
+
 	private final Logger logger;
 	private final boolean skinsRestorer;
 	private final Map<String, Skin> mojangCache = new ConcurrentHashMap<>();
@@ -73,6 +96,15 @@ final class SkinResolver {
 	}
 
 	private Skin ofName(String name, UUID knownUuid, StringBuilder notes) {
+		// A player of this server: the skin they really use here (as they joined), not their Mojang one.
+		if(knownUuid != null) {
+			Skin own = serverSkin(knownUuid);
+			if(own != null) {
+				Skin copy = new Skin(own.value, own.signature);
+				copy.source = "this server's player" + describe(copy);
+				return copy;
+			}
+		}
 		// SkinsRestorer only for players who have played here (the skin they use on this server).
 		// Any other name goes straight to Mojang, which returns that account's own, signed skin.
 		if(skinsRestorer && knownUuid != null) {

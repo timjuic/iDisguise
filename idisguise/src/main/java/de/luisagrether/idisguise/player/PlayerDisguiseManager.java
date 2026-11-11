@@ -215,6 +215,8 @@ public final class PlayerDisguiseManager implements Listener {
 		store = new PlayerDisguiseStore(plugin.getDataFolder(), plugin.getLogger());
 		luckPerms = Bukkit.getPluginManager().getPlugin("LuckPerms") != null ? LuckPermsHook.create(plugin.getLogger()) : null;
 		tab = TabHook.create(plugin);
+		// TAB loaded a player or reloaded: the disguise look goes on right away (else the real rank shows).
+		if(tab != null) tab.listen(this::tabLoadedPlayer, this::tabReloaded);
 		skins = new SkinResolver(plugin.getLogger());
 		File essentials = new File(settings.essentialsConfig);
 		if(!essentials.isAbsolute()) essentials = new File(Bukkit.getWorldContainer(), settings.essentialsConfig);
@@ -308,6 +310,7 @@ public final class PlayerDisguiseManager implements Listener {
 			if(disguise != null) resetLook(player, disguise);
 		}
 		if(listening) rewriter.unregister();
+		if(tab != null) tab.unlisten();
 		listening = false;
 		if(invisibleListening) invisiblePackets.unregister();
 		invisibleListening = false;
@@ -1151,7 +1154,8 @@ public final class PlayerDisguiseManager implements Listener {
 				});
 				return;
 			}
-			SkinResolver.Skin skin = knownSkin != null ? knownSkin : skins.resolve(name, knownUuid, settings.randomSkins);
+			// A skin the menu couldn't find (none) is looked up once more.
+			SkinResolver.Skin skin = knownSkin != null && knownSkin.value != null ? knownSkin : skins.resolve(name, knownUuid, settings.randomSkins);
 			debug("Skin for " + name + ": " + skin.source);
 			String finalRank = rank;
 			UUID finalUuid = knownUuid;
@@ -1250,6 +1254,12 @@ public final class PlayerDisguiseManager implements Listener {
 			finish(done, false);
 			return;
 		}
+		// Never a disguise without a skin: others would see Steve / Alex, the player himself his real skin.
+		if(skin == null || skin.value == null || skin.value.isEmpty()) {
+			send(sender, language.PLAYER_DISGUISE_NO_SKIN.replace("%name%", name));
+			finish(done, false);
+			return;
+		}
 		PlayerDisguiseAsPlayerEvent event = new PlayerDisguiseAsPlayerEvent(target, name);
 		Bukkit.getPluginManager().callEvent(event);
 		if(event.isCancelled()) {
@@ -1302,6 +1312,10 @@ public final class PlayerDisguiseManager implements Listener {
 		if(owner != null && owner != target) {
 			disguise.setHiddenFromTab(true);
 			disguise.setOwnerRank(realRankOf(owner));
+			// That player's nametag team would float above an invisible body: invisibility ends.
+			if(isInvisible(target)) Bukkit.getScheduler().runTask(plugin, () -> {
+				if(target.isOnline() && isInvisible(target)) setInvisible(target, target, false);
+			});
 		}
 		// Player permissions: OFF unless the menu's button turns them on (also /disguise <name> <rank>, /odisguise).
 		disguise.setPlayerPermissions(false);
@@ -1570,6 +1584,12 @@ public final class PlayerDisguiseManager implements Listener {
 			send(sender, language.INVISIBLE_NOT_WITH_MOB);
 			return;
 		}
+		// Disguised as a player who is online: that player's nametag team would show the name floating.
+		PlayerDisguise current = disguises.get(target.getUniqueId());
+		if(on && current != null && current.isHiddenFromTab()) {
+			send(sender, language.INVISIBLE_NOT_WITH_ONLINE_NAME);
+			return;
+		}
 		if(on == invisibility.isInvisible(target.getUniqueId())) {
 			sendInvisibleMessage(sender, target, on);
 			return;
@@ -1584,6 +1604,7 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		updateListener();
 		if(tab != null) tab.setNameTagHidden(target, on);
+		invisibleRules(target, on);
 		// Everyone gets the new look right away, the player too (invisible in F5, effect icon).
 		for(Player viewer : Bukkit.getOnlinePlayers()) {
 			if(viewer == target || !viewer.canSee(target)) continue;
@@ -1592,6 +1613,46 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		sendOwnInvisibility(target);
 		sendInvisibleMessage(sender, target, on);
+	}
+
+	/**
+	 * While invisible: arrows, fishing hooks and mobs pass through the player (an arrow stopping in the air
+	 * would show where he is), and no riding (a horse or boat moving by itself).
+	 */
+	private void invisibleRules(Player player, boolean on) {
+		try {
+			player.spigot().setCollidesWithEntities(!on);
+		} catch(Throwable t) {
+			debug("Could not change collisions of " + player.getName(), t);
+		}
+		if(on && player.isInsideVehicle()) player.leaveVehicle();
+	}
+
+	private boolean invisibleNow(org.bukkit.entity.Entity entity) {
+		return entity instanceof Player && invisibility != null && invisibility.isInvisible(entity.getUniqueId());
+	}
+
+	/** An invisible player picking up an item would show it flying to nothing. */
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void onInvisiblePickup(org.bukkit.event.player.PlayerPickupItemEvent event) {
+		if(invisibleNow(event.getPlayer())) event.setCancelled(true);
+	}
+
+	/** Pressure plates, tripwires and farmland would react to nothing. */
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void onInvisibleStep(org.bukkit.event.player.PlayerInteractEvent event) {
+		if(event.getAction() == org.bukkit.event.block.Action.PHYSICAL && invisibleNow(event.getPlayer())) event.setCancelled(true);
+	}
+
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void onInvisibleRide(org.bukkit.event.vehicle.VehicleEnterEvent event) {
+		if(invisibleNow(event.getEntered())) event.setCancelled(true);
+	}
+
+	/** Mobs don't chase or stare at nothing. */
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void onInvisibleTarget(org.bukkit.event.entity.EntityTargetLivingEntityEvent event) {
+		if(invisibleNow(event.getTarget())) event.setCancelled(true);
 	}
 
 	public void toggleInvisible(CommandSender sender, Player target) {
@@ -2028,6 +2089,8 @@ public final class PlayerDisguiseManager implements Listener {
 
 	private void hide(PlayerDisguise disguise, Player player, Player owner) {
 		disguise.setHiddenFromTab(true);
+		// The real player's nametag team would float above an invisible body: invisibility ends.
+		if(isInvisible(player)) setInvisible(player, player, false);
 		disguise.setOwnerRank(realRankOf(owner));
 		applyLook(player, disguise);
 		// Own entry back to the real account name, so TAB gives the name back to the real player's team.
@@ -2099,9 +2162,17 @@ public final class PlayerDisguiseManager implements Listener {
 	@EventHandler(priority = EventPriority.LOWEST)
 	public void onJoin(PlayerJoinEvent event) {
 		Player joined = event.getPlayer();
+		// The skin this player joined with (SkinsRestorer's, through the proxy): a disguise as them uses it.
+		try {
+			for(com.comphenix.protocol.wrappers.WrappedSignedProperty property : WrappedGameProfile.fromPlayer(joined).getProperties().get("textures")) {
+				SkinResolver.remember(joined.getUniqueId(), property.getValue(), property.getSignature());
+			}
+		} catch(Throwable ignored) {
+		}
 		// Invisible: before the server sends the player to others, so they arrive invisible.
 		if(invisibility != null && invisibility.isInvisible(joined.getUniqueId())) {
 			invisibility.online(joined);
+			invisibleRules(joined, true);
 			updateListener();
 			Bukkit.getScheduler().runTaskLater(plugin, () -> {
 				sendOwnInvisibility(joined);
@@ -2494,7 +2565,8 @@ public final class PlayerDisguiseManager implements Listener {
 				shared = sharedTabLines.get(disguise.getUniqueId());
 				if(shared == null) {
 					// Real names swapped once here, not for every viewer (the per-viewer part adds no names).
-					shared = NameReplacer.replace(tabLook.shared(target, effectiveRank(disguise), factions, owner), replacing);
+					// Always every disguised name (tab and nametags are swapped whatever the profile says).
+					shared = NameReplacer.replace(tabLook.shared(target, effectiveRank(disguise), factions, owner), online);
 					sharedTabLines.put(disguise.getUniqueId(), shared);
 				}
 			} catch(RuntimeException e) {
@@ -2517,6 +2589,28 @@ public final class PlayerDisguiseManager implements Listener {
 				sendRaw(viewer, PacketRewriter.displayName(disguise.getFakeUniqueId(), disguise.getFakeName(), target, line));
 			}
 		}
+	}
+
+	/** TAB has just loaded this player (join): their disguise look and invisible nametag at once. */
+	private void tabLoadedPlayer(UUID uuid) {
+		Player player = Bukkit.getPlayer(uuid);
+		if(player == null || !available) return;
+		PlayerDisguise disguise = disguises.get(uuid);
+		if(disguise != null && disguise.getProfile() != null) {
+			applyLook(player, disguise);
+			Map<UUID, String> sent = tabLines.get(uuid);
+			if(sent != null) sent.clear();
+			sharedTabLines.remove(uuid);
+		}
+		if(isInvisible(player) && tab != null) tab.setNameTagHidden(player, true);
+	}
+
+	/** /tab reload: TAB forgot every temporary group and hidden nametag; they go back on at once. */
+	private void tabReloaded() {
+		if(!available) return;
+		tabLines.clear();
+		sharedTabLines.clear();
+		for(Player player : Bukkit.getOnlinePlayers()) tabLoadedPlayer(player.getUniqueId());
 	}
 
 	/** The viewer's game got the disguise's tab entry again: the keeper sends the line once more. */

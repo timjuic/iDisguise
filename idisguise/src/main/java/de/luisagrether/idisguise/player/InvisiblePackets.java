@@ -69,7 +69,11 @@ final class InvisiblePackets extends PacketAdapter {
 	private void invisibleSound(PacketEvent event) {
 		String sound = event.getPacket().getStrings().readSafely(0);
 		if(sound == null || !(sound.startsWith("step.") || sound.startsWith("game.player.hurt.fall")
-				|| sound.startsWith("game.neutral.hurt.fall") || sound.startsWith("game.hostile.hurt.fall"))) return;
+				|| sound.startsWith("game.neutral.hurt.fall") || sound.startsWith("game.hostile.hurt.fall")
+				// eating, drinking, swimming, picking up, bow: also give an invisible player away
+				|| sound.startsWith("random.eat") || sound.startsWith("random.drink") || sound.startsWith("random.burp")
+				|| sound.startsWith("game.player.swim") || sound.startsWith("random.pop") || sound.startsWith("random.bow")
+				|| sound.startsWith("random.fizz"))) return;
 		Integer x = event.getPacket().getIntegers().readSafely(0);
 		Integer y = event.getPacket().getIntegers().readSafely(1);
 		Integer z = event.getPacket().getIntegers().readSafely(2);

@@ -126,7 +126,31 @@ final class PacketRewriter extends PacketAdapter {
 			}
 		} catch(RuntimeException e) {
 			manager.packetError(event.getPacketType().name(), e);
+			// A tab entry or body of a disguised player that couldn't be rewritten never goes out as it was
+			// (it would show the real player). Others are untouched.
+			if(concernsDisguise(event)) event.setCancelled(true);
 		}
+	}
+
+	/** A PLAYER_INFO or NAMED_ENTITY_SPAWN packet about a disguised player (false when unsure). */
+	private boolean concernsDisguise(PacketEvent event) {
+		try {
+			PacketType type = event.getPacketType();
+			if(type == PacketType.Play.Server.NAMED_ENTITY_SPAWN) {
+				UUID uuid = event.getPacket().getUUIDs().readSafely(0);
+				return uuid != null && manager.get(uuid) != null && !uuid.equals(event.getPlayer().getUniqueId());
+			}
+			if(type == PacketType.Play.Server.PLAYER_INFO) {
+				List<PlayerInfoData> entries = event.getPacket().getPlayerInfoDataLists().readSafely(0);
+				if(entries == null) return false;
+				for(PlayerInfoData entry : entries) {
+					if(entry != null && entry.getProfile() != null && manager.get(entry.getProfile().getUUID()) != null
+							&& !entry.getProfile().getUUID().equals(event.getPlayer().getUniqueId())) return true;
+				}
+			}
+		} catch(RuntimeException ignored) {
+		}
+		return false;
 	}
 
 	// ---------------------------------------------------------------- tab list / skin / nametag
@@ -173,7 +197,10 @@ final class PacketRewriter extends PacketAdapter {
 				WrappedGameProfile fake = fakeProfile(disguise, shownId);
 				manager.debugOnce(disguise, "Sending " + disguise.getRealName() + " as " + disguise.getFakeName() + " (id " + shownId + ") to "
 						+ event.getPlayer().getName() + (fake.getProperties().containsKey("textures") ? " with the disguise skin" : " WITHOUT a skin (none was found)"));
-				result.add(new PlayerInfoData(fake, entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
+				// Others: no display name from TAB (right after a join or /tab reload it can still carry the real
+				// rank or faction); iDisguise's tab keeper sends the line within a second. The name alone till then.
+				boolean keeperLine = !self && !disguise.isHiddenFromTab();
+				result.add(new PlayerInfoData(fake, entry.getLatency(), entry.getGameMode(), keeperLine ? null : replaceNames(entry.getDisplayName())));
 				disguise.getRemovedFor().remove(viewer);
 				if(!self) manager.forgetTabLine(disguise.getUniqueId(), viewer);
 				if(disguise.isHiddenFromTab() && !self) {
@@ -181,6 +208,10 @@ final class PacketRewriter extends PacketAdapter {
 				}
 			} else if(disguise.getRemovedFor().contains(viewer)) {
 				// This viewer's client has no entry for the player right now; drop the update.
+			} else if(action == PlayerInfoAction.UPDATE_DISPLAY_NAME && !self && !disguise.isHiddenFromTab()) {
+				// TAB's line for a disguised player never reaches others (it may still carry the real rank or
+				// faction); the tab keeper sends the right one again.
+				manager.forgetTabLine(disguise.getUniqueId(), viewer);
 			} else {
 				WrappedChatComponent display = action == PlayerInfoAction.UPDATE_DISPLAY_NAME ? replaceNames(entry.getDisplayName()) : entry.getDisplayName();
 				result.add(new PlayerInfoData(new WrappedGameProfile(shownId, disguise.getFakeName()), entry.getLatency(), entry.getGameMode(), display));
@@ -348,6 +379,7 @@ final class PacketRewriter extends PacketAdapter {
 		if(index == 0 && value instanceof Byte) {
 			byte flags = (byte)((Byte)value | 0x20);
 			if(!self) flags &= ~0x08; // not sprinting: no running particles
+			if(!self) flags &= ~0x01; // not burning: no flames
 			return flags;
 		}
 		if(index == 7 && value instanceof Integer) return 0; // potion colour: no swirls
