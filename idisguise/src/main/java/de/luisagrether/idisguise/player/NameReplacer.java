@@ -113,6 +113,8 @@ final class NameReplacer {
 			if(!primitive.isString() || isFixedKey(key)) return element;
 			String value = primitive.getAsString();
 			String replaced = replace(value, disguises);
+			// A hover over a name (death messages: show_entity) also carries the player's real ID.
+			if("value".equals(key)) replaced = replaceIds(replaced, disguises);
 			return replaced.equals(value) ? element : new JsonPrimitive(replaced);
 		}
 		if(element.isJsonArray()) {
@@ -125,6 +127,19 @@ final class NameReplacer {
 		JsonObject result = new JsonObject();
 		for(Map.Entry<String, JsonElement> entry : element.getAsJsonObject().entrySet()) {
 			result.add(entry.getKey(), walk(entry.getValue(), entry.getKey(), disguises));
+		}
+		return result;
+	}
+
+	/** Real player IDs in a hover value become the IDs the disguises are shown with. */
+	private static String replaceIds(String text, Collection<PlayerDisguise> disguises) {
+		String result = text;
+		for(PlayerDisguise disguise : disguises) {
+			String real = disguise.getUniqueId().toString();
+			if(result.toLowerCase(Locale.ENGLISH).contains(real)) {
+				result = Pattern.compile(Pattern.quote(real), Pattern.CASE_INSENSITIVE).matcher(result)
+						.replaceAll(Matcher.quoteReplacement(disguise.getFakeUniqueId().toString()));
+			}
 		}
 		return result;
 	}

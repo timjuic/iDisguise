@@ -109,7 +109,42 @@ final class TextSwap {
 
 	// ---------------------------------------------------------------- holograms (entity names)
 
+	private static volatile java.lang.reflect.Method rawIndex;
+	private static volatile java.lang.reflect.Method rawValue;
+	private static volatile boolean rawBroken;
+
+	/**
+	 * The packet has a non-empty custom name (index 2), read from the server's own objects without
+	 * converting them. True when unsure (then the full check runs as before).
+	 */
+	private static boolean hasCustomName(PacketEvent event) {
+		if(rawBroken) return true;
+		try {
+			@SuppressWarnings("rawtypes")
+			List raw = event.getPacket().getSpecificModifier(List.class).readSafely(0);
+			if(raw == null) return true;
+			for(Object object : raw) {
+				if(object == null) continue;
+				if(rawIndex == null || rawIndex.getDeclaringClass() != object.getClass()) {
+					// 1.8 DataWatcher.WatchableObject: a() = index, b() = value
+					rawIndex = object.getClass().getMethod("a");
+					rawValue = object.getClass().getMethod("b");
+				}
+				if(((Integer)rawIndex.invoke(object)) == 2) {
+					Object value = rawValue.invoke(object);
+					return !(value instanceof String) || !((String)value).isEmpty();
+				}
+			}
+			return false;
+		} catch(Throwable t) {
+			rawBroken = true;
+			return true;
+		}
+	}
+
 	private static void metadata(PacketEvent event, Collection<PlayerDisguise> disguises) {
+		// Most metadata (TNT, falling blocks, mobs moving) has no name in it: skip it before the costly read.
+		if(!hasCustomName(event)) return;
 		List<WrappedWatchableObject> values = event.getPacket().getWatchableCollectionModifier().readSafely(0);
 		if(values == null || values.isEmpty()) return;
 		Integer entity = event.getPacket().getIntegers().readSafely(0);

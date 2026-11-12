@@ -21,10 +21,12 @@ final class InvisiblePackets extends PacketAdapter {
 	private final PlayerDisguiseManager manager;
 
 	InvisiblePackets(Plugin plugin, PlayerDisguiseManager manager) {
-		super(plugin, ListenerPriority.HIGHEST,
+		// optionAsync: other plugins' packets sent from their own threads stay there (ProtocolLib would
+		// otherwise move them to the main thread, late and out of order). Only thread-safe data is read here.
+		super(PacketAdapter.params(plugin,
 				PacketType.Play.Server.ENTITY_EQUIPMENT,
 				PacketType.Play.Server.NAMED_SOUND_EFFECT,
-				PacketType.Play.Server.WORLD_PARTICLES);
+				PacketType.Play.Server.WORLD_PARTICLES).listenerPriority(ListenerPriority.HIGHEST).optionAsync());
 		this.manager = manager;
 	}
 

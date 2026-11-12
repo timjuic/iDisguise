@@ -108,6 +108,7 @@ public final class PlayerDisguiseManager implements Listener {
 	private boolean skinsRestorer;
 	private RandomNames randomNames;
 	private DisguiseLog log;
+	private EssentialsReplies replies;
 	// Staff who see through disguises (only on their own screen).
 	private final Set<UUID> revealPlayers = ConcurrentHashMap.newKeySet();
 	private org.bukkit.scheduler.BukkitTask checkTask;
@@ -140,6 +141,8 @@ public final class PlayerDisguiseManager implements Listener {
 	private final Map<UUID, Map<UUID, String>> tabLines = new ConcurrentHashMap<>();
 	// player -> when they last put on a player disguise themselves (cooldown)
 	private final Map<UUID, Long> lastDisguised = new ConcurrentHashMap<>();
+	// player -> last /disguise <name> (name lookups: at most one every 2 seconds)
+	private final Map<UUID, Long> lastAttempt = new ConcurrentHashMap<>();
 	// viewer -> disguised player -> how TAB would show the real player (staff with reveal on)
 	private final Map<UUID, Map<UUID, TabLook.Look>> revealLooks = new ConcurrentHashMap<>();
 	// viewer (reveal on) -> disguised players who have an iDisguise nametag team on that viewer's screen
@@ -214,7 +217,9 @@ public final class PlayerDisguiseManager implements Listener {
 			return;
 		}
 
+		PlayerDisguise.loadSecret(plugin.getDataFolder(), plugin.getLogger());
 		store = new PlayerDisguiseStore(plugin.getDataFolder(), plugin.getLogger());
+		replies = new EssentialsReplies(plugin.getLogger());
 		luckPerms = Bukkit.getPluginManager().getPlugin("LuckPerms") != null ? LuckPermsHook.create(plugin.getLogger()) : null;
 		tab = TabHook.create(plugin);
 		// TAB loaded a player or reloaded: the disguise look goes on right away (else the real rank shows).
@@ -298,6 +303,8 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		if(!available) return;
 		for(Player player : Bukkit.getOnlinePlayers()) {
+			// An open disguise menu would stop being protected (its click listener goes): items could be taken.
+			if(player.getOpenInventory().getTopInventory().getHolder() instanceof DisguiseMenu) player.closeInventory();
 			givePermissionsBack(player);
 			giveBypassBack(player);
 			ownSkin.resetNow(player);
@@ -520,6 +527,18 @@ public final class PlayerDisguiseManager implements Listener {
 	 */
 	public void disguiseCommand(CommandSender sender, Player target, String name, boolean self, Consumer<Boolean> done) {
 		Player chooser = sender instanceof Player ? (Player)sender : null;
+		// Every /disguise <name> asks LuckPerms and Mojang: players get one every 2 seconds (spamming names
+		// would get the server rate-limited by Mojang, and everyone's disguises random skins).
+		if(chooser != null && !isStaff(chooser) && !has(chooser, PERM_ADMIN)) {
+			long now = System.currentTimeMillis();
+			Long last = lastAttempt.get(chooser.getUniqueId());
+			if(last != null && now - last < 2000L) {
+				send(chooser, language().DISGUISE_ON_COOLDOWN.replace("%seconds%", String.valueOf((2000L - (now - last) + 999) / 1000L)));
+				finish(done, false);
+				return;
+			}
+			lastAttempt.put(chooser.getUniqueId(), now);
+		}
 		Player owner = Bukkit.getPlayerExact(name);
 		// Disguised as someone who is online, the rank is theirs: only the tag can be picked.
 		boolean ranks = (owner == null || owner == target) && canUseRanks(sender);
@@ -1109,7 +1128,14 @@ public final class PlayerDisguiseManager implements Listener {
 		boolean anyName = has(sender, PERM_ANY_NAME);
 		Player owner = Bukkit.getPlayerExact(name);
 		if(!anyName && owner != null && owner != target) {
-			send(sender, language.PLAYER_DISGUISE_NAME_ONLINE.replace("%name%", name));
+			// A vanished player the sender can't see: answered like an offline player, never "is online".
+			if(sender instanceof Player && !((Player)sender).canSee(owner)) {
+				if(knownSkin == null) send(sender, language.PLAYER_DISGUISE_LOADING.replace("%name%", name));
+				send(sender, (settings.blockKnownNamesForPlayers ? language.PLAYER_DISGUISE_NAME_PLAYED_BEFORE
+						: language.PLAYER_DISGUISE_NAME_UNAVAILABLE).replace("%name%", name));
+			} else {
+				send(sender, language.PLAYER_DISGUISE_NAME_ONLINE.replace("%name%", name));
+			}
 			finish(done, false);
 			return;
 		}
@@ -1324,6 +1350,7 @@ public final class PlayerDisguiseManager implements Listener {
 		// Player permissions: OFF unless the menu's button turns them on (also /disguise <name> <rank>, /odisguise).
 		disguise.setPlayerPermissions(false);
 		disguises.put(target.getUniqueId(), disguise);
+		replies.clear(target);
 		rebuildSnapshots();
 		save();
 		if(disguise.hasPlayerPermissions()) {
@@ -1425,11 +1452,23 @@ public final class PlayerDisguiseManager implements Listener {
 		if(flying) player.setFlying(true);
 	}
 
-	private static void stopFlying(Player player) {
+	private void stopFlying(Player player) {
 		org.bukkit.GameMode mode = player.getGameMode();
 		if(mode == org.bukkit.GameMode.CREATIVE || mode == org.bukkit.GameMode.SPECTATOR) return;
+		// Flight taken in the air: the fall that follows does no damage (once, within 30 seconds).
+		if(player.getAllowFlight() && !player.isOnGround()) safeFall.put(player.getUniqueId(), System.currentTimeMillis() + 30000L);
 		player.setFlying(false);
 		player.setAllowFlight(false);
+	}
+
+	// player -> until when the next fall does no damage (flight was taken in the air)
+	private final Map<UUID, Long> safeFall = new ConcurrentHashMap<>();
+
+	@EventHandler(ignoreCancelled = true)
+	public void onFallDamage(org.bukkit.event.entity.EntityDamageEvent event) {
+		if(event.getCause() != org.bukkit.event.entity.EntityDamageEvent.DamageCause.FALL || safeFall.isEmpty()) return;
+		Long until = safeFall.remove(event.getEntity().getUniqueId());
+		if(until != null && until > System.currentTimeMillis()) event.setCancelled(true);
 	}
 
 	private FactionsHook factionsApi() {
@@ -1469,6 +1508,7 @@ public final class PlayerDisguiseManager implements Listener {
 	public boolean undisguise(Player player) {
 		PlayerDisguise disguise = disguises.remove(player.getUniqueId());
 		if(disguise == null) return false;
+		replies.clear(player);
 		givePermissionsBack(player);
 		giveBypassBack(player);
 		flightTaken.remove(player.getUniqueId());
@@ -2289,6 +2329,7 @@ public final class PlayerDisguiseManager implements Listener {
 			disguise.getRemovedFor().remove(quit.getUniqueId());
 		}
 		PlayerDisguise own = disguises.get(quit.getUniqueId());
+		if(own != null) replies.clear(quit);
 		if(own != null && own.getProfile() != null && own.getProfile().replaceNameInMessages) startLeaving(own);
 		if(own != null && own.isGivenByStaff()) {
 			// Given with /odisguise: ends when the player leaves.
@@ -2906,6 +2947,9 @@ public final class PlayerDisguiseManager implements Listener {
 		if(protect && !others.isEmpty()) {
 			for(int i = 1; i < parts.length; i++) {
 				if(playerWords.contains(i)) continue;
+				// /f ally|enemy|truce|neutral <tag>: a faction named after its disguised leader stays findable.
+				if(FACTION_COMMANDS.contains(label) && parts.length > 1 && FACTION_TAG_SUBCOMMANDS.contains(parts[1].toLowerCase(Locale.ENGLISH))
+						&& factionsApi() != null && factionsApi().isFactionTag(parts[i])) continue;
 				String marked = NameReplacer.markTyped(parts[i], others);
 				if(!marked.equals(parts[i])) {
 					parts[i] = marked;
@@ -2960,8 +3004,11 @@ public final class PlayerDisguiseManager implements Listener {
 		for(Player player : Bukkit.getOnlinePlayers()) {
 			if(player.getName().equalsIgnoreCase(word)) return hiddenFrom(player, sender) ? NameReplacer.mark(word) : null;
 			if(hiddenFrom(player, sender) && player.getName().toLowerCase(Locale.ENGLISH).contains(lower)) hiddenReal = true;
+			// Part of a fake name (/pay xen for Xental): chosen by the shown names below, like /msg xen.
+			if(hiddenFrom(player, sender) && sender.canSee(player)
+					&& disguises.get(player.getUniqueId()).getFakeName().toLowerCase(Locale.ENGLISH).contains(lower)) hiddenReal = true;
 		}
-		// No disguised player's real name fits: nothing to hide, exactly as typed.
+		// No disguised player's real or fake name fits: nothing to do, exactly as typed.
 		if(!hiddenReal) return null;
 		// An account with exactly this name (offline): Essentials takes that one first.
 		if(essentialsAccount(word)) return null;

@@ -57,8 +57,32 @@ public final class PlayerDisguise {
 		this.skinValue = skinValue;
 		this.skinSignature = skinSignature;
 		this.realNamePattern = NameReplacer.wordPattern(realName);
-		this.fakeUuid = UUID.nameUUIDFromBytes(("iDisguise:" + uuid + ":" + fakeName.toLowerCase(java.util.Locale.ENGLISH))
+		// With this server's secret: nobody outside can work the real ID out from the fake one.
+		this.fakeUuid = UUID.nameUUIDFromBytes(("iDisguise:" + secret + ":" + uuid + ":" + fakeName.toLowerCase(java.util.Locale.ENGLISH))
 				.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+	}
+
+	// Random per server, kept in the plugin folder (the same disguise keeps its ID across restarts).
+	private static volatile String secret = java.util.UUID.randomUUID().toString();
+
+	/** Reads (or makes) the secret in fake-id-secret.txt. Before any disguise is made or loaded. */
+	static void loadSecret(java.io.File folder, java.util.logging.Logger logger) {
+		java.io.File file = new java.io.File(folder, "fake-id-secret.txt");
+		try {
+			if(file.isFile()) {
+				java.util.List<String> lines = java.nio.file.Files.readAllLines(file.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+				String text = lines.isEmpty() ? "" : lines.get(0).trim();
+				if(text.length() >= 16) {
+					secret = text;
+					return;
+				}
+			}
+			folder.mkdirs();
+			java.nio.file.Files.write(file.toPath(), (secret + "\n# Random secret for the IDs disguises are shown with. Don't share it.\n")
+					.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		} catch(java.io.IOException e) {
+			logger.warning("Could not read or write " + file.getName() + " (a new secret is used until the next start): " + e);
+		}
 	}
 
 	public UUID getUniqueId() { return uuid; }

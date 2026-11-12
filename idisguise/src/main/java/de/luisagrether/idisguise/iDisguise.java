@@ -431,6 +431,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	private Metrics metrics;
 	private Map<EntityType, List<String>> tabCompletions = new HashMap<>();
 	private Map<UUID, Entity> disguiseMap = new HashMap<>();
+	// IDs of disguise mobs, so ones left after a crash are removed (else normal mobs with drops).
+	private LeftoverMobs leftoverMobs;
 	private PlayerDisguiseManager playerDisguises;
 	// Players who were disguised when they started a cross-world teleport. Re-disguise happens
 	// in PlayerChangedWorldEvent (after the teleport completes) so the new mob spawns in the
@@ -591,6 +593,8 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			tabCompletions.put(type, completions);
 		}
 		Bukkit.getPluginManager().registerEvents(this, this);
+		leftoverMobs = new LeftoverMobs(getDataFolder(), getLogger());
+		leftoverMobs.cleanLoaded(Bukkit.getWorlds(), mobsInUse());
 
 		try {
 			/* Remove the dummy world of the old player disguise if existent */
@@ -663,6 +667,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 
 		for(Entity entity : disguiseMap.values()) {
 			entity.remove();
+			if(leftoverMobs != null) leftoverMobs.remove(entity);
 		}
 		disguiseMap.clear();
 
@@ -938,6 +943,13 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 										}
 									} else if(STRING_VAL.matcher(codeFrags[1]).matches()) {
 										statement = new Statement(entity, codeFrags[0], new Object[] {codeFrags[1].substring(1, codeFrags[1].length() - 1)});
+									}
+									// A slime / magma cube bigger than 4 has a huge hitbox the server checks every tick (lag, freeze).
+									if(statement != null && statement.getMethodName().equals("setSize") && statement.getArguments().length == 1
+											&& statement.getArguments()[0] instanceof Integer
+											&& ((Integer)statement.getArguments()[0] < 1 || (Integer)statement.getArguments()[0] > 4)) {
+										sender.sendMessage(language.DISGUISE_STATEMENT_ERROR.replace("%statement%", codeLine));
+										continue;
 									}
 									if(statement != null) {
 										try {
@@ -1580,6 +1592,7 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			entity.teleport(player.getLocation());
 		}
 		disguiseMap.put(player.getUniqueId(), entity);
+		if(leftoverMobs != null) leftoverMobs.add(entity);
 		if(playerDisguises != null) playerDisguises.logMob(player, type, true);
 		if(config.KEEP_TAB_LIST_WHEN_DISGUISED && LegacyInjector_injectAll != null) {
 			// Hide the player entity from observers via NMS tracker injection. Skips Bukkit's
@@ -1667,9 +1680,11 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			Entity entity = disguiseMap.remove(player.getUniqueId());
 			if(playerDisguises != null) playerDisguises.logMob(player, entity.getType(), false);
 			entity.remove();
+			if(leftoverMobs != null) leftoverMobs.remove(entity);
 			// Clear the invisibility we applied at disguise time. Otherwise an undisguise that
-			// happens during the 5s viewself grace leaves the player invisible.
-			player.removePotionEffect(PotionEffectType.INVISIBILITY);
+			// happens during the 5s viewself grace leaves the player invisible. Only ours (short,
+			// level 2, ambient): a real invisibility potion the player drank stays.
+			removeOwnInvisibility(player);
 			if(LegacyInjector_toggleInterceptAll != null) {
 				// Stop hiding the player from observers (no-op if no injection was active).
 				try {
@@ -1845,9 +1860,41 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void handlePlayerTeleportRegion(PlayerTeleportEvent event) {
 		Player player = event.getPlayer();
+		// The disguise mob follows a teleport in the same world (/home, /tpa ...); else it stays behind,
+		// gets saved with that chunk and hits there land on the player. Other worlds: handlePlayerChangedWorld.
+		Entity mob = disguiseMap.get(player.getUniqueId());
+		if(mob != null && event.getTo() != null && mob.getWorld().equals(event.getTo().getWorld())) mob.teleport(event.getTo());
 		if(isMobDisguised(player) && isDisguiseBlocked(player, event.getTo())) {
 			scheduleRegionUndisguise(player);
 		}
+	}
+
+	/** The invisibility a mob disguise gives (5 s, level 2, ambient); never a potion the player drank. */
+	private static void removeOwnInvisibility(Player player) {
+		for(PotionEffect effect : player.getActivePotionEffects()) {
+			if(effect.getType().equals(PotionEffectType.INVISIBILITY) && effect.getAmplifier() == 1 && effect.isAmbient()
+					&& effect.getDuration() <= 100) {
+				player.removePotionEffect(PotionEffectType.INVISIBILITY);
+			}
+		}
+	}
+
+	private java.util.Set<UUID> mobsInUse() {
+		java.util.Set<UUID> ids = new java.util.HashSet<>();
+		for(Entity entity : disguiseMap.values()) ids.add(entity.getUniqueId());
+		return ids;
+	}
+
+	/** A disguise mob left from before a crash: removed when its chunk loads. */
+	@EventHandler
+	public void handleChunkLoad(org.bukkit.event.world.ChunkLoadEvent event) {
+		if(leftoverMobs != null) leftoverMobs.clean(event.getChunk(), mobsInUse());
+	}
+
+	/** A dropped-item disguise is a real item: hoppers must never take it (players can't, see the pickup delay). */
+	@EventHandler(ignoreCancelled = true)
+	public void handleHopperPickup(org.bukkit.event.inventory.InventoryPickupItemEvent event) {
+		if(event.getItem().hasMetadata("iDisguise")) event.setCancelled(true);
 	}
 
 	@EventHandler
