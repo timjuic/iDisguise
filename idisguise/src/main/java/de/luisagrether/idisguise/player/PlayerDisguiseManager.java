@@ -3010,8 +3010,9 @@ public final class PlayerDisguiseManager implements Listener {
 		}
 		// No disguised player's real or fake name fits: nothing to do, exactly as typed.
 		if(!hiddenReal) return null;
-		// An account with exactly this name (offline): Essentials takes that one first.
-		if(essentialsAccount(word)) return null;
+		// An account with exactly this name (offline): Essentials takes that one first. Not for /pay: it only
+		// pays online players, so it would go on to a disguised player whose real name contains the word.
+		if(!sameCommand(label, "pay") && essentialsAccount(word)) return null;
 		// Like Essentials: a visible player whose name starts with the word, else one whose name contains it.
 		Player chosen = null;
 		for(Player player : Bukkit.getOnlinePlayers()) {

@@ -192,9 +192,21 @@ final class PacketRewriter extends PacketAdapter {
 				// takes the name in the player's own entry as a nickname and would put the real player's
 				// name into this player's nametag team for everyone; on 1.8 a name is in one team only,
 				// so the real player would lose his own nametag (rank, faction).
-				result.add(new PlayerInfoData(entry.getProfile(), entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
+				// Velocity / no proxy: nothing puts the disguise skin there later, so it goes in with the real name.
+				WrappedGameProfile own = entry.getProfile();
+				if(manager.settings().ownSkinDirect && manager.settings().seeOwnDisguise && disguise.hasSkin()) {
+					own = withTextures(new WrappedGameProfile(own.getUUID(), own.getName()), disguise.getSkinValue(), disguise.getSkinSignature());
+				}
+				result.add(new PlayerInfoData(own, entry.getLatency(), entry.getGameMode(), replaceNames(entry.getDisplayName())));
 			} else if(action == PlayerInfoAction.ADD_PLAYER) {
 				WrappedGameProfile fake = fakeProfile(disguise, shownId);
+				if(self && manager.settings().ownSkinDirect && !manager.settings().seeOwnDisguise) {
+					// Velocity / no proxy with see-own-disguise off: the player keeps the real skin on themselves.
+					fake = new WrappedGameProfile(shownId, disguise.getFakeName());
+					for(WrappedSignedProperty textures : entry.getProfile().getProperties().get("textures")) {
+						fake = withTextures(fake, textures.getValue(), textures.getSignature());
+					}
+				}
 				manager.debugOnce(disguise, "Sending " + disguise.getRealName() + " as " + disguise.getFakeName() + " (id " + shownId + ") to "
 						+ event.getPlayer().getName() + (fake.getProperties().containsKey("textures") ? " with the disguise skin" : " WITHOUT a skin (none was found)"));
 				// Others: no display name from TAB (right after a join or /tab reload it can still carry the real
@@ -282,18 +294,22 @@ final class PacketRewriter extends PacketAdapter {
 
 	static WrappedGameProfile fakeProfile(PlayerDisguise disguise, UUID id) {
 		WrappedGameProfile profile = new WrappedGameProfile(id, disguise.getFakeName());
-		if(disguise.hasSkin()) {
-			// Straight into the server's own profile object (not through ProtocolLib's converted view).
-			Object property = WrappedSignedProperty.fromValues("textures", disguise.getSkinValue(), disguise.getSkinSignature()).getHandle();
-			try {
-				Object handle = profile.getHandle();
-				@SuppressWarnings("unchecked")
-				Multimap<String, Object> properties = (Multimap<String, Object>)handle.getClass().getMethod("getProperties").invoke(handle);
-				properties.removeAll("textures");
-				properties.put("textures", property);
-			} catch(ReflectiveOperationException e) {
-				profile.getProperties().put("textures", WrappedSignedProperty.fromHandle(property));
-			}
+		if(disguise.hasSkin()) profile = withTextures(profile, disguise.getSkinValue(), disguise.getSkinSignature());
+		return profile;
+	}
+
+	/** Puts this skin into the profile (replacing any skin it had). */
+	static WrappedGameProfile withTextures(WrappedGameProfile profile, String value, String signature) {
+		// Straight into the server's own profile object (not through ProtocolLib's converted view).
+		Object property = WrappedSignedProperty.fromValues("textures", value, signature).getHandle();
+		try {
+			Object handle = profile.getHandle();
+			@SuppressWarnings("unchecked")
+			Multimap<String, Object> properties = (Multimap<String, Object>)handle.getClass().getMethod("getProperties").invoke(handle);
+			properties.removeAll("textures");
+			properties.put("textures", property);
+		} catch(ReflectiveOperationException e) {
+			profile.getProperties().put("textures", WrappedSignedProperty.fromHandle(property));
 		}
 		return profile;
 	}

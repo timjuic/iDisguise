@@ -26,6 +26,10 @@ import de.luisagrether.idisguise.iDisguise;
  * helper on the proxy. iDisguise asks it to use the disguise skin; only when it answers, the player's own
  * game is refreshed (a respawn in the same world, no loading screen). Without the helper there is no
  * answer, so nothing happens at all. Only the disguised player's own screen is ever refreshed.
+ *
+ * Velocity (proxy: velocity, or no proxy: none) passes the server's tab entries on unchanged, and the server
+ * already gives the player's own entry the disguise skin. There iDisguise refreshes the own view itself,
+ * without any helper or question.
  */
 final class OwnSkin implements PluginMessageListener {
 
@@ -81,7 +85,7 @@ final class OwnSkin implements PluginMessageListener {
 
 	/** The plugin stops: the proxy gives the real skin data back (no refresh, nobody listens any more). */
 	void resetNow(Player player) {
-		if(requested.remove(player.getUniqueId()) == null) return;
+		if(requested.remove(player.getUniqueId()) == null || manager.settings().ownSkinDirect) return;
 		try {
 			if(player.getListeningPluginChannels().contains(CHANNEL)) player.sendPluginMessage(plugin, CHANNEL, new byte[] {VERSION, RESET});
 		} catch(RuntimeException ignored) {
@@ -105,6 +109,19 @@ final class OwnSkin implements PluginMessageListener {
 		manager.debug("Own skin " + player.getName() + ": wanted " + want + " (see-own-disguise " + manager.settings().seeOwnDisguise
 				+ ", disguised " + (disguise != null) + ", skin " + (disguise != null && disguise.hasSkin()) + "), already asked "
 				+ (now != null) + (want && now != null ? (disguise.getSkinValue().equals(now) ? " (same skin)" : " (other skin)") : ""));
+		if(manager.settings().ownSkinDirect) {
+			// Velocity / no proxy: the own tab entry already carries the right skin, only the refresh is needed.
+			if(want && !disguise.getSkinValue().equals(now)) {
+				requested.put(player.getUniqueId(), disguise.getSkinValue());
+			} else if(!want && now != null) {
+				requested.remove(player.getUniqueId());
+			} else {
+				return;
+			}
+			manager.resendOwnEntry(player);
+			planRefresh(player);
+			return;
+		}
 		try {
 			if(want && !disguise.getSkinValue().equals(now)) {
 				ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -142,6 +159,12 @@ final class OwnSkin implements PluginMessageListener {
 		UUID id = player.getUniqueId();
 		if(!requested.containsKey(id)) return false;
 		requested.remove(id);
+		if(manager.settings().ownSkinDirect) {
+			// Velocity / no proxy: nothing to wait for. Others see the player right away (the caller), and the
+			// own view gets the real skin back after the caller re-sent the own entry.
+			planRefresh(player);
+			return false;
+		}
 		if(!send(player, new byte[] {VERSION, RESET})) return false;
 		afterReset.put(id, task);
 		manager.resendOwnEntry(player);

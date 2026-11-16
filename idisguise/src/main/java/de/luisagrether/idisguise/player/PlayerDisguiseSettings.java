@@ -46,6 +46,8 @@ final class PlayerDisguiseSettings {
 	final int randomNamePool;
 	final boolean visibleToOtherPlugins;
 	final boolean seeOwnDisguise;
+	// proxy: velocity / none - the proxy leaves the player's own tab entry alone, so iDisguise refreshes the own view itself.
+	final boolean ownSkinDirect;
 	final java.util.Set<String> commandsNotTranslated = new java.util.HashSet<>();
 	final java.util.Set<String> realPlayerCommands = new java.util.HashSet<>();
 	// Commands whose next word is a player ("msg", "f who"): split into words, lower case.
@@ -100,6 +102,8 @@ final class PlayerDisguiseSettings {
 		randomNamePool = Math.max(5, config.getInt("random-name-pool", 40));
 		visibleToOtherPlugins = config.getBoolean("visible-to-other-plugins", false);
 		seeOwnDisguise = config.getBoolean("see-own-disguise", true);
+		String proxy = config.getString("proxy", "bungeecord").trim().toLowerCase(Locale.ENGLISH);
+		ownSkinDirect = proxy.equals("velocity") || proxy.equals("none");
 		swapInMenus = config.getBoolean("name-swap.menus", true);
 		swapInTitles = config.getBoolean("name-swap.titles", true);
 		swapInHolograms = config.getBoolean("name-swap.holograms", true);
