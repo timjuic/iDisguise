@@ -63,10 +63,11 @@ public class Language {
 	public String ODISGUISE_NO_PLAYERNAME_GIVEN = c("%prefix%&cPlease give the name of an online player.");
 	@LastUpdated(60106)
 	public String ODISGUISE_PLAYER_NOT_FOUND = c("%prefix%&cPlayer not found: &e%player%");
-	@LastUpdated(60106)
-	public String ODISGUISE_NOTIFICATION = c("%prefix%&7You were disguised by &e%sender%&7.");
-	@LastUpdated(60106)
-	public String UNDISGUISE_NOTIFICATION = c("%prefix%&7You were undisguised by &e%sender%&7.");
+	// Never says who did it (6.1.89: the old texts named the staff member).
+	@LastUpdated(60189)
+	public String ODISGUISE_NOTIFICATION = c("%prefix%&7You were disguised.");
+	@LastUpdated(60189)
+	public String UNDISGUISE_NOTIFICATION = c("%prefix%&7You were undisguised.");
 
     @LastUpdated(60001)
 	public String UPDATE_AVAILABLE = ChatColor.GOLD + "[iDisguise] An update is available: %version%";

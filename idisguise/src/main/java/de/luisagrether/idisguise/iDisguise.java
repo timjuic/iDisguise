@@ -708,8 +708,23 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 					sender.sendMessage(language.CONSOLE_USE_COMMAND);
 					return true;
 				}
-				self = true;
-				target = (Player)sender;
+				// Staff shortcuts for /od: /d invis <player>, and /d <disguise> [options] <player> (the exact name
+				// of an online player as the last word). Not for words that take a name themselves (info, reveal).
+				Player other = null;
+				if(args.length >= 2 && hasPermissionOthers(sender)
+						&& !StringUtil.equalsIgnoreCase(args[0], "help", "?", "list", "permissions", "reload", "reveal", "info")) {
+					boolean invisWord = args[0].equalsIgnoreCase("invis") && args.length == 2;
+					other = Bukkit.getPlayerExact(args[args.length - 1]);
+					if(other == null && invisWord) other = Bukkit.getPlayer(args[1]);
+					if(other == null && invisWord) {
+						sender.sendMessage(language.ODISGUISE_PLAYER_NOT_FOUND.replace("%player%", args[1]));
+						return true;
+					}
+					if(other == sender) other = null;
+					if(other != null) args = Arrays.copyOfRange(args, 0, args.length - 1);
+				}
+				self = other == null;
+				target = self ? (Player)sender : other;
 			} else {
 				if(!hasPermissionOthers(sender)) {
 					sender.sendMessage(language.DISGUISE_NO_PERMISSION);
