@@ -1955,8 +1955,9 @@ public class iDisguise extends JavaPlugin implements Listener, DisguiseAPI {
 			// themselves. Relaying the mob's copy arrives as generic damage, which Fire Resistance
 			// doesn't block. Burning from attacks still reaches the player through
 			// handleEntityCombustMonitor, which sets the player on fire directly.
+			// MELTING: a snowman hurts itself in hot biomes (desert, savanna, mesa, nether); the player would die slowly.
 			if(StringUtil.equals(event.getCause().name(), "DROWNING", "DRYOUT", "FLY_INTO_WALL", "SUFFOCATION",
-					"FIRE", "FIRE_TICK", "LAVA", "HOT_FLOOR")) {
+					"FIRE", "FIRE_TICK", "LAVA", "HOT_FLOOR", "MELTING")) {
 				event.setCancelled(true);
 			}
 		}
