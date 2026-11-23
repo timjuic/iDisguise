@@ -202,19 +202,14 @@ final class TextSwap {
 	private static void windowItems(PacketEvent event, Collection<PlayerDisguise> disguises) {
 		// Creative players send items back to the server: never change what they hold.
 		if(event.getPlayer().getGameMode() == GameMode.CREATIVE) return;
-		// The player's own inventory: items they renamed themselves stay as they are (an item named
-		// after a disguised player would otherwise show the fake name and tell who it is).
-		Integer window = event.getPacket().getIntegers().readSafely(0);
-		if(window == null) return;
+		// Own inventory and chest alike: an item showing one name in a chest and another in the own
+		// inventory would tell who is behind a disguise. Anvil names stay as typed everywhere (item()).
 		ItemStack[] items = event.getPacket().getItemArrayModifier().readSafely(0);
 		if(items == null) return;
 		ItemStack[] result = new ItemStack[items.length];
 		boolean changed = false;
-		// A chest, menu ... also sends the player's own 36 slots last: those stay like in the own inventory.
-		int ownFrom = window <= 0 ? 0 : Math.max(0, items.length - 36);
 		for(int i = 0; i < items.length; i++) {
-			// The own inventory: only the invisible marker comes out, names stay as they are.
-			ItemStack replaced = i >= ownFrom ? markerFree(items[i]) : item(items[i], disguises);
+			ItemStack replaced = item(items[i], disguises);
 			result[i] = replaced != null ? replaced : items[i];
 			if(replaced != null) changed = true;
 		}
@@ -226,21 +221,9 @@ final class TextSwap {
 
 	private static void setSlot(PacketEvent event, Collection<PlayerDisguise> disguises) {
 		if(event.getPlayer().getGameMode() == GameMode.CREATIVE) return;
-		Integer window = event.getPacket().getIntegers().readSafely(0);
-		if(window == null) return;
 		ItemStack item = event.getPacket().getItemModifier().readSafely(0);
-		boolean own = window <= 0;
-		if(!own) {
-			// A slot below the chest / menu part is the player's own inventory.
-			Integer slot = event.getPacket().getIntegers().readSafely(1);
-			try {
-				int top = event.getPlayer().getOpenInventory().getTopInventory().getSize();
-				own = slot != null && slot >= top;
-			} catch(RuntimeException unsure) {
-				own = false;
-			}
-		}
-		ItemStack replaced = own ? markerFree(item) : item(item, disguises);
+		// Same in every slot, own inventory included (see windowItems).
+		ItemStack replaced = item(item, disguises);
 		if(replaced == null) return;
 		PacketContainer copy = event.getPacket().shallowClone();
 		copy.getItemModifier().write(0, replaced);
@@ -258,29 +241,6 @@ final class TextSwap {
 	/** The invisible marker never stays in text a player sees, even where no name is swapped. */
 	static String stripMarker(String text) {
 		return text == null ? null : text.replace(NameReplacer.MARKER, "");
-	}
-
-	/** A copy without the invisible marker in name and lore, or null when it has none. */
-	private static ItemStack markerFree(ItemStack item) {
-		if(item == null || !item.hasItemMeta()) return null;
-		ItemMeta meta = item.getItemMeta();
-		boolean changed = false;
-		if(meta.hasDisplayName() && meta.getDisplayName().contains(NameReplacer.MARKER)) {
-			meta.setDisplayName(stripMarker(meta.getDisplayName()));
-			changed = true;
-		}
-		if(meta.hasLore()) {
-			List<String> lore = new ArrayList<>();
-			for(String line : meta.getLore()) {
-				if(line != null && line.contains(NameReplacer.MARKER)) changed = true;
-				lore.add(stripMarker(line));
-			}
-			if(changed) meta.setLore(lore);
-		}
-		if(!changed) return null;
-		ItemStack copy = item.clone();
-		copy.setItemMeta(meta);
-		return copy;
 	}
 
 	/** Renamed in an anvil (a player typed the name, colour perks included): the name stays as typed. */

@@ -474,11 +474,13 @@ final class PacketRewriter extends PacketAdapter {
 
 		List<String> result = new ArrayList<>();
 		boolean changed = false;
+		boolean playerList = false;
 		for(String suggestion : suggestions) {
 			// A disguised player's real name: dropped, never turned into the fake name ("Dann" + TAB
 			// must not complete to the disguise). The fake name is added below when it fits what was typed.
 			if(fakeNameOf(suggestion, disguises) != null) {
 				changed = true;
+				playerList = true;
 				continue;
 			}
 			if(!containsIgnoreCase(result, suggestion)) {
@@ -487,14 +489,19 @@ final class PacketRewriter extends PacketAdapter {
 				changed = true;
 			}
 		}
-		if(!token.isEmpty()) {
+		// Nothing typed yet ("/msg " + TAB): fake names join only a list of players (one real name was
+		// dropped from it), never a list of subcommands ("/f " + TAB).
+		if(!token.isEmpty() || playerList) {
 			for(PlayerDisguise disguise : disguises) {
 				String fake = disguise.getFakeName();
 				// Only players this viewer can see (a vanished disguised player stays unknown, like in /tab).
 				Player shown = Bukkit.getPlayer(disguise.getUniqueId());
 				if(shown == null || !event.getPlayer().canSee(shown)) continue;
 				if(fake.toLowerCase(Locale.ENGLISH).startsWith(token) && !containsIgnoreCase(result, fake)) {
-					result.add(fake);
+					// In alphabetical place, like the real names around it.
+					int at = 0;
+					while(at < result.size() && result.get(at).compareToIgnoreCase(fake) < 0) at++;
+					result.add(at, fake);
 					changed = true;
 				}
 			}
